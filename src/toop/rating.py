@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import sqlite3
+
 import numpy as np
+
+AXES = ("attack", "defense", "setting")
 
 EPSILON = 1e-12
 
@@ -92,3 +96,100 @@ def fit_bradley_terry(
         for pid in isolated:
             result[pid] = median
     return result
+
+
+def _load_aggregates_for_axis(
+    conn: sqlite3.Connection, axis: str
+) -> dict[tuple[int, int], tuple[int, int]]:
+    rows = conn.execute(
+        "SELECT player_a, player_b, a_wins, b_wins FROM vote_aggregates WHERE axis=?",
+        (axis,),
+    ).fetchall()
+    return {(r["player_a"], r["player_b"]): (r["a_wins"], r["b_wins"]) for r in rows}
+
+
+def _vote_count_per_player(
+    conn: sqlite3.Connection, axis: str
+) -> dict[int, int]:
+    """Total votes touching each player in a given axis."""
+    rows = conn.execute(
+        """
+        SELECT player_a AS pid, SUM(a_wins + b_wins) AS n
+        FROM vote_aggregates WHERE axis=? GROUP BY player_a
+        UNION ALL
+        SELECT player_b AS pid, SUM(a_wins + b_wins) AS n
+        FROM vote_aggregates WHERE axis=? GROUP BY player_b
+        """,
+        (axis, axis),
+    ).fetchall()
+    counts: dict[int, int] = {}
+    for r in rows:
+        counts[r["pid"]] = counts.get(r["pid"], 0) + (r["n"] or 0)
+    return counts
+
+
+def refresh_ratings(
+    conn: sqlite3.Connection,
+    calibration_threshold: int,
+) -> int:
+    """Refit BT per axis for all active players; write to player_ratings.
+
+    Returns the count of rows written.
+    """
+    active_ids = [
+        r["telegram_id"]
+        for r in conn.execute("SELECT telegram_id FROM players WHERE active=1").fetchall()
+    ]
+    if not active_ids:
+        return 0
+
+    rows_written = 0
+    for axis in AXES:
+        aggregates = _load_aggregates_for_axis(conn, axis)
+        scores = fit_bradley_terry(aggregates, player_ids=active_ids)
+        vote_counts = _vote_count_per_player(conn, axis)
+        for pid in active_ids:
+            score = scores.get(pid, 0.0)
+            count = vote_counts.get(pid, 0)
+            calibrated = 1 if count >= calibration_threshold else 0
+            conn.execute(
+                """
+                INSERT INTO player_ratings
+                    (telegram_id, axis, score, vote_count, calibrated, computed_at)
+                VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(telegram_id, axis) DO UPDATE SET
+                    score = excluded.score,
+                    vote_count = excluded.vote_count,
+                    calibrated = excluded.calibrated,
+                    computed_at = CURRENT_TIMESTAMP
+                """,
+                (pid, axis, score, count, calibrated),
+            )
+            rows_written += 1
+    # Promote any player whose all 3 axes are calibrated.
+    conn.execute(
+        """
+        UPDATE players SET is_calibrating = 0
+        WHERE telegram_id IN (
+            SELECT telegram_id FROM player_ratings
+            GROUP BY telegram_id
+            HAVING SUM(calibrated) = 3
+        )
+        """
+    )
+    conn.commit()
+    return rows_written
+
+
+def get_player_ratings(
+    conn: sqlite3.Connection, telegram_id: int
+) -> dict[str, tuple[float, int, bool]]:
+    """Return {axis: (score, vote_count, calibrated)} for one player."""
+    rows = conn.execute(
+        "SELECT axis, score, vote_count, calibrated FROM player_ratings WHERE telegram_id=?",
+        (telegram_id,),
+    ).fetchall()
+    return {
+        r["axis"]: (r["score"], r["vote_count"], bool(r["calibrated"]))
+        for r in rows
+    }

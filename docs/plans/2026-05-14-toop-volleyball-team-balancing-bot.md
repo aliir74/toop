@@ -110,7 +110,7 @@ Turn pairwise aggregates into per-player skill scores.
   - Handles isolated players (return median if no comparisons)
   - Verify: unit test with synthetic data — known true skills, fitter recovers ranking; isolated player gets median
 
-- [ ] **Task 4.2 — Ratings cache + refresh**
+- [x] **Task 4.2 — Ratings cache + refresh**
   - Table `player_ratings(telegram_id, axis, score, vote_count, calibrated, computed_at)`
   - Job function `refresh_ratings()` runs fitter for all 3 axes, writes results
   - Sets `calibrated=true` for players with `vote_count >= CALIBRATION_THRESHOLD` in that axis

@@ -6,6 +6,7 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
 from toop.config import settings
 from toop.db import get_connection, init_db
+from toop.handlers.ratings import handle_refresh_ratings
 from toop.handlers.roster import (
     handle_add_player,
     handle_list_players,
@@ -51,6 +52,7 @@ def main() -> None:
     app.add_handler(CommandHandler("start", handle_start))
     app.add_handler(CommandHandler("vote", handle_vote_command))
     app.add_handler(CommandHandler("nudge", handle_nudge))
+    app.add_handler(CommandHandler("refresh_ratings", handle_refresh_ratings))
     app.add_handler(CallbackQueryHandler(handle_rsvp_callback, pattern=r"^rsvp:"))
     app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
 

@@ -77,6 +77,16 @@ CREATE TABLE IF NOT EXISTS snoozes (
     PRIMARY KEY (voter_id, axis)
 );
 
+CREATE TABLE IF NOT EXISTS player_ratings (
+    telegram_id     INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
+    axis            TEXT NOT NULL CHECK (axis IN ('attack', 'defense', 'setting')),
+    score           REAL NOT NULL,
+    vote_count      INTEGER NOT NULL DEFAULT 0,
+    calibrated      INTEGER NOT NULL DEFAULT 0,
+    computed_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (telegram_id, axis)
+);
+
 CREATE INDEX IF NOT EXISTS idx_pending_prompts_voter_gain
     ON pending_prompts(voter_id, info_gain DESC);
 
