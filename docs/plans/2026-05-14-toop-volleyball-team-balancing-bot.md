@@ -195,7 +195,7 @@ Ship-ready local hosting.
   - Install instructions in `deploy/README.md`
   - Verify: `launchctl load`, kill bun process, confirm restart within 30s
 
-- [ ] **Task 7.2 — Operational commands**
+- [x] **Task 7.2 — Operational commands**
   - Admin `/version` shows commit SHA + uptime
   - Admin `/backup_db` copies `toop.db` to a timestamped path inside repo (NOT auto-uploaded anywhere — local only)
   - Verify: commands respond correctly

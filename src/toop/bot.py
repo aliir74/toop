@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
-from datetime import UTC, time
+from datetime import UTC, datetime, time
 
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
 from toop.config import settings
 from toop.db import get_connection, init_db
 from toop.handlers.health import handle_coverage, handle_health
+from toop.handlers.ops import handle_backup_db, handle_version
 from toop.handlers.ratings import handle_refresh_ratings
 from toop.handlers.roster import (
     handle_add_player,
@@ -51,6 +52,7 @@ def main() -> None:
 
     app = Application.builder().token(settings.BOT_TOKEN).build()
     app.bot_data["conn"] = conn
+    app.bot_data["started_at"] = datetime.now(UTC)
 
     app.add_handler(CommandHandler("add_player", handle_add_player))
     app.add_handler(CommandHandler("remove_player", handle_remove_player))
@@ -69,6 +71,8 @@ def main() -> None:
     app.add_handler(CommandHandler("publish", handle_publish))
     app.add_handler(CommandHandler("health", handle_health))
     app.add_handler(CommandHandler("coverage", handle_coverage))
+    app.add_handler(CommandHandler("version", handle_version))
+    app.add_handler(CommandHandler("backup_db", handle_backup_db))
 
     if app.job_queue is not None:
         weekday = WEEKDAY_INDEX[settings.SESSION_WEEKDAY.lower()]
