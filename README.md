@@ -55,7 +55,7 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
    ```
    You should see `توپ starting (admin=…, group=…)` and the bot replies to `/start` in DM.
 
-6. **Run forever (macOS):** see `deploy/README.md` for the LaunchAgent flow.
+6. **Deploy to your VPS:** see `deploy/README.md`. TL;DR: add `VPS_SSH=user@host` to `.env`, run `make deploy`.
 
 ---
 
@@ -113,7 +113,7 @@ prompts a week — takes 30 seconds.
 - **"Couldn't find @username" when adding a player** — they need to DM the bot `/start` first so Telegram lets us resolve their numeric ID.
 - **RSVP buttons don't show** — make sure the bot is a member of `GROUP_CHAT_ID` and has permission to send messages.
 - **Vote callbacks silently fail** — most often `BOT_TOKEN` is wrong or the bot isn't running. Check `logs/toop.log`.
-- **Scheduled snapshot didn't fire Monday noon** — JobQueue requires the bot process to be alive at the scheduled time. Verify with `launchctl list | grep com.aliirani.toop` or trigger manually with `/snapshot`.
+- **Scheduled snapshot didn't fire Monday noon** — JobQueue requires the bot process to be alive at the scheduled time. Verify with `make logs` (look for `auto_snapshot scheduled`) or trigger manually with `/snapshot`. Note `SNAPSHOT_HOUR` is interpreted as UTC inside the container.
 - **"weights sum to 0.95"** warning at startup — composite weights in `.env` don't add to 1.0. Bot still runs; ratings just scale slightly differently. Adjust to taste.
 - **All-new roster shows "low confidence"** — expected during calibration. As pairs accumulate votes, confidence rises. Front-loading 15-20 votes per voter in week 1 is the recommended pattern.
 

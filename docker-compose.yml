@@ -1,0 +1,10 @@
+services:
+  bot:
+    build:
+      context: .
+      args:
+        GIT_SHA: ${GIT_SHA:-unknown}
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
