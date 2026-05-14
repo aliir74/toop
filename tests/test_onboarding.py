@@ -124,8 +124,7 @@ def test_nudge_templates_sort_ascending_completion(conn: sqlite3.Connection) -> 
         )
     for axis in ("attack", "defense"):
         conn.execute(
-            "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis) "
-            "VALUES (?, ?, ?, ?)",
+            "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis) VALUES (?, ?, ?, ?)",
             (3, 1, 2, axis),
         )
     conn.commit()
@@ -147,9 +146,7 @@ async def test_nudge_admin_only(admin_settings: None, conn: sqlite3.Connection) 
     assert "Manual sends only" in reply
 
 
-async def test_nudge_blocked_for_non_admin(
-    admin_settings: None, conn: sqlite3.Connection
-) -> None:
+async def test_nudge_blocked_for_non_admin(admin_settings: None, conn: sqlite3.Connection) -> None:
     update = _admin_update()
     update.effective_user = MagicMock(id=99)
     await handle_nudge(update, _ctx(conn))

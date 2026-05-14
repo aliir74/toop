@@ -125,14 +125,10 @@ def generate_teams(
     team_a, team_b = _snake_assign(sorted_attendees)
 
     top_quartile_count = max(1, len(attendees) // 4)
-    setting_ranked = sorted(
-        attendees, key=lambda pid: (-axis_scores["setting"][pid], pid)
-    )
+    setting_ranked = sorted(attendees, key=lambda pid: (-axis_scores["setting"][pid], pid))
     top_setters = set(setting_ranked[:top_quartile_count])
 
-    team_a, team_b, swap_applied = _try_setter_swap(
-        team_a, team_b, top_setters, composite
-    )
+    team_a, team_b, swap_applied = _try_setter_swap(team_a, team_b, top_setters, composite)
 
     calibrated_count = sum(1 for pid in attendees if statuses[pid] == "calibrated")
     confidence = _confidence_from_ratio(calibrated_count / len(attendees))

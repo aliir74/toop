@@ -61,9 +61,7 @@ async def test_callback_idempotent(conn: sqlite3.Connection) -> None:
     sess = open_session(conn, date(2026, 5, 18))
     add_player(conn, 1, "Alice", "alice")
     for status in ("yes", "no", "yes"):
-        await handle_rsvp_callback(
-            _callback_update(1, f"rsvp:{status}"), _ctx(conn)
-        )
+        await handle_rsvp_callback(_callback_update(1, f"rsvp:{status}"), _ctx(conn))
     counts = count_rsvps(conn, sess.id)
     assert counts == count_rsvps(conn, sess.id)
     assert counts.yes == 1
@@ -93,9 +91,7 @@ async def test_18_yes_rsvps_via_callback(conn: sqlite3.Connection) -> None:
     for i in range(18):
         add_player(conn, i + 1, f"P{i}", f"p{i}")
     for i in range(18):
-        await handle_rsvp_callback(
-            _callback_update(i + 1, "rsvp:yes"), _ctx(conn)
-        )
+        await handle_rsvp_callback(_callback_update(i + 1, "rsvp:yes"), _ctx(conn))
     counts = count_rsvps(conn, sess.id)
     assert counts.yes == 18
 

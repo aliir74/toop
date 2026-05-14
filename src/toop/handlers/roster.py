@@ -44,9 +44,7 @@ def _parse_add_args(text: str) -> tuple[str, str] | None:
     return username, display_name
 
 
-async def _resolve_telegram_id(
-    context: ContextTypes.DEFAULT_TYPE, username: str
-) -> int | None:
+async def _resolve_telegram_id(context: ContextTypes.DEFAULT_TYPE, username: str) -> int | None:
     try:
         chat = await context.bot.get_chat(f"@{username}")
     except BadRequest:

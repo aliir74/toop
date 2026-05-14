@@ -104,9 +104,7 @@ def _fetch_player_by_username(conn: sqlite3.Connection, username: str) -> Player
     )
 
 
-def _format_teams(
-    conn: sqlite3.Connection, snap: Snapshot, session_date: str
-) -> str:
+def _format_teams(conn: sqlite3.Connection, snap: Snapshot, session_date: str) -> str:
     a_names = [
         (_fetch_player(conn, pid) or Player(pid, None, f"#{pid}", True, True)).display_name
         for pid in snap.team_a
@@ -132,9 +130,7 @@ def _format_teams(
     )
 
 
-def _format_snapshot_summary(
-    conn: sqlite3.Connection, snap: Snapshot, cut: list[int]
-) -> str:
+def _format_snapshot_summary(conn: sqlite3.Connection, snap: Snapshot, cut: list[int]) -> str:
     cut_note = ""
     if cut:
         cut_names = [
@@ -159,9 +155,7 @@ async def handle_snapshot(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if sess is None:
         await message.reply_text("No active session. Open one with /open_session.")
         return
-    result = take_snapshot(
-        conn, _weights(), settings.MAX_ATTENDEES, settings.CALIBRATION_THRESHOLD
-    )
+    result = take_snapshot(conn, _weights(), settings.MAX_ATTENDEES, settings.CALIBRATION_THRESHOLD)
     if result is None:
         await message.reply_text("No yes-RSVPs yet — nothing to snapshot.")
         return
@@ -174,9 +168,7 @@ async def auto_snapshot_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     Does NOT auto-publish — admin must /publish manually.
     """
     conn = _conn(context)
-    result = take_snapshot(
-        conn, _weights(), settings.MAX_ATTENDEES, settings.CALIBRATION_THRESHOLD
-    )
+    result = take_snapshot(conn, _weights(), settings.MAX_ATTENDEES, settings.CALIBRATION_THRESHOLD)
     if result is None:
         logger.info("auto_snapshot: no active session with yes-RSVPs; skipping")
         return

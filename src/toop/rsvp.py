@@ -85,7 +85,5 @@ def is_player_on_roster(conn: sqlite3.Connection, telegram_id: int) -> bool:
 
 def format_rsvp_message(session_date: str, counts: RsvpCounts) -> str:
     return (
-        f"📅 {session_date}\n\n"
-        f"✅ {counts.yes} · ❌ {counts.no} · 🤔 {counts.maybe}\n\n"
-        "Tap to RSVP:"
+        f"📅 {session_date}\n\n✅ {counts.yes} · ❌ {counts.no} · 🤔 {counts.maybe}\n\nTap to RSVP:"
     )

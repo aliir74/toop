@@ -16,6 +16,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.25.0",
     "ruff>=0.11.0",
+    "ty>=0.0.1a0",
 ]
 
 [tool.ruff]
@@ -32,6 +33,16 @@ quote-style = "double"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ty.src]
+# Type-check pure logic modules. Handler/wiring files are excluded because
+# python-telegram-bot's CommandHandler signatures don't compose cleanly with
+# `async def handler() -> None` (ty reports Awaitable[None] vs Coroutine[...]).
+# Those modules are exercised by integration tests instead.
+exclude = [
+    "src/toop/bot.py",
+    "src/toop/handlers/**",
+]
 
 [build-system]
 requires = ["hatchling"]

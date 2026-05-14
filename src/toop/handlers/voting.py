@@ -39,9 +39,7 @@ START_DM = (
     "The more you vote, the more accurate the teams. 🏐"
 )
 
-START_GROUP = (
-    "👋 I'm توپ. Tap RSVP buttons here in the group, and DM me to /vote on player skills."
-)
+START_GROUP = "👋 I'm توپ. Tap RSVP buttons here in the group, and DM me to /vote on player skills."
 
 
 def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
@@ -69,10 +67,7 @@ def _get_player(conn: sqlite3.Connection, telegram_id: int) -> Player | None:
 
 
 def _format_prompt(prompt: Prompt, a: Player, b: Player) -> str:
-    return (
-        f"Who's stronger at *{prompt.axis}*?\n\n"
-        f"*{a.display_name}*  vs  *{b.display_name}*"
-    )
+    return f"Who's stronger at *{prompt.axis}*?\n\n*{a.display_name}*  vs  *{b.display_name}*"
 
 
 def _prompt_keyboard(prompt: Prompt, a: Player, b: Player) -> InlineKeyboardMarkup:
@@ -163,7 +158,7 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     query = update.callback_query
     if query is None or query.data is None or query.from_user is None or query.message is None:
         return
-    chat_id = query.message.chat_id
+    chat_id = query.message.chat.id
     message_id = query.message.message_id
     voter_id = query.from_user.id
     conn = _conn(context)

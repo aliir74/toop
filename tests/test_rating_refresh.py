@@ -59,8 +59,7 @@ def test_calibration_flag_set_when_threshold_met(conn: sqlite3.Connection) -> No
     _seed_aggregate(conn, 1, 2, "attack", 10, 10)
     refresh_ratings(conn, calibration_threshold=15)
     row = conn.execute(
-        "SELECT calibrated, vote_count FROM player_ratings "
-        "WHERE telegram_id=1 AND axis='attack'"
+        "SELECT calibrated, vote_count FROM player_ratings WHERE telegram_id=1 AND axis='attack'"
     ).fetchone()
     assert row["vote_count"] == 20
     assert row["calibrated"] == 1

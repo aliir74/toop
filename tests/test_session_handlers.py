@@ -69,9 +69,7 @@ async def test_open_session_when_one_exists_errors(
     assert "active" in reply.lower() or "still" in reply.lower()
 
 
-async def test_close_session_marks_done(
-    admin_settings: None, conn: sqlite3.Connection
-) -> None:
+async def test_close_session_marks_done(admin_settings: None, conn: sqlite3.Connection) -> None:
     open_session(conn, date(2026, 5, 18))
     update = _admin_update()
     ctx = _ctx(conn, [])
@@ -96,9 +94,7 @@ async def test_open_session_posts_rsvp_message(
     assert "✅ 0" in kwargs["text"]
 
 
-async def test_list_sessions_empty(
-    admin_settings: None, conn: sqlite3.Connection
-) -> None:
+async def test_list_sessions_empty(admin_settings: None, conn: sqlite3.Connection) -> None:
     update = _admin_update()
     ctx = _ctx(conn, [])
     await handle_list_sessions(update, ctx)

@@ -164,9 +164,9 @@ async def test_three_votes_three_answered(conn: sqlite3.Connection) -> None:
     ).fetchone()["n"]
     assert aggregate_total == 3
     # Queue refilled back toward full depth
-    pending = conn.execute(
-        "SELECT COUNT(*) AS n FROM pending_prompts WHERE voter_id=1"
-    ).fetchone()["n"]
+    pending = conn.execute("SELECT COUNT(*) AS n FROM pending_prompts WHERE voter_id=1").fetchone()[
+        "n"
+    ]
     assert pending >= 1
 
 

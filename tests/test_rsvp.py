@@ -65,9 +65,7 @@ def test_18_yes_rsvps_persisted(conn: sqlite3.Connection, session_id: int) -> No
     assert rows["n"] == 18
 
 
-def test_lock_in_creates_yes_with_locked_flag(
-    conn: sqlite3.Connection, session_id: int
-) -> None:
+def test_lock_in_creates_yes_with_locked_flag(conn: sqlite3.Connection, session_id: int) -> None:
     add_player(conn, 1, "Alice", "alice")
     assert lock_in_player(conn, session_id, 1) is True
     row = conn.execute(
@@ -90,9 +88,7 @@ def test_lock_in_overrides_existing_no(conn: sqlite3.Connection, session_id: int
     assert row["locked_in"] == 1
 
 
-def test_lock_in_unknown_player_returns_false(
-    conn: sqlite3.Connection, session_id: int
-) -> None:
+def test_lock_in_unknown_player_returns_false(conn: sqlite3.Connection, session_id: int) -> None:
     assert lock_in_player(conn, session_id, 999) is False
 
 

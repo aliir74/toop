@@ -42,9 +42,7 @@ def _context(conn: sqlite3.Connection, args: list[str], chat_id: int | None = No
     return ctx
 
 
-async def test_add_player_round_trip(
-    admin_settings: None, conn: sqlite3.Connection
-) -> None:
+async def test_add_player_round_trip(admin_settings: None, conn: sqlite3.Connection) -> None:
     update = _admin_update('/add_player @alice "Alice Smith"')
     ctx = _context(conn, args=["@alice", '"Alice', 'Smith"'], chat_id=111)
     await handle_add_player(update, ctx)
@@ -55,9 +53,7 @@ async def test_add_player_round_trip(
     update.effective_message.reply_text.assert_awaited_once()
 
 
-async def test_add_player_unknown_username(
-    admin_settings: None, conn: sqlite3.Connection
-) -> None:
+async def test_add_player_unknown_username(admin_settings: None, conn: sqlite3.Connection) -> None:
     update = _admin_update('/add_player @ghost "Ghost"')
     ctx = _context(conn, args=["@ghost", '"Ghost"'], chat_id=None)
     await handle_add_player(update, ctx)
@@ -66,9 +62,7 @@ async def test_add_player_unknown_username(
     assert "DM me /start" in reply
 
 
-async def test_add_player_bad_usage(
-    admin_settings: None, conn: sqlite3.Connection
-) -> None:
+async def test_add_player_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
     update = _admin_update("/add_player @alice")
     ctx = _context(conn, args=["@alice"])
     await handle_add_player(update, ctx)
@@ -77,9 +71,7 @@ async def test_add_player_bad_usage(
     assert reply.startswith("Usage:")
 
 
-async def test_remove_player_round_trip(
-    admin_settings: None, conn: sqlite3.Connection
-) -> None:
+async def test_remove_player_round_trip(admin_settings: None, conn: sqlite3.Connection) -> None:
     add_update = _admin_update('/add_player @alice "Alice"')
     add_ctx = _context(conn, args=["@alice", '"Alice"'], chat_id=111)
     await handle_add_player(add_update, add_ctx)
@@ -90,9 +82,7 @@ async def test_remove_player_round_trip(
     assert list_active_players(conn) == []
 
 
-async def test_list_players_empty(
-    admin_settings: None, conn: sqlite3.Connection
-) -> None:
+async def test_list_players_empty(admin_settings: None, conn: sqlite3.Connection) -> None:
     update = _admin_update("/list_players")
     ctx = _context(conn, args=[])
     await handle_list_players(update, ctx)

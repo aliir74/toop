@@ -54,7 +54,9 @@ def open_session(
         (session_date.isoformat(),),
     )
     conn.commit()
-    return _fetch_session(conn, cur.lastrowid)
+    new_id = cur.lastrowid
+    assert new_id is not None  # SQLite always populates lastrowid after INSERT
+    return _fetch_session(conn, new_id)
 
 
 def close_session(conn: sqlite3.Connection) -> Session:
@@ -89,8 +91,7 @@ def set_session_status(
 
 def list_recent_sessions(conn: sqlite3.Connection, limit: int = 10) -> list[Session]:
     rows = conn.execute(
-        "SELECT id, session_date, snapshot_at, status FROM sessions "
-        "ORDER BY id DESC LIMIT ?",
+        "SELECT id, session_date, snapshot_at, status FROM sessions ORDER BY id DESC LIMIT ?",
         (limit,),
     ).fetchall()
     return [_row_to_session(r) for r in rows]

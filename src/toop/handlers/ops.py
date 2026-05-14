@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 import sqlite3
 import subprocess
@@ -24,6 +25,9 @@ def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
 
 
 def _commit_sha() -> str:
+    env_sha = os.environ.get("GIT_SHA")
+    if env_sha and env_sha != "unknown":
+        return env_sha
     try:
         out = subprocess.run(
             ["git", "rev-parse", "--short", "HEAD"],

@@ -98,9 +98,7 @@ async def test_swap_persists_new_assignment(conn: sqlite3.Connection) -> None:
     a_username = f"p{a_player_id}"
     b_username = f"p{b_player_id}"
 
-    await handle_swap(
-        _admin_update(), _ctx(conn, args=[f"@{a_username}", f"@{b_username}"])
-    )
+    await handle_swap(_admin_update(), _ctx(conn, args=[f"@{a_username}", f"@{b_username}"]))
     new_snap = get_snapshot(conn, sess_id)
     assert new_snap is not None
     assert a_player_id in new_snap.team_b
@@ -115,9 +113,7 @@ async def test_full_lifecycle_open_rsvp_snapshot_swap_publish(conn: sqlite3.Conn
     assert snap_before is not None
     a0 = snap_before.team_a[0]
     b0 = snap_before.team_b[0]
-    await handle_swap(
-        _admin_update(), _ctx(conn, args=[f"@p{a0}", f"@p{b0}"])
-    )
+    await handle_swap(_admin_update(), _ctx(conn, args=[f"@p{a0}", f"@p{b0}"]))
     publish_ctx = _ctx(conn)
     await handle_publish(_admin_update(), publish_ctx)
 

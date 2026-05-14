@@ -50,9 +50,7 @@ async def handle_open_session(update: Update, context: ContextTypes.DEFAULT_TYPE
     except SessionStateError as exc:
         await message.reply_text(str(exc))
         return
-    await message.reply_text(
-        f"Session #{sess.id} opened for {sess.session_date.isoformat()}."
-    )
+    await message.reply_text(f"Session #{sess.id} opened for {sess.session_date.isoformat()}.")
     if settings.GROUP_CHAT_ID == 0:
         logger.warning("GROUP_CHAT_ID unset — skipping RSVP post")
         return
@@ -78,9 +76,7 @@ async def handle_close_session(update: Update, context: ContextTypes.DEFAULT_TYP
     except SessionStateError as exc:
         await message.reply_text(str(exc))
         return
-    await message.reply_text(
-        f"Session #{sess.id} ({sess.session_date.isoformat()}) closed."
-    )
+    await message.reply_text(f"Session #{sess.id} ({sess.session_date.isoformat()}) closed.")
 
 
 @require_admin

@@ -78,9 +78,7 @@ def build_health_rows(conn: sqlite3.Connection) -> list[dict]:
                 "lifetime": r["lifetime"],
                 "last_30d": r["last_30d"],
                 "pending": r["pending"],
-                "calibration": _calibration_marker(
-                    bool(r["is_calibrating"]), r["lifetime"]
-                ),
+                "calibration": _calibration_marker(bool(r["is_calibrating"]), r["lifetime"]),
             }
         )
 
@@ -154,9 +152,7 @@ LIMIT ?
 
 
 def _name_lookup(conn: sqlite3.Connection) -> dict[int, str]:
-    rows = conn.execute(
-        "SELECT telegram_id, display_name FROM players WHERE active=1"
-    ).fetchall()
+    rows = conn.execute("SELECT telegram_id, display_name FROM players WHERE active=1").fetchall()
     return {r["telegram_id"]: r["display_name"] for r in rows}
 
 

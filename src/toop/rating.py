@@ -88,9 +88,7 @@ def fit_bradley_terry(
     log_skills = np.log(np.maximum(pi, EPSILON))
     log_skills -= log_skills.mean()
 
-    result: dict[int, float] = {
-        pid: float(log_skills[idx[pid]]) for pid in connected
-    }
+    result: dict[int, float] = {pid: float(log_skills[idx[pid]]) for pid in connected}
     if isolated:
         median = float(np.median(list(result.values())))
         for pid in isolated:
@@ -108,9 +106,7 @@ def _load_aggregates_for_axis(
     return {(r["player_a"], r["player_b"]): (r["a_wins"], r["b_wins"]) for r in rows}
 
 
-def _vote_count_per_player(
-    conn: sqlite3.Connection, axis: str
-) -> dict[int, int]:
+def _vote_count_per_player(conn: sqlite3.Connection, axis: str) -> dict[int, int]:
     """Total votes touching each player in a given axis."""
     rows = conn.execute(
         """
@@ -189,10 +185,7 @@ def get_player_ratings(
         "SELECT axis, score, vote_count, calibrated FROM player_ratings WHERE telegram_id=?",
         (telegram_id,),
     ).fetchall()
-    return {
-        r["axis"]: (r["score"], r["vote_count"], bool(r["calibrated"]))
-        for r in rows
-    }
+    return {r["axis"]: (r["score"], r["vote_count"], bool(r["calibrated"])) for r in rows}
 
 
 def composite_score(
@@ -209,16 +202,13 @@ def composite_score(
     ratings = get_player_ratings(conn, telegram_id)
     w_attack, w_defense, w_setting = weights
     axis_weights = {"attack": w_attack, "defense": w_defense, "setting": w_setting}
-    score = sum(
-        ratings.get(axis, (0.0, 0, False))[0] * w
-        for axis, w in axis_weights.items()
-    )
-    calibrated_count = sum(
-        1 for axis in AXES if ratings.get(axis, (0.0, 0, False))[2]
-    )
+    score = sum(ratings.get(axis, (0.0, 0, False))[0] * w for axis, w in axis_weights.items())
+    calibrated_count = sum(1 for axis in AXES if ratings.get(axis, (0.0, 0, False))[2])
     status = (
-        "calibrated" if calibrated_count == 3
-        else "partial" if calibrated_count > 0
+        "calibrated"
+        if calibrated_count == 3
+        else "partial"
+        if calibrated_count > 0
         else "calibrating"
     )
     return score, status

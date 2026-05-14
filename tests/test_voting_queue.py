@@ -25,9 +25,7 @@ def test_refill_for_voter_with_no_history_returns_queue_depth(conn: sqlite3.Conn
     _seed_players(conn, 5)
     inserted = refill_queue(conn, voter_id=1, queue_depth=5)
     assert inserted == 5
-    rows = conn.execute(
-        "SELECT COUNT(*) AS n FROM pending_prompts WHERE voter_id=1"
-    ).fetchone()
+    rows = conn.execute("SELECT COUNT(*) AS n FROM pending_prompts WHERE voter_id=1").fetchone()
     assert rows["n"] == 5
 
 
@@ -130,15 +128,15 @@ def test_peek_returns_highest_info_gain(conn: sqlite3.Connection) -> None:
 def test_remove_prompt(conn: sqlite3.Connection) -> None:
     _seed_players(conn, 3)
     refill_queue(conn, voter_id=1, queue_depth=5)
-    before = conn.execute(
-        "SELECT COUNT(*) AS n FROM pending_prompts WHERE voter_id=1"
-    ).fetchone()["n"]
+    before = conn.execute("SELECT COUNT(*) AS n FROM pending_prompts WHERE voter_id=1").fetchone()[
+        "n"
+    ]
     p = peek_next_prompt(conn, voter_id=1)
     assert p is not None
     remove_prompt(conn, 1, p.player_a, p.player_b, p.axis)
-    after = conn.execute(
-        "SELECT COUNT(*) AS n FROM pending_prompts WHERE voter_id=1"
-    ).fetchone()["n"]
+    after = conn.execute("SELECT COUNT(*) AS n FROM pending_prompts WHERE voter_id=1").fetchone()[
+        "n"
+    ]
     assert after == before - 1
 
 
@@ -155,9 +153,7 @@ def test_add_snooze_clears_pending_for_axis(conn: sqlite3.Connection) -> None:
 def test_priority_prompt_normalizes_pair_order(conn: sqlite3.Connection) -> None:
     _seed_players(conn, 3)
     insert_priority_prompt(conn, voter_id=1, player_a=3, player_b=2, axis="attack")
-    row = conn.execute(
-        "SELECT player_a, player_b FROM pending_prompts WHERE voter_id=1"
-    ).fetchone()
+    row = conn.execute("SELECT player_a, player_b FROM pending_prompts WHERE voter_id=1").fetchone()
     assert row["player_a"] == 2
     assert row["player_b"] == 3
 
@@ -165,7 +161,5 @@ def test_priority_prompt_normalizes_pair_order(conn: sqlite3.Connection) -> None
 def test_priority_prompt_skips_voter_in_pair(conn: sqlite3.Connection) -> None:
     _seed_players(conn, 3)
     insert_priority_prompt(conn, voter_id=1, player_a=1, player_b=2, axis="attack")
-    rows = conn.execute(
-        "SELECT COUNT(*) AS n FROM pending_prompts WHERE voter_id=1"
-    ).fetchone()
+    rows = conn.execute("SELECT COUNT(*) AS n FROM pending_prompts WHERE voter_id=1").fetchone()
     assert rows["n"] == 0
