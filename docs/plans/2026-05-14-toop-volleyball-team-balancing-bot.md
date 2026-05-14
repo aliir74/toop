@@ -135,7 +135,7 @@ Snake-draft + setter constraint + admin override.
   - If >14: keep all `locked_in=true` first, then sort remainder by "sessions attended in last 8 weeks" ascending (least-recent plays first), take top to fill 14
   - Verify: synthetic test — 18 RSVPs, 2 locked, 16 contested → 14 selected correctly, fairness queue ordered right
 
-- [ ] **Task 5.2 — Snake-draft + setter constraint**
+- [x] **Task 5.2 — Snake-draft + setter constraint**
   - Function `generate_teams(attendees: list[int]) -> tuple[list[int], list[int], dict]` returning (team_a, team_b, metrics)
   - Sort attendees by composite score desc, snake-draft into A/B
   - Identify top-quartile setters (by setting-axis score). Constraint: each team has ≥1 top-quartile setter. If violated, swap one player between teams to satisfy (greedy: lowest-impact swap that fixes constraint)
