@@ -142,7 +142,7 @@ Snake-draft + setter constraint + admin override.
   - Metrics: per-team total composite, per-axis totals, abs delta, calibration confidence ("high"/"medium"/"low" based on how many attendees are calibrated)
   - Verify: unit tests — balanced inputs produce ≤5% delta; setter-clustered inputs trigger swap
 
-- [ ] **Task 5.3 — Snapshot + publish flow**
+- [x] **Task 5.3 — Snapshot + publish flow**
   - Admin command `/snapshot` runs `select_attendees` + `generate_teams`, sets session status `snapshotted`, stores result
   - Admin command `/teams` previews current snapshot in DM with two-column layout, metrics, calibration confidence
   - Admin command `/swap @player_a @player_b` exchanges between teams, recomputes metrics live, shows new delta

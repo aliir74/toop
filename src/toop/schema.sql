@@ -77,6 +77,15 @@ CREATE TABLE IF NOT EXISTS snoozes (
     PRIMARY KEY (voter_id, axis)
 );
 
+CREATE TABLE IF NOT EXISTS snapshots (
+    session_id      INTEGER PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    team_a_json     TEXT NOT NULL,
+    team_b_json     TEXT NOT NULL,
+    cut_json        TEXT NOT NULL DEFAULT '[]',
+    metrics_json    TEXT NOT NULL,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS player_ratings (
     telegram_id     INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
     axis            TEXT NOT NULL CHECK (axis IN ('attack', 'defense', 'setting')),

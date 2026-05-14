@@ -18,6 +18,12 @@ from toop.handlers.sessions import (
     handle_list_sessions,
     handle_open_session,
 )
+from toop.handlers.snapshot import (
+    handle_publish,
+    handle_snapshot,
+    handle_swap,
+    handle_teams,
+)
 from toop.handlers.voting import (
     handle_nudge,
     handle_start,
@@ -53,6 +59,10 @@ def main() -> None:
     app.add_handler(CommandHandler("vote", handle_vote_command))
     app.add_handler(CommandHandler("nudge", handle_nudge))
     app.add_handler(CommandHandler("refresh_ratings", handle_refresh_ratings))
+    app.add_handler(CommandHandler("snapshot", handle_snapshot))
+    app.add_handler(CommandHandler("teams", handle_teams))
+    app.add_handler(CommandHandler("swap", handle_swap))
+    app.add_handler(CommandHandler("publish", handle_publish))
     app.add_handler(CallbackQueryHandler(handle_rsvp_callback, pattern=r"^rsvp:"))
     app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
 

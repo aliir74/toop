@@ -70,6 +70,23 @@ def close_session(conn: sqlite3.Connection) -> Session:
     return _fetch_session(conn, row["id"])
 
 
+def set_session_status(
+    conn: sqlite3.Connection, session_id: int, status: str, snapshot_at: bool = False
+) -> Session:
+    """Update a session's status. Optionally stamps snapshot_at = now."""
+    if status not in ("open", "snapshotted", "published", "done"):
+        raise ValueError(f"invalid status {status!r}")
+    if snapshot_at:
+        conn.execute(
+            "UPDATE sessions SET status=?, snapshot_at=CURRENT_TIMESTAMP WHERE id=?",
+            (status, session_id),
+        )
+    else:
+        conn.execute("UPDATE sessions SET status=? WHERE id=?", (status, session_id))
+    conn.commit()
+    return _fetch_session(conn, session_id)
+
+
 def list_recent_sessions(conn: sqlite3.Connection, limit: int = 10) -> list[Session]:
     rows = conn.execute(
         "SELECT id, session_date, snapshot_at, status FROM sessions "
