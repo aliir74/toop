@@ -209,6 +209,63 @@ def mark_dont_know(
     conn.commit()
 
 
+def bootstrap_calibration_prompts(
+    conn: sqlite3.Connection,
+    new_player_id: int,
+    veteran_count: int = 3,
+) -> int:
+    """Inject priority prompts so veterans get calibration data on a new player.
+
+    For each of up to `veteran_count` random veterans (not the new player, not
+    themselves calibrating, with at least one other player to anchor against),
+    pair the new player with one random anchor player and inject 1 priority
+    prompt per axis (3 prompts per veteran → 9 total for 3 veterans).
+    """
+    veterans = conn.execute(
+        """
+        SELECT telegram_id FROM players
+        WHERE active=1
+          AND telegram_id != ?
+          AND is_calibrating=0
+        ORDER BY RANDOM()
+        LIMIT ?
+        """,
+        (new_player_id, veteran_count),
+    ).fetchall()
+    if not veterans:
+        veterans = conn.execute(
+            """
+            SELECT telegram_id FROM players
+            WHERE active=1 AND telegram_id != ?
+            ORDER BY RANDOM() LIMIT ?
+            """,
+            (new_player_id, veteran_count),
+        ).fetchall()
+
+    inserted = 0
+    for vet in veterans:
+        anchor_row = conn.execute(
+            """
+            SELECT telegram_id FROM players
+            WHERE active=1 AND telegram_id NOT IN (?, ?)
+            ORDER BY RANDOM() LIMIT 1
+            """,
+            (new_player_id, vet["telegram_id"]),
+        ).fetchone()
+        if anchor_row is None:
+            continue
+        for axis in AXES:
+            insert_priority_prompt(
+                conn,
+                voter_id=vet["telegram_id"],
+                player_a=new_player_id,
+                player_b=anchor_row["telegram_id"],
+                axis=axis,
+            )
+            inserted += 1
+    return inserted
+
+
 def insert_priority_prompt(
     conn: sqlite3.Connection,
     voter_id: int,

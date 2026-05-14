@@ -12,6 +12,7 @@ from telegram.constants import ChatType, ParseMode
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
+from toop.admin import require_admin
 from toop.config import settings
 from toop.players import Player
 from toop.voting_queue import (
@@ -29,6 +30,17 @@ CALLBACK_PREFIX = "v:"
 GROUP_REPLY = "DM me to vote 🤫"
 NO_PROMPTS_REPLY = (
     "🎉 No prompts right now. Check back later — new pairs surface as the roster grows."
+)
+
+START_DM = (
+    "Hi 👋 I'm توپ — I help balance our weekly volleyball teams.\n\n"
+    "Tap /vote any time to rate your teammates on attack, defense, and setting. "
+    "Your individual votes stay private — only the running tally is used. "
+    "The more you vote, the more accurate the teams. 🏐"
+)
+
+START_GROUP = (
+    "👋 I'm توپ. Tap RSVP buttons here in the group, and DM me to /vote on player skills."
 )
 
 
@@ -204,3 +216,62 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         return
 
     await query.answer()
+
+
+async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    chat = update.effective_chat
+    if message is None or chat is None:
+        return
+    if chat.type == ChatType.PRIVATE:
+        await message.reply_text(START_DM)
+    else:
+        await message.reply_text(START_GROUP)
+
+
+def _build_nudge_templates(conn: sqlite3.Connection, limit: int = 5) -> list[str]:
+    """Return raw DM-able templates per low-completion voter.
+
+    Sorted ascending by lifetime answered_prompts count. Privacy-safe — counts
+    completion only, never reveals what they voted.
+    """
+    rows = conn.execute(
+        """
+        SELECT p.telegram_id, p.username, p.display_name,
+               (SELECT COUNT(*) FROM answered_prompts ap WHERE ap.voter_id = p.telegram_id)
+                   AS lifetime
+        FROM players p
+        WHERE p.active = 1
+        ORDER BY lifetime ASC, p.display_name COLLATE NOCASE
+        LIMIT ?
+        """,
+        (limit,),
+    ).fetchall()
+    templates: list[str] = []
+    for r in rows:
+        handle = f"@{r['username']}" if r["username"] else r["display_name"]
+        first_name = r["display_name"].split()[0]
+        templates.append(
+            f"--- {r['display_name']} ({handle}) — {r['lifetime']} lifetime votes ---\n"
+            f"Hey {first_name}! Whenever you get a sec, "
+            f"could you ping توپ on Telegram and run /vote? "
+            f"It helps me balance teams better. 🙏 Takes ~30s."
+        )
+    return templates
+
+
+@require_admin
+async def handle_nudge(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    message = update.effective_message
+    if message is None:
+        return
+    templates = _build_nudge_templates(_conn(context))
+    if not templates:
+        await message.reply_text("No players on the roster yet.")
+        return
+    body = "\n\n".join(templates)
+    header = (
+        "Copy/paste these to nudge the lowest-completion voters. "
+        "(Manual sends only — no auto-DMs.)\n\n"
+    )
+    await message.reply_text(header + body)

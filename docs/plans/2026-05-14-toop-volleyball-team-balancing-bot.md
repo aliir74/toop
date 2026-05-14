@@ -91,7 +91,7 @@ Continuous queue, 3 axes, info-gain ordering, full privacy.
   - **In group chats: bot replies with "DM me to vote 🤫"** — never expose pairwise prompts in group
   - Verify: end-to-end test — voter answers 3 prompts, queue refills, aggregates increment correctly, answered_prompts has 3 rows
 
-- [ ] **Task 3.3 — Voting nudge + onboarding**
+- [x] **Task 3.3 — Voting nudge + onboarding**
   - When a new player is added: insert calibration-bootstrap prompts targeting that player into 3 random veterans' queues (priority-flagged so they surface first)
   - `/start` in DM sends a friendly intro: explains voting is private, link to instructions
   - Admin command `/nudge` returns DM-able message templates per low-completion voter (raw text only, admin sends manually — no automated DMs that look spammy)

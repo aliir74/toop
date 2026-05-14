@@ -14,6 +14,7 @@ from toop.players import (
     list_active_players,
     soft_remove_player,
 )
+from toop.voting_queue import bootstrap_calibration_prompts
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +70,20 @@ async def handle_add_player(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             f"Couldn't find @{username}. Ask them to DM me /start, then try again."
         )
         return
-    player = add_player(_conn(context), telegram_id, display_name, username)
+    conn = _conn(context)
+    existed = conn.execute(
+        "SELECT active FROM players WHERE telegram_id=?", (telegram_id,)
+    ).fetchone()
+    is_new = existed is None
+    player = add_player(conn, telegram_id, display_name, username)
+    if is_new:
+        inserted = bootstrap_calibration_prompts(conn, telegram_id)
+        suffix = f" Seeded {inserted} calibration prompts." if inserted else ""
+    else:
+        was_inactive = existed is not None and existed["active"] == 0
+        suffix = " (revived from soft-delete)" if was_inactive else ""
     await message.reply_text(
-        f"Added {player.display_name} (@{player.username}) — calibrating."
+        f"Added {player.display_name} (@{player.username}) — calibrating.{suffix}"
     )
 
 
