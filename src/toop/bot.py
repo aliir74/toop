@@ -22,7 +22,11 @@ def main() -> None:
 
     app = Application.builder().token(settings.BOT_TOKEN).build()
 
-    logger.info("توپ starting (admin=%s, group=%s)", settings.ADMIN_TELEGRAM_ID, settings.GROUP_CHAT_ID)
+    logger.info(
+        "توپ starting (admin=%s, group=%s)",
+        settings.ADMIN_TELEGRAM_ID,
+        settings.GROUP_CHAT_ID,
+    )
     app.run_polling()
 
 

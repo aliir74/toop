@@ -24,7 +24,7 @@ Establish the project layout, config, and persistence before any Telegram code.
   - Set up `.venv` and confirm deps install
   - Verify: `python -c "from toop.config import settings; print(settings)"` prints the loaded config
 
-- [ ] **Task 1.2 — SQLite schema + migrations**
+- [x] **Task 1.2 — SQLite schema + migrations**
   - Single `schema.sql` file applied idempotently on startup
   - Tables:
     - `players(telegram_id PK, username, display_name, joined_at, active, is_calibrating)`
