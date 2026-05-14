@@ -56,7 +56,7 @@ First user-facing surface. Admin can manage roster; group can RSVP.
   - All gated by `require_admin`
   - Verify: integration test using `python-telegram-bot`'s `ApplicationBuilder` test harness — add, list, remove, list
 
-- [ ] **Task 2.2 — Session lifecycle commands (admin-only)**
+- [x] **Task 2.2 — Session lifecycle commands (admin-only)**
   - `/open_session [YYYY-MM-DD]` — creates a session row with status `open`; default date = next Monday
   - `/close_session` — marks current open session `done` after the fact
   - `/sessions` — list recent sessions with status
