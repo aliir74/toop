@@ -128,7 +128,7 @@ Turn pairwise aggregates into per-player skill scores.
 
 Snake-draft + setter constraint + admin override.
 
-- [ ] **Task 5.1 — Attendee selection**
+- [x] **Task 5.1 — Attendee selection**
   - Function `select_attendees(session_id) -> tuple[list[int], list[int]]` returning (selected, cut)
   - Inputs: all `yes`-RSVPs for the session
   - If ≤14: all selected, empty cut
