@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import UTC, time
 
 from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
@@ -19,6 +20,7 @@ from toop.handlers.sessions import (
     handle_open_session,
 )
 from toop.handlers.snapshot import (
+    auto_snapshot_job,
     handle_publish,
     handle_snapshot,
     handle_swap,
@@ -30,6 +32,7 @@ from toop.handlers.voting import (
     handle_vote_callback,
     handle_vote_command,
 )
+from toop.sessions import WEEKDAY_INDEX
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +66,20 @@ def main() -> None:
     app.add_handler(CommandHandler("teams", handle_teams))
     app.add_handler(CommandHandler("swap", handle_swap))
     app.add_handler(CommandHandler("publish", handle_publish))
+
+    if app.job_queue is not None:
+        weekday = WEEKDAY_INDEX[settings.SESSION_WEEKDAY.lower()]
+        app.job_queue.run_daily(
+            auto_snapshot_job,
+            time=time(hour=settings.SNAPSHOT_HOUR, minute=0, tzinfo=UTC),
+            days=(weekday,),
+            name="auto_snapshot",
+        )
+        logger.info(
+            "auto_snapshot scheduled: weekday=%s hour=%s UTC",
+            settings.SESSION_WEEKDAY,
+            settings.SNAPSHOT_HOUR,
+        )
     app.add_handler(CallbackQueryHandler(handle_rsvp_callback, pattern=r"^rsvp:"))
     app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
 

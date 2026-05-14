@@ -149,7 +149,7 @@ Snake-draft + setter constraint + admin override.
   - Admin command `/publish` posts final teams to group chat with friendly formatting, sets status `published`, writes `attendance` rows (this is what feeds the fairness queue next week)
   - Verify: full lifecycle test — open session, RSVP 16 players, snapshot, swap, publish, confirm attendance written
 
-- [ ] **Task 5.4 — Scheduled snapshot**
+- [x] **Task 5.4 — Scheduled snapshot**
   - `JobQueue` schedules `auto_snapshot` to fire at `SNAPSHOT_HOUR` on `SESSION_WEEKDAY` (Monday noon)
   - Calls `/snapshot` logic + DMs admin "Snapshot ready — preview with /teams"
   - Does NOT auto-publish — admin must `/publish` deliberately

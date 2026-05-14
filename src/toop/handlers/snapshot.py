@@ -32,6 +32,32 @@ logger = logging.getLogger(__name__)
 SWAP_USAGE = "Usage: /swap @player_a @player_b"
 
 
+def take_snapshot(
+    conn: sqlite3.Connection,
+    weights: tuple[float, float, float],
+    max_attendees: int,
+    calibration_threshold: int,
+) -> tuple[Snapshot, list[int]] | None:
+    """Run the full snapshot pipeline. Returns (snap, cut) or None when no
+    active session / no yes-RSVPs.
+    """
+    from toop.sessions import get_active_session as _get_active
+
+    sess = _get_active(conn)
+    if sess is None:
+        return None
+    selection = select_attendees(conn, sess.id, max_attendees)
+    if not selection.selected:
+        return None
+    refresh_ratings(conn, calibration_threshold)
+    team_a, team_b, metrics = generate_teams(conn, selection.selected, weights)
+    save_snapshot(conn, sess.id, team_a, team_b, selection.cut, metrics)
+    set_session_status(conn, sess.id, "snapshotted", snapshot_at=True)
+    snap = get_snapshot(conn, sess.id)
+    assert snap is not None
+    return snap, selection.cut
+
+
 def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
     conn = context.bot_data.get("conn")
     if conn is None:
@@ -106,6 +132,23 @@ def _format_teams(
     )
 
 
+def _format_snapshot_summary(
+    conn: sqlite3.Connection, snap: Snapshot, cut: list[int]
+) -> str:
+    cut_note = ""
+    if cut:
+        cut_names = [
+            (_fetch_player(conn, pid) or Player(pid, None, f"#{pid}", True, True)).display_name
+            for pid in cut
+        ]
+        cut_note = "\n\nCut: " + ", ".join(cut_names)
+    swap_note = " (setter swap applied)" if snap.metrics.setter_swap_applied else ""
+    return (
+        f"Snapshot saved for session #{snap.session_id}.{swap_note}\n"
+        f"Preview with /teams, swap with /swap, ship with /publish.{cut_note}"
+    )
+
+
 @require_admin
 async def handle_snapshot(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
@@ -116,29 +159,39 @@ async def handle_snapshot(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if sess is None:
         await message.reply_text("No active session. Open one with /open_session.")
         return
-
-    selection = select_attendees(conn, sess.id, settings.MAX_ATTENDEES)
-    if not selection.selected:
+    result = take_snapshot(
+        conn, _weights(), settings.MAX_ATTENDEES, settings.CALIBRATION_THRESHOLD
+    )
+    if result is None:
         await message.reply_text("No yes-RSVPs yet — nothing to snapshot.")
         return
+    snap, cut = result
+    await message.reply_text(_format_snapshot_summary(conn, snap, cut))
 
-    refresh_ratings(conn, settings.CALIBRATION_THRESHOLD)
-    team_a, team_b, metrics = generate_teams(conn, selection.selected, _weights())
-    save_snapshot(conn, sess.id, team_a, team_b, selection.cut, metrics)
-    set_session_status(conn, sess.id, "snapshotted", snapshot_at=True)
 
-    cut_note = ""
-    if selection.cut:
-        cut_names = [
-            (_fetch_player(conn, pid) or Player(pid, None, f"#{pid}", True, True)).display_name
-            for pid in selection.cut
-        ]
-        cut_note = "\n\nCut: " + ", ".join(cut_names)
-    swap_note = " (setter swap applied)" if metrics.setter_swap_applied else ""
-    await message.reply_text(
-        f"Snapshot saved for session #{sess.id}.{swap_note}\n"
-        f"Preview with /teams, swap with /swap, ship with /publish.{cut_note}"
+async def auto_snapshot_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Scheduled job: runs the snapshot pipeline and DMs admin when done.
+    Does NOT auto-publish — admin must /publish manually.
+    """
+    conn = _conn(context)
+    result = take_snapshot(
+        conn, _weights(), settings.MAX_ATTENDEES, settings.CALIBRATION_THRESHOLD
     )
+    if result is None:
+        logger.info("auto_snapshot: no active session with yes-RSVPs; skipping")
+        return
+    snap, cut = result
+    if settings.ADMIN_TELEGRAM_ID == 0:
+        logger.warning("auto_snapshot: ADMIN_TELEGRAM_ID unset; not DMing")
+        return
+    summary = _format_snapshot_summary(conn, snap, cut)
+    try:
+        await context.bot.send_message(
+            chat_id=settings.ADMIN_TELEGRAM_ID,
+            text=f"⏰ Auto-snapshot ran.\n\n{summary}",
+        )
+    except TelegramError as exc:
+        logger.warning("auto_snapshot: failed to DM admin: %s", exc)
 
 
 @require_admin
