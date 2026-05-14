@@ -117,7 +117,7 @@ Turn pairwise aggregates into per-player skill scores.
   - Triggered on: snapshot, admin `/refresh_ratings`, and every N vote-callbacks (debounced)
   - Verify: integration test — seed aggregates, call refresh, query player_ratings, confirm scores monotonic with seeded wins
 
-- [ ] **Task 4.3 — Composite score**
+- [x] **Task 4.3 — Composite score**
   - Function `composite_score(telegram_id) -> tuple[float, str]` returning (score, calibration_status)
   - Status: `"calibrated"` if all 3 axes calibrated, `"partial"` if 1-2, `"calibrating"` if 0
   - Verify: unit tests across the three states

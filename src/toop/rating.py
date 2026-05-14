@@ -193,3 +193,32 @@ def get_player_ratings(
         r["axis"]: (r["score"], r["vote_count"], bool(r["calibrated"]))
         for r in rows
     }
+
+
+def composite_score(
+    conn: sqlite3.Connection,
+    telegram_id: int,
+    weights: tuple[float, float, float],
+) -> tuple[float, str]:
+    """Return (weighted_score, calibration_status).
+
+    weights is (attack, defense, setting) — does NOT need to sum to 1.0;
+    scaled appropriately. Status: 'calibrated' (all 3), 'partial' (1-2),
+    'calibrating' (0).
+    """
+    ratings = get_player_ratings(conn, telegram_id)
+    w_attack, w_defense, w_setting = weights
+    axis_weights = {"attack": w_attack, "defense": w_defense, "setting": w_setting}
+    score = sum(
+        ratings.get(axis, (0.0, 0, False))[0] * w
+        for axis, w in axis_weights.items()
+    )
+    calibrated_count = sum(
+        1 for axis in AXES if ratings.get(axis, (0.0, 0, False))[2]
+    )
+    status = (
+        "calibrated" if calibrated_count == 3
+        else "partial" if calibrated_count > 0
+        else "calibrating"
+    )
+    return score, status
