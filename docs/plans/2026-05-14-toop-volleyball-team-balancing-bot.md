@@ -83,7 +83,7 @@ Continuous queue, 3 axes, info-gain ordering, full privacy.
   - Excludes axes the voter has snoozed
   - Verify: unit tests — voter with 0 votes gets 5 prompts, voter who answered all available pairs gets 0, voter with snooze gets axes filtered
 
-- [ ] **Task 3.2 — Pairwise voting handler (DMs only)**
+- [x] **Task 3.2 — Pairwise voting handler (DMs only)**
   - `/vote` command in DM: pulls top prompt from queue, sends message "Who's stronger at **attack**, Alice vs Bob?" with inline buttons [Alice] [Bob] [🤷 Don't know] [😴 Snooze 1w]
   - Callback writes to `vote_aggregates` (incrementing winner count) AND `answered_prompts` (dedupe), then immediately calls `refill_queue` and shows next prompt
   - "Don't know" writes to `answered_prompts` only (no aggregate increment), advances queue

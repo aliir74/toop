@@ -17,6 +17,7 @@ from toop.handlers.sessions import (
     handle_list_sessions,
     handle_open_session,
 )
+from toop.handlers.voting import handle_vote_callback, handle_vote_command
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +43,9 @@ def main() -> None:
     app.add_handler(CommandHandler("close_session", handle_close_session))
     app.add_handler(CommandHandler("sessions", handle_list_sessions))
     app.add_handler(CommandHandler("lock_in", handle_lock_in))
+    app.add_handler(CommandHandler("vote", handle_vote_command))
     app.add_handler(CallbackQueryHandler(handle_rsvp_callback, pattern=r"^rsvp:"))
+    app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
 
     logger.info(
         "توپ starting (admin=%s, group=%s)",

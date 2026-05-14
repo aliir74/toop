@@ -144,6 +144,71 @@ def add_snooze(conn: sqlite3.Connection, voter_id: int, axis: str) -> datetime:
     return until
 
 
+def record_vote(
+    conn: sqlite3.Connection,
+    voter_id: int,
+    player_a: int,
+    player_b: int,
+    axis: str,
+    winner: str,
+) -> None:
+    """Record an aggregate increment + voter-side dedupe.
+
+    Privacy invariant: vote_aggregates row carries no voter_id; answered_prompts
+    carries voter_id but never the outcome. These two writes happen in the same
+    transaction but the tables are never joined downstream.
+    """
+    if winner not in ("a", "b"):
+        raise ValueError(f"winner must be 'a' or 'b', got {winner!r}")
+    a_inc = 1 if winner == "a" else 0
+    b_inc = 1 if winner == "b" else 0
+    conn.execute(
+        """
+        INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, updated_at)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(player_a, player_b, axis) DO UPDATE SET
+            a_wins = a_wins + excluded.a_wins,
+            b_wins = b_wins + excluded.b_wins,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (player_a, player_b, axis, a_inc, b_inc),
+    )
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO answered_prompts (voter_id, player_a, player_b, axis)
+        VALUES (?, ?, ?, ?)
+        """,
+        (voter_id, player_a, player_b, axis),
+    )
+    conn.execute(
+        "DELETE FROM pending_prompts WHERE voter_id=? AND player_a=? AND player_b=? AND axis=?",
+        (voter_id, player_a, player_b, axis),
+    )
+    conn.commit()
+
+
+def mark_dont_know(
+    conn: sqlite3.Connection,
+    voter_id: int,
+    player_a: int,
+    player_b: int,
+    axis: str,
+) -> None:
+    """Voter declined to compare. Dedupe only — no aggregate increment."""
+    conn.execute(
+        """
+        INSERT OR IGNORE INTO answered_prompts (voter_id, player_a, player_b, axis)
+        VALUES (?, ?, ?, ?)
+        """,
+        (voter_id, player_a, player_b, axis),
+    )
+    conn.execute(
+        "DELETE FROM pending_prompts WHERE voter_id=? AND player_a=? AND player_b=? AND axis=?",
+        (voter_id, player_a, player_b, axis),
+    )
+    conn.commit()
+
+
 def insert_priority_prompt(
     conn: sqlite3.Connection,
     voter_id: int,
