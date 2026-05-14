@@ -38,7 +38,7 @@ Establish the project layout, config, and persistence before any Telegram code.
   - Indexes on `pending_prompts(voter_id, info_gain DESC)`, `vote_aggregates(player_a, player_b, axis)`
   - Verify: `pytest tests/test_db.py` — schema applies cleanly twice, foreign keys enforced
 
-- [ ] **Task 1.3 — Config validation + admin guard**
+- [x] **Task 1.3 — Config validation + admin guard**
   - `pydantic-settings` validates: token present, admin_id is int, weights sum to 1.0 (warn if not), snapshot hour 0-23
   - `require_admin` decorator for handlers that checks `update.effective_user.id == settings.ADMIN_TELEGRAM_ID`, replies politely otherwise
   - Verify: unit test for `require_admin` with mock Update — non-admin gets reject message, admin proceeds
