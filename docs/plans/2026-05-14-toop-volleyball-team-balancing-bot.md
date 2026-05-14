@@ -177,7 +177,7 @@ Voting health visibility without exposing vote content.
   - Format: `Alice vs Bob — attack: 1 vote · defense: 4 votes · setting: 0 votes`
   - Verify: synthetic data — confirms ordering by total votes ascending
 
-- [ ] **Task 6.3 — Privacy audit checklist (manual)**
+- [x] **Task 6.3 — Privacy audit checklist (manual)**
   - Doc `docs/PRIVACY.md` enumerating every code path that touches vote data
   - Confirm: no logger emits vote outcomes, no admin command surfaces raw votes, no DB query returns voter+outcome together
   - Manual run-through reviewing each handler, signed off in this checklist
