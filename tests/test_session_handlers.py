@@ -49,7 +49,8 @@ async def test_open_session_uses_default_weekday(
     admin_settings: None, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        "toop.handlers.sessions.settings", MagicMock(SESSION_WEEKDAY="monday")
+        "toop.handlers.sessions.settings",
+        MagicMock(SESSION_WEEKDAY="monday", GROUP_CHAT_ID=0),
     )
     update = _admin_update()
     ctx = _ctx(conn, [])
@@ -76,6 +77,23 @@ async def test_close_session_marks_done(
     ctx = _ctx(conn, [])
     await handle_close_session(update, ctx)
     assert get_active_session(conn) is None
+
+
+async def test_open_session_posts_rsvp_message(
+    admin_settings: None, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "toop.handlers.sessions.settings",
+        MagicMock(SESSION_WEEKDAY="monday", GROUP_CHAT_ID=-100123),
+    )
+    update = _admin_update()
+    ctx = _ctx(conn, ["2026-05-18"])
+    ctx.bot.send_message = AsyncMock()
+    await handle_open_session(update, ctx)
+    ctx.bot.send_message.assert_awaited_once()
+    kwargs = ctx.bot.send_message.await_args.kwargs
+    assert kwargs["chat_id"] == -100123
+    assert "✅ 0" in kwargs["text"]
 
 
 async def test_list_sessions_empty(

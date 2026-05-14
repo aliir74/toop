@@ -62,7 +62,7 @@ First user-facing surface. Admin can manage roster; group can RSVP.
   - `/sessions` — list recent sessions with status
   - Verify: one-session-open invariant — `/open_session` errors if one already open
 
-- [ ] **Task 2.3 — RSVP flow (group chat)**
+- [x] **Task 2.3 — RSVP flow (group chat)**
   - When session opens, bot posts to `GROUP_CHAT_ID` with three inline buttons: ✅ Yes / ❌ No / 🤔 Maybe
   - Callback writes to `rsvps` table, edits message to show running count: "✅ 12 · ❌ 3 · 🤔 2"
   - Idempotent — clicking again updates the player's row
