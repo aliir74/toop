@@ -75,7 +75,7 @@ First user-facing surface. Admin can manage roster; group can RSVP.
 
 Continuous queue, 3 axes, info-gain ordering, full privacy.
 
-- [ ] **Task 3.1 — Prompt generation + queue maintenance**
+- [x] **Task 3.1 — Prompt generation + queue maintenance**
   - Service function `refill_queue(voter_id) -> int` that ensures `pending_prompts` has up to `QUEUE_DEPTH` rows for the voter, ordered by descending info-gain
   - Info-gain heuristic for MVP: prioritize pairs where `(a_wins + b_wins) < 5` (under-sampled), tiebreak by total votes ascending across the group. Full uncertainty-based scoring deferred.
   - Excludes pairs the voter already answered (`answered_prompts`)
