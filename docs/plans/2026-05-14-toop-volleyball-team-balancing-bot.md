@@ -161,7 +161,7 @@ Snake-draft + setter constraint + admin override.
 
 Voting health visibility without exposing vote content.
 
-- [ ] **Task 6.1 — Voting health view**
+- [x] **Task 6.1 — Voting health view**
   - Admin command `/health` returns a DM-formatted table per active player:
     ```
     Player          Last vote   Lifetime   30d   Pending   Cal
@@ -172,7 +172,7 @@ Voting health visibility without exposing vote content.
   - Sorted by "least recently voted" descending — nudge targets at top
   - Verify: synthetic data — confirms ordering and counts
 
-- [ ] **Task 6.2 — Coverage gaps view**
+- [x] **Task 6.2 — Coverage gaps view**
   - Admin command `/coverage` lists the 10 most under-sampled `(player_a, player_b, axis)` triples across the group
   - Format: `Alice vs Bob — attack: 1 vote · defense: 4 votes · setting: 0 votes`
   - Verify: synthetic data — confirms ordering by total votes ascending

@@ -7,6 +7,7 @@ from telegram.ext import Application, CallbackQueryHandler, CommandHandler
 
 from toop.config import settings
 from toop.db import get_connection, init_db
+from toop.handlers.health import handle_coverage, handle_health
 from toop.handlers.ratings import handle_refresh_ratings
 from toop.handlers.roster import (
     handle_add_player,
@@ -66,6 +67,8 @@ def main() -> None:
     app.add_handler(CommandHandler("teams", handle_teams))
     app.add_handler(CommandHandler("swap", handle_swap))
     app.add_handler(CommandHandler("publish", handle_publish))
+    app.add_handler(CommandHandler("health", handle_health))
+    app.add_handler(CommandHandler("coverage", handle_coverage))
 
     if app.job_queue is not None:
         weekday = WEEKDAY_INDEX[settings.SESSION_WEEKDAY.lower()]
