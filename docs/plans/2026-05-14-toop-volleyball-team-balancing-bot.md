@@ -189,7 +189,7 @@ Voting health visibility without exposing vote content.
 
 Ship-ready local hosting.
 
-- [ ] **Task 7.1 — LaunchAgent plist**
+- [x] **Task 7.1 — LaunchAgent plist**
   - `deploy/com.aliirani.toop.plist` + `deploy/launch-toop.sh` matching the shape of telegram-claude / telegram-companion
   - Loads `.env`, starts the bot, KeepAlive + ThrottleInterval=30s, logs to `logs/toop.log` (rotating via shell logrotate or python `RotatingFileHandler`)
   - Install instructions in `deploy/README.md`
