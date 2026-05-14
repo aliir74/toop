@@ -1,7 +1,7 @@
  # توپ — Volleyball team-balancing Telegram bot (MVP)
 
 **Goal:** Ship a Telegram bot that manages weekly 6v6 volleyball sessions: roster, RSVP, private peer pairwise voting (3 skill axes), Bradley-Terry ratings, balanced team generation with admin override.
-**Status:** in_progress
+**Status:** done
 **Created:** 2026-05-14
 **Execution:** Use `/execute-plan <path-to-this-file>` to run this plan task-by-task.
 
@@ -200,7 +200,7 @@ Ship-ready local hosting.
   - Admin `/backup_db` copies `toop.db` to a timestamped path inside repo (NOT auto-uploaded anywhere — local only)
   - Verify: commands respond correctly
 
-- [ ] **Task 7.3 — Onboarding doc**
+- [x] **Task 7.3 — Onboarding doc**
   - Update README with: setup, first-run, admin commands cheat sheet, voter intro template (copy-paste for group chat), troubleshooting
   - Verify: another human (or fresh-eyes re-read) can run the bot from cold
 
