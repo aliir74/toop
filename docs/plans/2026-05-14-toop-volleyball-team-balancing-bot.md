@@ -103,7 +103,7 @@ Continuous queue, 3 axes, info-gain ordering, full privacy.
 
 Turn pairwise aggregates into per-player skill scores.
 
-- [ ] **Task 4.1 — Bradley-Terry fitter**
+- [x] **Task 4.1 — Bradley-Terry fitter**
   - Pure function `fit_bradley_terry(aggregates: dict[(int,int), tuple[int,int]]) -> dict[int, float]` per axis
   - Standard iterative MM algorithm (Hunter 2004), 50 iterations max, convergence threshold 1e-6
   - Returns normalized log-skill scores (mean 0)
