@@ -49,7 +49,7 @@ Establish the project layout, config, and persistence before any Telegram code.
 
 First user-facing surface. Admin can manage roster; group can RSVP.
 
-- [ ] **Task 2.1 — Roster commands (admin-only)**
+- [x] **Task 2.1 — Roster commands (admin-only)**
   - `/add_player @username "Display Name"` — adds player, sets `is_calibrating=true`
   - `/remove_player @username` — soft-delete (sets `active=false`)
   - `/list_players` — returns roster as a numbered list with calibration status
