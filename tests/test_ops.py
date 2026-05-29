@@ -84,3 +84,44 @@ async def test_backup_db_missing_path_friendly_error(
     await handle_backup_db(update, _ctx(conn))
     reply = update.effective_message.reply_text.await_args.args[0]
     assert "not found" in reply
+
+
+# ----- branch coverage additions -----
+
+from toop.handlers.ops import _commit_sha, _conn  # noqa: E402
+
+
+def test_conn_raises_when_missing() -> None:
+    ctx = MagicMock()
+    ctx.bot_data = {}
+    with pytest.raises(RuntimeError, match="DB connection missing"):
+        _conn(ctx)
+
+
+def test_commit_sha_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GIT_SHA", "abc1234")
+    assert _commit_sha() == "abc1234"
+
+
+def test_commit_sha_subprocess_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GIT_SHA", raising=False)
+
+    def boom(*a: object, **k: object) -> None:
+        raise FileNotFoundError
+
+    monkeypatch.setattr("toop.handlers.ops.subprocess.run", boom)
+    assert _commit_sha() == "unknown"
+
+
+async def test_version_returns_without_message(conn: sqlite3.Connection) -> None:
+    u = MagicMock()
+    u.effective_user = MagicMock(id=42)
+    u.effective_message = None
+    await handle_version(u, _ctx(conn))
+
+
+async def test_backup_db_returns_without_message(conn: sqlite3.Connection) -> None:
+    u = MagicMock()
+    u.effective_user = MagicMock(id=42)
+    u.effective_message = None
+    await handle_backup_db(u, _ctx(conn))

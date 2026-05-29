@@ -126,3 +126,68 @@ async def test_coverage_handler_replies(conn: sqlite3.Connection) -> None:
     await handle_coverage(update, _ctx(conn))
     reply = update.effective_message.reply_text.await_args.args[0]
     assert "Coverage" in reply or "Not enough" in reply
+
+
+# ----- branch coverage additions -----
+
+from toop.handlers.health import _calibration_marker, _conn, _humanize_age  # noqa: E402
+
+
+def test_conn_raises_when_missing() -> None:
+    ctx = MagicMock()
+    ctx.bot_data = {}
+    with pytest.raises(RuntimeError, match="DB connection missing"):
+        _conn(ctx)
+
+
+def test_humanize_age_variants() -> None:
+    now = datetime.now(UTC)
+    assert _humanize_age(None) == "never"
+    assert _humanize_age("") == "never"
+    assert _humanize_age("garbage") == "?"
+    assert _humanize_age((now - timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")) == "3d ago"
+    assert _humanize_age((now - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")) == "2h ago"
+    assert _humanize_age((now - timedelta(minutes=1)).strftime("%Y-%m-%d %H:%M:%S")) == "today"
+
+
+def test_calibration_marker_variants() -> None:
+    assert _calibration_marker(False, 0) == "✓"
+    assert _calibration_marker(True, 5) == "⚠"
+    assert _calibration_marker(True, 0) == "✗"
+
+
+def test_format_health_empty() -> None:
+    assert format_health([]) == "Roster is empty."
+
+
+def test_build_health_rows_handles_malformed_timestamp(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    add_player(conn, 3, "Carol", "carol")
+    conn.execute(
+        "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis, answered_at) "
+        "VALUES (1, 2, 3, 'attack', 'not-a-date')"
+    )
+    conn.commit()
+    rows = build_health_rows(conn)
+    alice = next(r for r in rows if r["display_name"] == "Alice")
+    assert alice["last_voted_human"] == "?"
+
+
+async def test_health_returns_without_message(conn: sqlite3.Connection) -> None:
+    u = MagicMock()
+    u.effective_user = MagicMock(id=42)
+    u.effective_message = None
+    await handle_health(u, _ctx(conn))
+
+
+def test_build_coverage_too_few_players(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    assert "Not enough players" in build_coverage(conn, limit=10)
+
+
+async def test_coverage_returns_without_message(conn: sqlite3.Connection) -> None:
+    u = MagicMock()
+    u.effective_user = MagicMock(id=42)
+    u.effective_message = None
+    await handle_coverage(u, _ctx(conn))
