@@ -95,8 +95,8 @@ def main() -> None:
         settings.ADMIN_TELEGRAM_ID,
         settings.GROUP_CHAT_ID,
     )
-    app.run_polling()
+    app.run_polling()  # pragma: no cover
 
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     main()
