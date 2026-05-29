@@ -878,7 +878,7 @@
     <span class="phase-progress">0 / 0</span>
   </div>
   <div class="phase-bar"><div class="fill"></div></div>
-  <article class="task" data-task-id="2.1" data-task-status="pending">
+  <article class="task" data-task-id="2.1" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">2.1</span><span class="task-name">Test handlers/ratings.py (/refresh_ratings)</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -890,20 +890,20 @@
             <span class="label">Files</span> Create: tests/test_ratings_handler.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests: (a) non-admin caller is rejected by the require_admin guard, (b) update with no effective_message returns early, (c) happy path calls refresh_ratings and replies with the row count</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Use the existing conftest fixtures / fake Update+Context patterns from tests/test_voting_handler.py as the template</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run <code>uv run pytest tests/test_ratings_handler.py --cov=toop.handlers.ratings --cov-report=term-missing</code> — expect handlers/ratings.py at 100%</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: test(ratings): cover /refresh_ratings handler</span>
         </li>
           </ol>
