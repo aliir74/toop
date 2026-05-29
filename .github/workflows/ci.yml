@@ -38,5 +38,6 @@ jobs:
       - name: Typecheck (ty)
         run: uv run ty check src
 
-      - name: Tests (pytest)
-        run: uv run pytest -v
+      - name: Tests (pytest + 100% coverage)
+        # Fails the job if TOTAL line coverage < 100% (fail_under in pyproject [tool.coverage.report]).
+        run: uv run pytest -v --cov=toop --cov-report=term-missing

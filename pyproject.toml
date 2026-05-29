@@ -42,6 +42,7 @@ branch = false
 
 [tool.coverage.report]
 show_missing = true
+fail_under = 100
 
 [tool.ty.src]
 # Type-check pure logic modules. Handler/wiring files are excluded because

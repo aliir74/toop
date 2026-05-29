@@ -1153,7 +1153,7 @@
     <span class="phase-progress">0 / 0</span>
   </div>
   <div class="phase-bar"><div class="fill"></div></div>
-  <article class="task" data-task-id="5.1" data-task-status="pending">
+  <article class="task" data-task-id="5.1" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">5.1</span><span class="task-name">Enforce --cov-fail-under=100 in pyproject + CI</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1165,24 +1165,24 @@
             <span class="label">Files</span> Modify: pyproject.toml · Modify: .github/workflows/ci.yml
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>fail_under = 100</code> to <code>[tool.coverage.report]</code> (and/or <code>--cov-fail-under=100</code> to pytest addopts) so any drop below 100% exits non-zero</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Update the CI <code>Tests (pytest)</code> step so coverage is measured and reported in the job — e.g. <code>uv run pytest -v --cov=toop --cov-report=term-missing</code> (addopts already cover this; make it explicit in the workflow for log visibility)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run the full suite locally: <code>uv run pytest</code> must pass AND report 100%</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Sanity check the gate: temporarily delete one assertion-bearing test, confirm <code>pytest</code> now exits non-zero on coverage, then restore it</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: ci(test): require 100% coverage (cov-fail-under)</span>
         </li>
           </ol>
