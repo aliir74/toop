@@ -1215,7 +1215,7 @@
     <span class="phase-progress">0 / 0</span>
   </div>
   <div class="phase-bar"><div class="fill"></div></div>
-  <article class="task" data-task-id="6.1" data-task-status="pending">
+  <article class="task" data-task-id="6.1" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">6.1</span><span class="task-name">Push branch, confirm CI green, require the check on main</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1227,24 +1227,24 @@
             <span class="label">Files</span> Reference: aliir74/toop repo settings (GitHub ruleset)
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Push feat/toop-mvp: <code>git push origin feat/toop-mvp</code></span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Watch PR #1 CI: <code>gh pr checks 1 --repo aliir74/toop --watch</code> — confirm the <code>lint + typecheck + tests</code> check is SUCCESS with coverage at 100%</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Create a branch-protection ruleset on <code>main</code> requiring the CI status check, via <code>gh api --method POST repos/aliir74/toop/rulesets</code> with a <code>required_status_checks</code> rule whose context is <code>lint + typecheck + tests</code>, <code>pull_request</code> rule enabled, target ref <code>~DEFAULT_BRANCH</code></span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify the rule is active: <code>gh api repos/aliir74/toop/rulesets</code> lists it, and PR #1 shows the check as Required</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Report back: gate is live; a PR with &lt;100% coverage will fail CI and the merge button will be blocked. Do NOT merge PR #1 (merging is the user&#x27;s call)</span>
         </li>
           </ol>
