@@ -989,20 +989,20 @@
             <span class="label">Files</span> Modify: tests/test_voting_handler.py · Modify: tests/test_snapshot_flow.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Read the term-missing lines for handlers/voting.py (~50, 106-123, 136-137, 151, 165, 174-206, 218, 225, 267-271) and handlers/snapshot.py (~64-295) and identify each as a guard / early-return / error branch</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add focused tests for each: no effective_message, no effective_user, empty queue / no pending prompt, group-vote redirect to DM, invalid callback data, no active snapshot, swap with unknown players, publish with nothing to publish, etc.</span>
         </li>
         <li class="step" data-status="pending">
           <input type="checkbox" />
           <span class="step-text">Run <code>uv run pytest --cov=toop --cov-report=term-missing</code> and confirm both modules reach 100%</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: test(handlers): cover voting + snapshot branches</span>
         </li>
           </ol>

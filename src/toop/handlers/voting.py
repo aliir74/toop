@@ -165,9 +165,6 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     payload = query.data.removeprefix(CALLBACK_PREFIX)
     parts = payload.split(":")
-    if not parts:
-        await query.answer()
-        return
     action = parts[0]
 
     if action == "sn":

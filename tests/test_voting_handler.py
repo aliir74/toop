@@ -5,13 +5,22 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from telegram.constants import ChatType
+from telegram.error import BadRequest
 
 from toop.handlers.voting import (
     GROUP_REPLY,
+    NO_PROMPTS_REPLY,
+    START_DM,
+    START_GROUP,
+    _conn,
+    _send_next_prompt,
+    handle_nudge,
+    handle_start,
     handle_vote_callback,
     handle_vote_command,
 )
 from toop.players import add_player
+from toop.voting_queue import Prompt
 
 
 @pytest.fixture(autouse=True)
@@ -178,3 +187,190 @@ async def test_privacy_voter_and_outcome_not_joinable(conn: sqlite3.Connection) 
     va_columns = [c[1] for c in conn.execute("PRAGMA table_info(vote_aggregates)").fetchall()]
     assert "a_wins" not in ap_columns and "b_wins" not in ap_columns
     assert "voter_id" not in va_columns
+
+
+def _admin_update(user_id: int = 42, with_message: bool = True) -> MagicMock:
+    u = MagicMock()
+    u.effective_user = MagicMock(id=user_id)
+    if with_message:
+        msg = MagicMock()
+        msg.reply_text = AsyncMock()
+        u.effective_message = msg
+    else:
+        u.effective_message = None
+    return u
+
+
+def test_conn_raises_when_missing() -> None:
+    ctx = MagicMock()
+    ctx.bot_data = {}
+    with pytest.raises(RuntimeError, match="DB connection missing"):
+        _conn(ctx)
+
+
+async def test_vote_command_returns_without_message(conn: sqlite3.Connection) -> None:
+    u = MagicMock()
+    u.effective_message = None
+    u.effective_chat = MagicMock()
+    u.effective_user = MagicMock(id=1)
+    # No message → silent return, no DB access needed.
+    await handle_vote_command(u, _ctx(conn))
+
+
+async def test_callback_returns_without_query(conn: sqlite3.Connection) -> None:
+    u = MagicMock()
+    u.callback_query = None
+    await handle_vote_callback(u, _ctx(conn))
+
+
+async def test_callback_snooze_missing_axis(conn: sqlite3.Connection) -> None:
+    update = _callback_update(user_id=1, data="v:sn")
+    await handle_vote_callback(update, _ctx(conn))
+    update.callback_query.answer.assert_awaited()
+
+
+async def test_callback_snooze_invalid_axis(conn: sqlite3.Connection) -> None:
+    update = _callback_update(user_id=1, data="v:sn:bogus")
+    await handle_vote_callback(update, _ctx(conn))
+    update.callback_query.answer.assert_awaited()
+
+
+async def test_callback_vote_too_few_parts(conn: sqlite3.Connection) -> None:
+    update = _callback_update(user_id=1, data="v:a:1:2")
+    await handle_vote_callback(update, _ctx(conn))
+    update.callback_query.answer.assert_awaited()
+
+
+async def test_callback_vote_non_int_players(conn: sqlite3.Connection) -> None:
+    update = _callback_update(user_id=1, data="v:a:x:y:attack")
+    await handle_vote_callback(update, _ctx(conn))
+    update.callback_query.answer.assert_awaited()
+
+
+async def test_callback_vote_invalid_axis(conn: sqlite3.Connection) -> None:
+    update = _callback_update(user_id=1, data="v:a:1:2:bogus")
+    await handle_vote_callback(update, _ctx(conn))
+    update.callback_query.answer.assert_awaited()
+
+
+async def test_callback_unknown_action(conn: sqlite3.Connection) -> None:
+    update = _callback_update(user_id=1, data="v:zzz")
+    await handle_vote_callback(update, _ctx(conn))
+    update.callback_query.answer.assert_awaited()
+
+
+async def test_start_in_dm(conn: sqlite3.Connection) -> None:
+    update = _dm_update(user_id=1)
+    await handle_start(update, _ctx(conn))
+    update.effective_message.reply_text.assert_awaited_once_with(START_DM)
+
+
+async def test_start_in_group(conn: sqlite3.Connection) -> None:
+    update = _group_update(user_id=1)
+    await handle_start(update, _ctx(conn))
+    update.effective_message.reply_text.assert_awaited_once_with(START_GROUP)
+
+
+async def test_start_returns_without_message(conn: sqlite3.Connection) -> None:
+    u = MagicMock()
+    u.effective_message = None
+    u.effective_chat = MagicMock()
+    await handle_start(u, _ctx(conn))
+
+
+async def test_nudge_returns_without_message(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("toop.admin.settings", MagicMock(ADMIN_TELEGRAM_ID=42))
+    await handle_nudge(_admin_update(with_message=False), _ctx(conn))
+
+
+async def test_nudge_empty_roster(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("toop.admin.settings", MagicMock(ADMIN_TELEGRAM_ID=42))
+    update = _admin_update()
+    await handle_nudge(update, _ctx(conn))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "No players" in reply
+
+
+async def test_nudge_with_players(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("toop.admin.settings", MagicMock(ADMIN_TELEGRAM_ID=42))
+    _seed(conn)
+    update = _admin_update()
+    await handle_nudge(update, _ctx(conn))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "nudge" in reply.lower()
+    assert "Alice" in reply
+
+
+def _prompt(player_a: int, player_b: int) -> Prompt:
+    return Prompt(voter_id=1, player_a=player_a, player_b=player_b, axis="attack", info_gain=1.0)
+
+
+def _patch_queue(monkeypatch: pytest.MonkeyPatch, prompt: Prompt | None) -> None:
+    monkeypatch.setattr("toop.handlers.voting.refill_queue", lambda *a, **k: None)
+    monkeypatch.setattr("toop.handlers.voting.peek_next_prompt", lambda *a, **k: prompt)
+
+
+async def test_send_next_prompt_none_edits_message(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_queue(monkeypatch, None)
+    ctx = _ctx(conn)
+    await _send_next_prompt(conn, ctx, chat_id=1, voter_id=1, edit_message_id=5)
+    ctx.bot.edit_message_text.assert_awaited_once()
+    ctx.bot.send_message.assert_not_awaited()
+
+
+async def test_send_next_prompt_none_edit_fails_falls_back_to_send(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_queue(monkeypatch, None)
+    ctx = _ctx(conn)
+    ctx.bot.edit_message_text = AsyncMock(side_effect=BadRequest("boom"))
+    await _send_next_prompt(conn, ctx, chat_id=1, voter_id=1, edit_message_id=5)
+    ctx.bot.send_message.assert_awaited_once()
+
+
+async def test_send_next_prompt_none_no_edit_sends(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_queue(monkeypatch, None)
+    ctx = _ctx(conn)
+    await _send_next_prompt(conn, ctx, chat_id=1, voter_id=1)
+    ctx.bot.send_message.assert_awaited_once()
+    assert ctx.bot.send_message.await_args.kwargs["text"] == NO_PROMPTS_REPLY
+
+
+async def test_send_next_prompt_missing_players(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_queue(monkeypatch, _prompt(111, 222))  # players not on roster
+    ctx = _ctx(conn)
+    await _send_next_prompt(conn, ctx, chat_id=1, voter_id=1)
+    assert ctx.bot.send_message.await_args.kwargs["text"] == NO_PROMPTS_REPLY
+
+
+async def test_send_next_prompt_edit_with_prompt(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed(conn)
+    _patch_queue(monkeypatch, _prompt(1, 2))
+    ctx = _ctx(conn)
+    await _send_next_prompt(conn, ctx, chat_id=1, voter_id=1, edit_message_id=5)
+    ctx.bot.edit_message_text.assert_awaited_once()
+
+
+async def test_send_next_prompt_edit_fails_with_prompt_sends(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed(conn)
+    _patch_queue(monkeypatch, _prompt(1, 2))
+    ctx = _ctx(conn)
+    ctx.bot.edit_message_text = AsyncMock(side_effect=BadRequest("boom"))
+    await _send_next_prompt(conn, ctx, chat_id=1, voter_id=1, edit_message_id=5)
+    ctx.bot.send_message.assert_awaited_once()
