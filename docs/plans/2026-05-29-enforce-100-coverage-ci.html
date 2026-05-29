@@ -917,7 +917,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="2.2" data-task-status="pending">
+  <article class="task" data-task-id="2.2" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">2.2</span><span class="task-name">Test bot.py main() wiring</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -929,28 +929,28 @@
             <span class="label">Files</span> Create: tests/test_bot_wiring.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test that calls <code>toop.bot.main()</code> with: env/settings patched so <code>require_runtime()</code> passes, a temp/in-memory DB path, and <code>Application.builder</code> monkeypatched to return a mock whose <code>.build()</code> yields a mock app (mock <code>bot_data</code> dict, mock <code>add_handler</code>, mock <code>job_queue</code> with <code>run_daily</code>)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Assert: every CommandHandler + both CallbackQueryHandlers are registered (assert <code>add_handler</code> call count / patterns), <code>bot_data[&quot;conn&quot;]</code> and <code>bot_data[&quot;started_at&quot;]</code> are set, and <code>job_queue.run_daily</code> is called with the auto_snapshot job</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add a second test covering the <code>app.job_queue is None</code> branch (mock app with <code>job_queue = None</code>) so that branch is hit</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Confirm <code>app.run_polling()</code> (pragma) and the <code>__main__</code> guard are excluded; importing <code>toop.__main__</code> covers its import line</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run coverage scoped to <code>toop.bot</code> and <code>toop.__main__</code> — expect 100% on both</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: test(bot): cover application wiring + scheduler branch</span>
         </li>
           </ol>
