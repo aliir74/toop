@@ -75,7 +75,7 @@ def _try_setter_swap(
             impact = abs(composite[d] - composite[r])
             if best is None or impact < best[0]:
                 best = (impact, d, r)
-    if best is None:
+    if best is None:  # pragma: no cover - defensive; loop above always sets best
         return team_a, team_b, False
 
     _, d, r = best
