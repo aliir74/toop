@@ -112,3 +112,92 @@ async def test_non_admin_blocked(monkeypatch: pytest.MonkeyPatch, conn: sqlite3.
     ctx = _context(conn, args=["@alice", '"Alice"'], chat_id=111)
     await handle_add_player(update, ctx)
     assert list_active_players(conn) == []
+
+
+# ----- branch coverage additions -----
+
+from toop.handlers.roster import _conn, _parse_add_args  # noqa: E402
+
+
+def test_conn_raises_when_missing() -> None:
+    ctx = MagicMock()
+    ctx.bot_data = {}
+    with pytest.raises(RuntimeError, match="DB connection missing"):
+        _conn(ctx)
+
+
+def test_parse_add_args_unbalanced_quote() -> None:
+    assert _parse_add_args('/add_player @alice "Unclosed') is None
+
+
+def test_parse_add_args_too_few_tokens() -> None:
+    assert _parse_add_args("/add_player @alice") is None
+
+
+def test_parse_add_args_empty_username() -> None:
+    assert _parse_add_args('/add_player @ "Name"') is None
+
+
+async def test_add_player_no_text(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update('/add_player @a "A"')
+    update.effective_message.text = None
+    await handle_add_player(update, _context(conn, args=["@a"], chat_id=111))
+    update.effective_message.reply_text.assert_not_called()
+
+
+async def test_add_player_revives_soft_deleted(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    await handle_add_player(
+        _admin_update('/add_player @alice "Alice"'),
+        _context(conn, args=["@alice", '"Alice"'], chat_id=111),
+    )
+    await handle_remove_player(
+        _admin_update("/remove_player @alice"),
+        _context(conn, args=["@alice"], chat_id=111),
+    )
+    update = _admin_update('/add_player @alice "Alice"')
+    await handle_add_player(update, _context(conn, args=["@alice", '"Alice"'], chat_id=111))
+    assert "revived" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_remove_player_returns_without_message(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update("/remove_player @x")
+    update.effective_message = None
+    await handle_remove_player(update, _context(conn, args=["@x"], chat_id=111))
+
+
+async def test_remove_player_no_args(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/remove_player")
+    await handle_remove_player(update, _context(conn, args=[], chat_id=111))
+    assert update.effective_message.reply_text.await_args.args[0].startswith("Usage")
+
+
+async def test_remove_player_empty_username(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/remove_player @")
+    await handle_remove_player(update, _context(conn, args=["@"], chat_id=111))
+    assert update.effective_message.reply_text.await_args.args[0].startswith("Usage")
+
+
+async def test_remove_player_unknown_username(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update("/remove_player @ghost")
+    await handle_remove_player(update, _context(conn, args=["@ghost"], chat_id=None))
+    assert "Couldn't find" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_remove_player_not_on_roster(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/remove_player @ghost")
+    await handle_remove_player(update, _context(conn, args=["@ghost"], chat_id=222))
+    assert "wasn't in the active roster" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_list_players_returns_without_message(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update("/list_players")
+    update.effective_message = None
+    await handle_list_players(update, _context(conn, args=[]))

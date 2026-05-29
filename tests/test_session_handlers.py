@@ -100,3 +100,78 @@ async def test_list_sessions_empty(admin_settings: None, conn: sqlite3.Connectio
     await handle_list_sessions(update, ctx)
     reply = update.effective_message.reply_text.await_args.args[0]
     assert "No sessions" in reply
+
+
+# ----- branch coverage additions -----
+
+from telegram.error import TelegramError  # noqa: E402
+
+from toop.handlers.sessions import _conn  # noqa: E402
+
+
+def _admin_update_no_msg() -> MagicMock:
+    u = MagicMock()
+    u.effective_user = MagicMock(id=42)
+    u.effective_message = None
+    return u
+
+
+def test_conn_raises_when_missing() -> None:
+    ctx = MagicMock()
+    ctx.bot_data = {}
+    with pytest.raises(RuntimeError, match="DB connection missing"):
+        _conn(ctx)
+
+
+async def test_open_session_returns_without_message(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    await handle_open_session(_admin_update_no_msg(), _ctx(conn, []))
+
+
+async def test_open_session_invalid_date(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update()
+    await handle_open_session(update, _ctx(conn, ["not-a-date"]))
+    assert "Usage" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_open_session_group_post_fails(
+    admin_settings: None, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        "toop.handlers.sessions.settings",
+        MagicMock(SESSION_WEEKDAY="monday", GROUP_CHAT_ID=-100123),
+    )
+    update = _admin_update()
+    ctx = _ctx(conn, ["2026-05-18"])
+    ctx.bot.send_message = AsyncMock(side_effect=TelegramError("down"))
+    await handle_open_session(update, ctx)
+    replies = [c.args[0] for c in update.effective_message.reply_text.await_args_list]
+    assert any("Couldn't post" in r for r in replies)
+
+
+async def test_close_session_returns_without_message(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    await handle_close_session(_admin_update_no_msg(), _ctx(conn, []))
+
+
+async def test_close_session_no_active_errors(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update()
+    await handle_close_session(update, _ctx(conn, []))
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_list_sessions_returns_without_message(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    await handle_list_sessions(_admin_update_no_msg(), _ctx(conn, []))
+
+
+async def test_list_sessions_with_entries(admin_settings: None, conn: sqlite3.Connection) -> None:
+    open_session(conn, date(2026, 5, 18))
+    update = _admin_update()
+    await handle_list_sessions(update, _ctx(conn, []))
+    assert "Recent sessions" in update.effective_message.reply_text.await_args.args[0]

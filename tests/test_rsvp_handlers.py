@@ -122,3 +122,81 @@ async def test_lock_in_no_active_session(admin_settings: None, conn: sqlite3.Con
     await handle_lock_in(update, _ctx(conn, args=["@mehdi"]))
     reply = update.effective_message.reply_text.await_args.args[0]
     assert "No active session" in reply
+
+
+# ----- branch coverage additions -----
+
+from telegram.error import BadRequest  # noqa: E402
+
+from toop.handlers.rsvp import _conn  # noqa: E402
+
+
+def test_conn_raises_when_missing() -> None:
+    ctx = MagicMock()
+    ctx.bot_data = {}
+    with pytest.raises(RuntimeError, match="DB connection missing"):
+        _conn(ctx)
+
+
+async def test_callback_returns_without_query(conn: sqlite3.Connection) -> None:
+    u = MagicMock()
+    u.callback_query = None
+    await handle_rsvp_callback(u, _ctx(conn))
+
+
+async def test_callback_invalid_status(conn: sqlite3.Connection) -> None:
+    open_session(conn, date(2026, 5, 18))
+    add_player(conn, 1, "Alice", "alice")
+    update = _callback_update(1, "rsvp:bogus")
+    await handle_rsvp_callback(update, _ctx(conn))
+    update.callback_query.answer.assert_awaited_once()
+    update.callback_query.edit_message_text.assert_not_called()
+
+
+async def test_callback_edit_not_modified_is_swallowed(conn: sqlite3.Connection) -> None:
+    open_session(conn, date(2026, 5, 18))
+    add_player(conn, 1, "Alice", "alice")
+    update = _callback_update(1, "rsvp:yes")
+    update.callback_query.edit_message_text = AsyncMock(
+        side_effect=BadRequest("Message is not modified")
+    )
+    await handle_rsvp_callback(update, _ctx(conn))  # must not raise
+
+
+async def test_callback_edit_other_error_is_logged(conn: sqlite3.Connection) -> None:
+    open_session(conn, date(2026, 5, 18))
+    add_player(conn, 1, "Alice", "alice")
+    update = _callback_update(1, "rsvp:yes")
+    update.callback_query.edit_message_text = AsyncMock(side_effect=BadRequest("boom"))
+    await handle_rsvp_callback(update, _ctx(conn))  # must not raise
+
+
+async def test_lock_in_returns_without_message(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    u = _admin_update()
+    u.effective_message = None
+    await handle_lock_in(u, _ctx(conn, args=["@x"]))
+
+
+async def test_lock_in_no_args(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update()
+    await handle_lock_in(update, _ctx(conn, args=[]))
+    assert "Usage" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_lock_in_empty_username(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update()
+    await handle_lock_in(update, _ctx(conn, args=["@"]))
+    assert "Usage" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_lock_in_failure_branch(
+    admin_settings: None, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    open_session(conn, date(2026, 5, 18))
+    add_player(conn, 7, "Mehdi", "mehdi")
+    monkeypatch.setattr("toop.handlers.rsvp.lock_in_player", lambda *a, **k: False)
+    update = _admin_update()
+    await handle_lock_in(update, _ctx(conn, args=["@mehdi"]))
+    assert "Couldn't lock" in update.effective_message.reply_text.await_args.args[0]
