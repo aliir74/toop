@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 
-from toop.contacts import list_contacts, upsert_contact
+from toop.contacts import get_contact, list_contacts, upsert_contact
 
 
 def test_upsert_inserts_new_contact(conn: sqlite3.Connection) -> None:
@@ -13,6 +13,16 @@ def test_upsert_inserts_new_contact(conn: sqlite3.Connection) -> None:
     # Username normalized: stripped of @ and lowercased.
     assert contacts[0].username == "alice"
     assert contacts[0].display_name == "Alice Smith"
+
+
+def test_get_contact_found_and_missing(conn: sqlite3.Connection) -> None:
+    upsert_contact(conn, 7290468940, username=None, display_name="Meysam Bz")
+    found = get_contact(conn, 7290468940)
+    assert found is not None
+    assert found.telegram_id == 7290468940
+    assert found.username is None
+    assert found.display_name == "Meysam Bz"
+    assert get_contact(conn, 999) is None
 
 
 def test_upsert_handles_missing_username_and_name(conn: sqlite3.Connection) -> None:
