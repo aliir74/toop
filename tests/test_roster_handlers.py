@@ -73,6 +73,59 @@ async def test_add_player_bad_usage(admin_settings: None, conn: sqlite3.Connecti
     assert reply.startswith("Usage:")
 
 
+async def test_add_player_by_id_success(admin_settings: None, conn: sqlite3.Connection) -> None:
+    # Contact has DM'd the bot and carries a username — add purely by numeric id.
+    upsert_contact(conn, 7290468940, username="meysam", display_name="Meysam Bz")
+    update = _admin_update('/add_player 7290468940 "Meysam Bz"')
+    # chat_id=None so the @handle resolution path would fail if it were taken.
+    ctx = _context(conn, args=["7290468940", '"Meysam', 'Bz"'], chat_id=None)
+    await handle_add_player(update, ctx)
+    players = list_active_players(conn)
+    assert len(players) == 1
+    assert players[0].telegram_id == 7290468940
+    assert players[0].display_name == "Meysam Bz"
+    assert players[0].username == "meysam"
+
+
+async def test_add_player_by_id_null_username(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    # No-username contact — the whole point of add-by-id.
+    upsert_contact(conn, 5299711301, username=None, display_name="SHH")
+    update = _admin_update('/add_player 5299711301 "SHH"')
+    ctx = _context(conn, args=["5299711301", '"SHH"'], chat_id=None)
+    await handle_add_player(update, ctx)
+    players = list_active_players(conn)
+    assert len(players) == 1
+    assert players[0].telegram_id == 5299711301
+    assert players[0].username is None
+    assert "(no username)" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_add_player_by_id_not_a_contact(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    # Unknown id with no contacts row — can't be DM'd later, so reject.
+    update = _admin_update('/add_player 999 "Ghost"')
+    ctx = _context(conn, args=["999", '"Ghost"'], chat_id=None)
+    await handle_add_player(update, ctx)
+    assert list_active_players(conn) == []
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "hasn't DM'd the bot yet" in reply
+    assert "999" in reply
+
+
+async def test_add_player_unknown_username_points_to_id_path(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update('/add_player @ghost "Ghost"')
+    ctx = _context(conn, args=["@ghost", '"Ghost"'], chat_id=None)
+    await handle_add_player(update, ctx)
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "/contacts" in reply
+    assert "/add_player <id>" in reply
+
+
 async def test_remove_player_round_trip(admin_settings: None, conn: sqlite3.Connection) -> None:
     add_update = _admin_update('/add_player @alice "Alice"')
     add_ctx = _context(conn, args=["@alice", '"Alice"'], chat_id=111)
@@ -138,6 +191,14 @@ def test_parse_add_args_too_few_tokens() -> None:
 
 def test_parse_add_args_empty_username() -> None:
     assert _parse_add_args('/add_player @ "Name"') is None
+
+
+def test_parse_add_args_numeric_id() -> None:
+    assert _parse_add_args('/add_player 7290468940 "Meysam Bz"') == (7290468940, "Meysam Bz")
+
+
+def test_parse_add_args_empty_display_name() -> None:
+    assert _parse_add_args('/add_player @alice ""') is None
 
 
 async def test_add_player_no_text(admin_settings: None, conn: sqlite3.Connection) -> None:
@@ -229,6 +290,10 @@ async def test_contacts_flags_non_roster(admin_settings: None, conn: sqlite3.Con
     # Only the non-roster contact is flagged.
     assert reply.count("🆕 not on roster") == 1
     assert "available to /add_player (1" in reply
+    # Non-roster contact gets a ready-to-copy add-by-id command line.
+    assert '/add_player 222 "New Bie"' in reply
+    # Roster member (Bob) gets no copy line.
+    assert "/add_player 111" not in reply
 
 
 async def test_contacts_all_on_roster_no_flag(

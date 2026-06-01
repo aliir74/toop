@@ -38,6 +38,23 @@ def upsert_contact(
     conn.commit()
 
 
+def get_contact(conn: sqlite3.Connection, telegram_id: int) -> Contact | None:
+    """Fetch a single contact by telegram_id, or None if they haven't DM'd."""
+    row = conn.execute(
+        "SELECT telegram_id, username, display_name, first_seen_at "
+        "FROM contacts WHERE telegram_id=?",
+        (telegram_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    return Contact(
+        telegram_id=row["telegram_id"],
+        username=row["username"],
+        display_name=row["display_name"],
+        first_seen_at=row["first_seen_at"],
+    )
+
+
 def list_contacts(conn: sqlite3.Connection) -> list[Contact]:
     """All known contacts, oldest first."""
     rows = conn.execute(

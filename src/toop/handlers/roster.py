@@ -9,7 +9,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
-from toop.contacts import list_contacts
+from toop.contacts import get_contact, list_contacts
 from toop.players import (
     add_player,
     list_active_players,
@@ -19,7 +19,9 @@ from toop.voting_queue import bootstrap_calibration_prompts
 
 logger = logging.getLogger(__name__)
 
-ADD_USAGE = 'Usage: /add_player @username "Display Name"'
+ADD_USAGE = (
+    'Usage: /add_player @username "Display Name"  (or /add_player <telegram_id> "Display Name")'
+)
 REMOVE_USAGE = "Usage: /remove_player @username"
 
 
@@ -30,17 +32,26 @@ def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
     return conn
 
 
-def _parse_add_args(text: str) -> tuple[str, str] | None:
-    """Parse `/add_player @username "Display Name"` → (username, display_name)."""
+def _parse_add_args(text: str) -> tuple[int | str, str] | None:
+    """Parse `/add_player <@username|telegram_id> "Display Name"`.
+
+    Returns (identifier, display_name) where identifier is an int telegram_id
+    when the first arg is all-digits, otherwise the normalized username str.
+    """
     try:
         tokens = shlex.split(text)
     except ValueError:
         return None
     if len(tokens) < 3:
         return None
-    username = tokens[1].lstrip("@").lower()
+    raw = tokens[1]
     display_name = " ".join(tokens[2:])
-    if not username or not display_name:
+    if not display_name:
+        return None
+    if raw.isdigit():
+        return int(raw), display_name
+    username = raw.lstrip("@").lower()
+    if not username:
         return None
     return username, display_name
 
@@ -62,14 +73,30 @@ async def handle_add_player(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if parsed is None:
         await message.reply_text(ADD_USAGE)
         return
-    username, display_name = parsed
-    telegram_id = await _resolve_telegram_id(context, username)
-    if telegram_id is None:
-        await message.reply_text(
-            f"Couldn't find @{username}. Ask them to DM me /start, then try again."
-        )
-        return
+    identifier, display_name = parsed
     conn = _conn(context)
+    if isinstance(identifier, int):
+        # Add-by-id: the contacts row proves we can DM them later for voting.
+        contact = get_contact(conn, identifier)
+        if contact is None:
+            await message.reply_text(
+                f"That user (id {identifier}) hasn't DM'd the bot yet — they must "
+                "DM /start first so I can message them for voting."
+            )
+            return
+        telegram_id = identifier
+        username = contact.username  # may be None — that's fine.
+    else:
+        username = identifier
+        resolved = await _resolve_telegram_id(context, username)
+        if resolved is None:
+            await message.reply_text(
+                f"Couldn't find @{username}. Ask them to DM me /start, then try again. "
+                "If they have no Telegram username, run /contacts and use "
+                '/add_player <id> "Name" instead.'
+            )
+            return
+        telegram_id = resolved
     existed = conn.execute(
         "SELECT active FROM players WHERE telegram_id=?", (telegram_id,)
     ).fetchone()
@@ -81,9 +108,8 @@ async def handle_add_player(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     else:
         was_inactive = existed is not None and existed["active"] == 0
         suffix = " (revived from soft-delete)" if was_inactive else ""
-    await message.reply_text(
-        f"Added {player.display_name} (@{player.username}) — calibrating.{suffix}"
-    )
+    handle = f"@{player.username}" if player.username else "(no username)"
+    await message.reply_text(f"Added {player.display_name} {handle} — calibrating.{suffix}")
 
 
 @require_admin
@@ -150,11 +176,13 @@ async def handle_contacts(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         name = c.display_name or "?"
         first_seen = c.first_seen_at[:10] if c.first_seen_at else "?"
         if c.telegram_id in roster_ids:
-            flag = ""
+            lines.append(f"{i}. {handle} ({name}) — first seen {first_seen}")
         else:
-            flag = "  🆕 not on roster"
             addable += 1
-        lines.append(f"{i}. {handle} ({name}) — first seen {first_seen}{flag}")
+            lines.append(f"{i}. {handle} ({name}) — first seen {first_seen}  🆕 not on roster")
+            # Ready-to-copy command — works even when the contact has no @username.
+            copy_name = c.display_name or c.username or "Player"
+            lines.append(f'   /add_player {c.telegram_id} "{copy_name}"')
     if addable:
         lines.append(f"\n🆕 = available to /add_player ({addable} not yet on the roster).")
     await message.reply_text("\n".join(lines))
