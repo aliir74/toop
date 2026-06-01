@@ -5,10 +5,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from telegram.constants import ChatType
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Forbidden
 
 from toop.handlers.voting import (
-    GROUP_REPLY,
+    GROUP_VOTE_DM_NUDGE,
     NO_PROMPTS_REPLY,
     START_DM,
     START_GROUP,
@@ -47,13 +47,13 @@ def _dm_update(user_id: int) -> MagicMock:
     return u
 
 
-def _group_update(user_id: int) -> MagicMock:
+def _group_update(user_id: int, *, username: str | None = None, message_id: int = 555) -> MagicMock:
     u = MagicMock()
-    u.effective_user = MagicMock(id=user_id)
+    u.effective_user = MagicMock(id=user_id, username=username, full_name=f"User {user_id}")
     chat = MagicMock(id=-100123)
     chat.type = ChatType.GROUP
     u.effective_chat = chat
-    msg = MagicMock()
+    msg = MagicMock(message_id=message_id)
     msg.reply_text = AsyncMock()
     u.effective_message = msg
     return u
@@ -63,8 +63,12 @@ def _ctx(conn: sqlite3.Connection) -> MagicMock:
     ctx = MagicMock()
     ctx.bot_data = {"conn": conn}
     ctx.bot = MagicMock()
+    ctx.bot.username = "toop_bot_bot"
     ctx.bot.send_message = AsyncMock()
     ctx.bot.edit_message_text = AsyncMock()
+    ctx.bot.delete_message = AsyncMock()
+    ctx.job_queue = MagicMock()
+    ctx.job_queue.run_once = MagicMock()
     return ctx
 
 
@@ -81,11 +85,118 @@ def _callback_update(user_id: int, data: str, message_id: int = 999) -> MagicMoc
     return u
 
 
-async def test_vote_in_group_redirects_to_dm(conn: sqlite3.Connection) -> None:
+async def test_vote_in_group_dms_roster_player_and_leaves_no_reply(
+    conn: sqlite3.Connection,
+) -> None:
+    """Group /vote from a roster player: prompt goes to their DM, group stays clean."""
     _seed(conn)
     update = _group_update(user_id=1)
-    await handle_vote_command(update, _ctx(conn))
-    update.effective_message.reply_text.assert_awaited_once_with(GROUP_REPLY)
+    ctx = _ctx(conn)
+    await handle_vote_command(update, ctx)
+    # Never quote/reply in the group.
+    update.effective_message.reply_text.assert_not_awaited()
+    # Prompt was DM'd to the sender's private chat.
+    ctx.bot.send_message.assert_awaited()
+    assert ctx.bot.send_message.await_args.kwargs["chat_id"] == 1
+    assert "stronger" in ctx.bot.send_message.await_args.kwargs["text"]
+    # The /vote command is removed from the group.
+    ctx.bot.delete_message.assert_awaited_once_with(chat_id=-100123, message_id=555)
+    # No transient group nudge was needed, so nothing is scheduled.
+    ctx.job_queue.run_once.assert_not_called()
+
+
+async def test_vote_in_group_dms_nudge_to_non_roster_starter(conn: sqlite3.Connection) -> None:
+    """Sender not on roster but has started the bot: gets a DM nudge, no group reply."""
+    update = _group_update(user_id=999)
+    ctx = _ctx(conn)
+    await handle_vote_command(update, ctx)
+    update.effective_message.reply_text.assert_not_awaited()
+    ctx.bot.send_message.assert_awaited_once_with(chat_id=999, text=GROUP_VOTE_DM_NUDGE)
+    ctx.bot.delete_message.assert_awaited_once()
+    ctx.job_queue.run_once.assert_not_called()
+
+
+def _send_message_dm_blocked() -> AsyncMock:
+    """send_message that raises Forbidden for DMs (positive chat_id) but works in groups."""
+
+    async def _impl(*_args: object, chat_id: int, **_kwargs: object) -> MagicMock:
+        if chat_id > 0:
+            raise Forbidden("bot can't initiate conversation with a user")
+        return MagicMock(message_id=777)
+
+    return AsyncMock(side_effect=_impl)
+
+
+async def test_vote_in_group_dm_forbidden_posts_self_deleting_nudge(
+    conn: sqlite3.Connection,
+) -> None:
+    """When the bot can't DM the sender, it posts a transient group nudge that self-deletes."""
+    _seed(conn)
+    update = _group_update(user_id=1, username="alice")
+    ctx = _ctx(conn)
+    ctx.bot.send_message = _send_message_dm_blocked()
+    await handle_vote_command(update, ctx)
+    # No standing reply quoting the command.
+    update.effective_message.reply_text.assert_not_awaited()
+    # The last send_message call is the group nudge: targets the group, mentions sender,
+    # and is NOT a quoting reply.
+    last = ctx.bot.send_message.await_args
+    assert last.kwargs["chat_id"] == -100123
+    assert "@alice" in last.kwargs["text"]
+    assert "reply_to_message_id" not in last.kwargs
+    # Deletion of the /vote command was attempted.
+    ctx.bot.delete_message.assert_awaited()
+    # The transient nudge is scheduled for deletion.
+    ctx.job_queue.run_once.assert_called_once()
+    assert ctx.job_queue.run_once.call_args.kwargs["data"] == (-100123, 777)
+
+
+async def test_vote_in_group_dm_forbidden_uses_full_name_without_username(
+    conn: sqlite3.Connection,
+) -> None:
+    update = _group_update(user_id=2)  # username=None
+    ctx = _ctx(conn)
+    ctx.bot.send_message = _send_message_dm_blocked()
+    await handle_vote_command(update, ctx)
+    last = ctx.bot.send_message.await_args
+    assert "User 2" in last.kwargs["text"]
+
+
+async def test_vote_in_group_swallows_delete_failure(conn: sqlite3.Connection) -> None:
+    """Lacking delete permission must not raise — the group fix still works."""
+    _seed(conn)
+    update = _group_update(user_id=1)
+    ctx = _ctx(conn)
+    ctx.bot.delete_message = AsyncMock(side_effect=BadRequest("message can't be deleted"))
+    await handle_vote_command(update, ctx)  # no exception
+    ctx.bot.send_message.assert_awaited()  # DM still sent
+
+
+async def test_delete_message_job_deletes_target(conn: sqlite3.Connection) -> None:
+    from toop.handlers.voting import _delete_message_job
+
+    ctx = _ctx(conn)
+    ctx.job = MagicMock(data=(-100123, 555))
+    await _delete_message_job(ctx)
+    ctx.bot.delete_message.assert_awaited_once_with(chat_id=-100123, message_id=555)
+
+
+async def test_delete_message_job_no_job_is_noop(conn: sqlite3.Connection) -> None:
+    from toop.handlers.voting import _delete_message_job
+
+    ctx = _ctx(conn)
+    ctx.job = None
+    await _delete_message_job(ctx)
+    ctx.bot.delete_message.assert_not_awaited()
+
+
+async def test_delete_message_job_swallows_failure(conn: sqlite3.Connection) -> None:
+    from toop.handlers.voting import _delete_message_job
+
+    ctx = _ctx(conn)
+    ctx.job = MagicMock(data=(-100123, 555))
+    ctx.bot.delete_message = AsyncMock(side_effect=Forbidden("no rights"))
+    await _delete_message_job(ctx)  # no exception
 
 
 async def test_vote_in_dm_sends_prompt(conn: sqlite3.Connection) -> None:

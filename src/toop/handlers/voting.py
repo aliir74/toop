@@ -7,9 +7,10 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     Update,
+    User,
 )
 from telegram.constants import ChatType, ParseMode
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Forbidden
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
@@ -28,7 +29,12 @@ from toop.voting_queue import (
 logger = logging.getLogger(__name__)
 
 CALLBACK_PREFIX = "v:"
-GROUP_REPLY = "DM me to vote 🤫"
+# Sent privately when someone runs /vote in the group and the bot can DM them.
+GROUP_VOTE_DM_NUDGE = "👋 Tap /vote right here in our DM to rate teammates. 🏐"
+# Last-resort transient group nudge when the bot can't DM the sender (they
+# haven't started the bot). Self-deletes so it never lingers in the group.
+GROUP_VOTE_BLOCKED_NUDGE = "start a DM with me (@{bot}) and tap /vote there 🤫"
+GROUP_VOTE_NUDGE_TTL = 10  # seconds before the transient group nudge is deleted
 NO_PROMPTS_REPLY = (
     "🎉 No prompts right now. Check back later — new pairs surface as the roster grows."
 )
@@ -139,16 +145,80 @@ async def _send_next_prompt(
     )
 
 
+async def _delete_message_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Delete a previously posted transient message (scheduled via job_queue)."""
+    job = context.job
+    if job is None or job.data is None:
+        return
+    chat_id, message_id = job.data
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except (BadRequest, Forbidden) as exc:
+        logger.debug("could not delete transient message %s in %s: %s", message_id, chat_id, exc)
+
+
+async def _safe_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int) -> None:
+    """Best-effort delete; the bot may lack delete permission in the group."""
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except (BadRequest, Forbidden) as exc:
+        logger.debug("could not delete message %s in %s: %s", message_id, chat_id, exc)
+
+
+async def _try_dm_voter(
+    conn: sqlite3.Connection, context: ContextTypes.DEFAULT_TYPE, user_id: int
+) -> bool:
+    """DM the voter their next prompt (or a nudge). Returns True if the DM landed.
+
+    Fails gracefully when the user has never started the bot (``Forbidden``).
+    """
+    try:
+        if _get_player(conn, user_id) is not None:
+            await _send_next_prompt(conn, context, chat_id=user_id, voter_id=user_id)
+        else:
+            await context.bot.send_message(chat_id=user_id, text=GROUP_VOTE_DM_NUDGE)
+        return True
+    except (Forbidden, BadRequest) as exc:
+        logger.info("could not DM voter %s: %s", user_id, exc)
+        return False
+
+
+async def _post_transient_group_nudge(
+    context: ContextTypes.DEFAULT_TYPE, chat_id: int, user: User, bot_username: str | None
+) -> None:
+    """Post a self-deleting group nudge (no reply quote) when the DM was blocked."""
+    mention = f"@{user.username}" if user.username else user.full_name
+    text = f"{mention} {GROUP_VOTE_BLOCKED_NUDGE.format(bot=bot_username or 'me')}"
+    try:
+        sent = await context.bot.send_message(chat_id=chat_id, text=text)
+    except (BadRequest, Forbidden) as exc:
+        logger.warning("could not post transient group nudge: %s", exc)
+        return
+    if context.job_queue is not None:
+        context.job_queue.run_once(
+            _delete_message_job,
+            when=GROUP_VOTE_NUDGE_TTL,
+            data=(chat_id, sent.message_id),
+            name=f"del_vote_nudge_{sent.message_id}",
+        )
+
+
 async def handle_vote_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
     chat = update.effective_chat
     user = update.effective_user
     if message is None or chat is None or user is None:
         return
-    if chat.type != ChatType.PRIVATE:
-        await message.reply_text(GROUP_REPLY)
-        return
     conn = _conn(context)
+    if chat.type != ChatType.PRIVATE:
+        # Never leave a standing reply in the group: it quotes the /vote and
+        # orphans into "Deleted message" chatter when the player tidies up.
+        # Instead push the prompt into a DM and clear the command from the group.
+        dm_sent = await _try_dm_voter(conn, context, user.id)
+        await _safe_delete(context, chat.id, message.message_id)
+        if not dm_sent:
+            await _post_transient_group_nudge(context, chat.id, user, context.bot.username)
+        return
     if _get_player(conn, user.id) is None:
         await message.reply_text("You're not on the roster yet — ask the admin to add you.")
         return

@@ -91,7 +91,7 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 | `/start` | Intro message |
 | `/vote` | Show the next prompt; cycles to next on each tap |
 
-Group `/vote` always redirects to DM: "DM me to vote 🤫".
+Group `/vote` keeps the group clean: the bot DMs the sender their next prompt (or, if it can't DM them, posts a short self-deleting nudge) and removes the `/vote` command from the group when it has permission. It never leaves a standing reply quoting the command.
 
 ---
 
