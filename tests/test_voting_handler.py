@@ -37,7 +37,7 @@ def _seed(conn: sqlite3.Connection) -> None:
 
 def _dm_update(user_id: int) -> MagicMock:
     u = MagicMock()
-    u.effective_user = MagicMock(id=user_id)
+    u.effective_user = MagicMock(id=user_id, username=f"user{user_id}", full_name=f"User {user_id}")
     chat = MagicMock(id=user_id)
     chat.type = ChatType.PRIVATE
     u.effective_chat = chat
@@ -263,6 +263,27 @@ async def test_start_in_dm(conn: sqlite3.Connection) -> None:
     update = _dm_update(user_id=1)
     await handle_start(update, _ctx(conn))
     update.effective_message.reply_text.assert_awaited_once_with(START_DM)
+
+
+async def test_start_in_dm_records_contact(conn: sqlite3.Connection) -> None:
+    await handle_start(_dm_update(user_id=7), _ctx(conn))
+    row = conn.execute("SELECT username, display_name FROM contacts WHERE telegram_id=7").fetchone()
+    assert row is not None
+    assert row["username"] == "user7"
+    assert row["display_name"] == "User 7"
+
+
+async def test_start_in_dm_repeat_keeps_single_contact(conn: sqlite3.Connection) -> None:
+    await handle_start(_dm_update(user_id=7), _ctx(conn))
+    await handle_start(_dm_update(user_id=7), _ctx(conn))
+    count = conn.execute("SELECT COUNT(*) AS n FROM contacts WHERE telegram_id=7").fetchone()["n"]
+    assert count == 1
+
+
+async def test_start_in_group_records_no_contact(conn: sqlite3.Connection) -> None:
+    await handle_start(_group_update(user_id=8), _ctx(conn))
+    count = conn.execute("SELECT COUNT(*) AS n FROM contacts").fetchone()["n"]
+    assert count == 0
 
 
 async def test_start_in_group(conn: sqlite3.Connection) -> None:

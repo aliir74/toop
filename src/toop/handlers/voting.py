@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
 from toop.config import settings
+from toop.contacts import upsert_contact
 from toop.players import Player
 from toop.voting_queue import (
     Prompt,
@@ -216,6 +217,14 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if message is None or chat is None:
         return
     if chat.type == ChatType.PRIVATE:
+        user = update.effective_user
+        if user is not None:
+            upsert_contact(
+                _conn(context),
+                user.id,
+                username=user.username,
+                display_name=user.full_name,
+            )
         await message.reply_text(START_DM)
     else:
         await message.reply_text(START_GROUP)
