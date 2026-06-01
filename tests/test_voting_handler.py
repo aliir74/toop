@@ -304,6 +304,29 @@ async def test_three_votes_three_answered(conn: sqlite3.Connection) -> None:
     assert pending >= 1
 
 
+async def test_vote_callback_advances_to_different_pair(conn: sqlite3.Connection) -> None:
+    """After a vote, the edited prompt shows a *different* pair when one exists.
+
+    A bootstrapped pair (Bob vs Carol, 3 axes at top priority) plus filler pairs
+    are queued. Voting Bob-vs-Carol-attack must surface a non-(Bob,Carol) pair
+    next instead of re-showing the same two names with a new axis word.
+    """
+    from toop.voting_queue import insert_priority_prompt, refill_queue
+
+    _seed(conn)  # players 1..4
+    voter = 1
+    for axis in ("attack", "defense", "setting"):
+        insert_priority_prompt(conn, voter_id=voter, player_a=2, player_b=3, axis=axis)
+    refill_queue(conn, voter, queue_depth=8)
+
+    ctx = _ctx(conn)
+    await handle_vote_callback(_callback_update(voter, "v:a:2:3:attack"), ctx)
+
+    edited = ctx.bot.edit_message_text.await_args.kwargs["text"]
+    # The next prompt must not be the just-answered Bob vs Carol pair.
+    assert not ("Bob" in edited and "Carol" in edited)
+
+
 async def test_privacy_voter_and_outcome_not_joinable(conn: sqlite3.Connection) -> None:
     """answered_prompts stores no outcome; vote_aggregates stores no voter."""
     _seed(conn)

@@ -101,9 +101,10 @@ async def _send_next_prompt(
     chat_id: int,
     voter_id: int,
     edit_message_id: int | None = None,
+    exclude_pair: tuple[int, int] | None = None,
 ) -> None:
     refill_queue(conn, voter_id, settings.QUEUE_DEPTH)
-    prompt = peek_next_prompt(conn, voter_id)
+    prompt = peek_next_prompt(conn, voter_id, exclude_pair=exclude_pair)
     if prompt is None:
         if edit_message_id is not None:
             try:
@@ -273,8 +274,15 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         else:
             record_vote(conn, voter_id, player_a, player_b, axis, action)
             await query.answer("Recorded ✅")
+        # Prefer a different pair next so the prompt visibly advances instead of
+        # cycling the same two names across attack/defense/setting.
         await _send_next_prompt(
-            conn, context, chat_id=chat_id, voter_id=voter_id, edit_message_id=message_id
+            conn,
+            context,
+            chat_id=chat_id,
+            voter_id=voter_id,
+            edit_message_id=message_id,
+            exclude_pair=(player_a, player_b),
         )
         return
 
