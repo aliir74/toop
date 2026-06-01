@@ -151,6 +151,20 @@ async def test_vote_in_group_dm_forbidden_posts_self_deleting_nudge(
     assert ctx.job_queue.run_once.call_args.kwargs["data"] == (-100123, 777)
 
 
+async def test_vote_in_group_nudge_send_failure_is_swallowed(
+    conn: sqlite3.Connection,
+) -> None:
+    """If even the transient group nudge can't be posted, don't raise or schedule a delete."""
+    _seed(conn)
+    update = _group_update(user_id=1, username="alice")
+    ctx = _ctx(conn)
+    # Every send_message fails — both the DM attempt and the group nudge.
+    ctx.bot.send_message = AsyncMock(side_effect=Forbidden("can't send anywhere"))
+    await handle_vote_command(update, ctx)  # no exception
+    update.effective_message.reply_text.assert_not_awaited()
+    ctx.job_queue.run_once.assert_not_called()
+
+
 async def test_vote_in_group_dm_forbidden_uses_full_name_without_username(
     conn: sqlite3.Connection,
 ) -> None:
