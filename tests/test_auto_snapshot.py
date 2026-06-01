@@ -1,0 +1,63 @@
+from __future__ import annotations
+
+import sqlite3
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+
+from toop.handlers.snapshot import auto_snapshot_job
+from toop.players import add_player
+from toop.rsvp import upsert_rsvp
+from toop.sessions import get_active_session, open_session
+
+
+@pytest.fixture(autouse=True)
+def patch_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "toop.handlers.snapshot.settings",
+        MagicMock(
+            ADMIN_TELEGRAM_ID=42,
+            MAX_ATTENDEES=14,
+            CALIBRATION_THRESHOLD=15,
+            WEIGHT_ATTACK=0.4,
+            WEIGHT_DEFENSE=0.4,
+            WEIGHT_SETTING=0.2,
+        ),
+    )
+
+
+def _ctx(conn: sqlite3.Connection) -> MagicMock:
+    ctx = MagicMock()
+    ctx.bot_data = {"conn": conn}
+    ctx.bot = MagicMock()
+    ctx.bot.send_message = AsyncMock()
+    return ctx
+
+
+async def test_auto_snapshot_dms_admin(conn: sqlite3.Connection) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    for i in range(1, 17):
+        add_player(conn, i, f"P{i}", f"p{i}")
+        upsert_rsvp(conn, sess.id, i, "yes")
+    ctx = _ctx(conn)
+    await auto_snapshot_job(ctx)
+    ctx.bot.send_message.assert_awaited_once()
+    kwargs = ctx.bot.send_message.await_args.kwargs
+    assert kwargs["chat_id"] == 42
+    assert "Auto-snapshot" in kwargs["text"]
+    active = get_active_session(conn)
+    assert active is not None and active.status == "snapshotted"
+
+
+async def test_auto_snapshot_no_active_session_skips(conn: sqlite3.Connection) -> None:
+    ctx = _ctx(conn)
+    await auto_snapshot_job(ctx)
+    ctx.bot.send_message.assert_not_called()
+
+
+async def test_auto_snapshot_no_rsvps_skips(conn: sqlite3.Connection) -> None:
+    open_session(conn, date(2026, 5, 18))
+    ctx = _ctx(conn)
+    await auto_snapshot_job(ctx)
+    ctx.bot.send_message.assert_not_called()

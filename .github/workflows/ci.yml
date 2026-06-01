@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: lint + typecheck + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Pin Python
+        run: uv python install 3.12
+
+      - name: Install deps
+        run: uv sync --extra dev
+
+      - name: Lint (ruff check)
+        run: uv run ruff check src tests
+
+      - name: Format check (ruff format --check)
+        run: uv run ruff format --check src tests
+
+      - name: Typecheck (ty)
+        run: uv run ty check src
+
+      - name: Tests (pytest + 100% coverage)
+        # Fails the job if TOTAL line coverage < 100% (fail_under in pyproject [tool.coverage.report]).
+        run: uv run pytest -v --cov=toop --cov-report=term-missing
