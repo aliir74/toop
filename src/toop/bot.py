@@ -3,7 +3,13 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, time
 
-from telegram.ext import Application, CallbackQueryHandler, CommandHandler
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    MessageHandler,
+    filters,
+)
 
 from toop.config import settings
 from toop.db import get_connection, init_db
@@ -15,6 +21,9 @@ from toop.handlers.roster import (
     handle_contacts,
     handle_list_players,
     handle_remove_player,
+    handle_rename,
+    handle_rename_callback,
+    handle_rename_text,
 )
 from toop.handlers.rsvp import handle_lock_in, handle_rsvp_callback
 from toop.handlers.sessions import (
@@ -58,6 +67,7 @@ def main() -> None:
     app.add_handler(CommandHandler("add_player", handle_add_player))
     app.add_handler(CommandHandler("remove_player", handle_remove_player))
     app.add_handler(CommandHandler("list_players", handle_list_players))
+    app.add_handler(CommandHandler("rename", handle_rename))
     app.add_handler(CommandHandler("contacts", handle_contacts))
     app.add_handler(CommandHandler("open_session", handle_open_session))
     app.add_handler(CommandHandler("close_session", handle_close_session))
@@ -91,6 +101,13 @@ def main() -> None:
         )
     app.add_handler(CallbackQueryHandler(handle_rsvp_callback, pattern=r"^rsvp:"))
     app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
+    app.add_handler(CallbackQueryHandler(handle_rename_callback, pattern=r"^rename:"))
+    # Lower-priority group so /commands still reach their CommandHandler above;
+    # this only consumes a private text message when a rename is pending.
+    app.add_handler(
+        MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_rename_text),
+        group=1,
+    )
 
     logger.info(
         "توپ starting (admin=%s, group=%s)",

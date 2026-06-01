@@ -46,6 +46,27 @@ def soft_remove_player(conn: sqlite3.Connection, telegram_id: int) -> bool:
     return cur.rowcount > 0
 
 
+def rename_player(conn: sqlite3.Connection, telegram_id: int, new_display_name: str) -> str | None:
+    """Update an active player's display_name. Returns the old name, or None.
+
+    None means no active player with that telegram_id exists (nothing changed).
+    Touches display_name only — never username, votes, ratings, or telegram_id.
+    """
+    row = conn.execute(
+        "SELECT display_name FROM players WHERE telegram_id=? AND active=1",
+        (telegram_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    old_name = row["display_name"]
+    conn.execute(
+        "UPDATE players SET display_name=? WHERE telegram_id=? AND active=1",
+        (new_display_name, telegram_id),
+    )
+    conn.commit()
+    return old_name
+
+
 def list_active_players(conn: sqlite3.Connection) -> list[Player]:
     rows = conn.execute(
         "SELECT telegram_id, username, display_name, is_calibrating, active "

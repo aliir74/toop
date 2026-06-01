@@ -4,7 +4,8 @@ import logging
 import shlex
 import sqlite3
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
+from telegram.constants import ChatType
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
@@ -12,7 +13,9 @@ from toop.admin import require_admin
 from toop.contacts import get_contact, list_contacts
 from toop.players import (
     add_player,
+    get_player_by_username,
     list_active_players,
+    rename_player,
     soft_remove_player,
 )
 from toop.voting_queue import bootstrap_calibration_prompts
@@ -23,6 +26,10 @@ ADD_USAGE = (
     'Usage: /add_player @username "Display Name"  (or /add_player <telegram_id> "Display Name")'
 )
 REMOVE_USAGE = "Usage: /remove_player @username"
+RENAME_PREFIX = "rename:"
+RENAME_USAGE = 'Usage: /rename (no args) for buttons, or /rename <@username|telegram_id> "New Name"'
+RENAME_EMPTY_ROSTER = "No players on the roster yet — use /add_player first."
+PENDING_RENAME_KEY = "pending_rename"
 
 
 def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
@@ -186,3 +193,156 @@ async def handle_contacts(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if addable:
         lines.append(f"\n🆕 = available to /add_player ({addable} not yet on the roster).")
     await message.reply_text("\n".join(lines))
+
+
+# ----- /rename: pick a player, then type the new display name -----
+
+
+def _player_label(display_name: str, username: str | None) -> str:
+    return f"{display_name} (@{username})" if username else display_name
+
+
+def _parse_rename_args(text: str) -> tuple[int | str, str] | None:
+    """Parse the one-shot shortcut `/rename <@username|telegram_id> "New Name"`.
+
+    Returns (identifier, new_name) where identifier is an int telegram_id when
+    the first arg is all-digits, otherwise the normalized username str.
+    """
+    try:
+        tokens = shlex.split(text)
+    except ValueError:
+        return None
+    if len(tokens) < 3:
+        return None
+    raw = tokens[1]
+    new_name = " ".join(tokens[2:]).strip()
+    if not new_name:
+        return None
+    if raw.isdigit():
+        return int(raw), new_name
+    username = raw.lstrip("@").lower()
+    if not username:
+        return None
+    return username, new_name
+
+
+async def _rename_one_shot(
+    message: Message, conn: sqlite3.Connection, identifier: int | str, new_name: str
+) -> None:
+    """Resolve a roster player from the shortcut identifier and rename in place."""
+    if isinstance(identifier, int):
+        old_name = rename_player(conn, identifier, new_name)
+        if old_name is None:
+            await message.reply_text(f"No active player with id {identifier}.")
+            return
+    else:
+        player = get_player_by_username(conn, identifier)
+        if player is None:
+            await message.reply_text(f"@{identifier} isn't on the active roster.")
+            return
+        old_name = rename_player(conn, player.telegram_id, new_name)
+        if old_name is None:  # pragma: no cover - racey soft-delete between lookup and update
+            await message.reply_text(f"@{identifier} isn't on the active roster.")
+            return
+    await message.reply_text(f"Renamed {old_name} → {new_name} ✅")
+
+
+@require_admin
+async def handle_rename(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Rename a player's display_name (DM-only, admin-only).
+
+    With no args, lists active players as inline buttons and waits for the admin
+    to type the new name. With args, runs the one-shot shortcut.
+    """
+    message = update.effective_message
+    chat = update.effective_chat
+    if message is None:
+        return
+    if chat is not None and chat.type != ChatType.PRIVATE:
+        await message.reply_text("DM me to rename players. 🤫")
+        return
+    conn = _conn(context)
+    if message.text is not None and len(message.text.split()) > 1:
+        parsed = _parse_rename_args(message.text)
+        if parsed is None:
+            await message.reply_text(RENAME_USAGE)
+            return
+        identifier, new_name = parsed
+        await _rename_one_shot(message, conn, identifier, new_name)
+        return
+    players = list_active_players(conn)
+    if not players:
+        await message.reply_text(RENAME_EMPTY_ROSTER)
+        return
+    keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    _player_label(p.display_name, p.username),
+                    callback_data=f"{RENAME_PREFIX}{p.telegram_id}",
+                )
+            ]
+            for p in players
+        ]
+    )
+    await message.reply_text("Who do you want to rename?", reply_markup=keyboard)
+
+
+@require_admin
+async def handle_rename_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin tapped a player button: stash the target and prompt for the new name."""
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+    raw = query.data.removeprefix(RENAME_PREFIX)
+    try:
+        telegram_id = int(raw)
+    except ValueError:
+        await query.answer()
+        return
+    conn = _conn(context)
+    row = conn.execute(
+        "SELECT display_name FROM players WHERE telegram_id=? AND active=1",
+        (telegram_id,),
+    ).fetchone()
+    if row is None:
+        await query.answer("That player is no longer on the roster.", show_alert=True)
+        return
+    if context.user_data is not None:
+        context.user_data[PENDING_RENAME_KEY] = telegram_id
+    await query.answer()
+    try:
+        await query.edit_message_text(f"Send the new display name for {row['display_name']}:")
+    except BadRequest as exc:  # pragma: no cover - only on stale/identical message
+        logger.warning("failed to edit rename prompt: %s", exc)
+
+
+async def handle_rename_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Apply a pending rename from a plain DM text message.
+
+    Registered in a lower-priority handler group so it sees every private text
+    message (commands still reach their CommandHandler in the default group).
+    Acts only when this admin has a rename pending — otherwise returns silently
+    so normal messages are never swallowed. A command sent while pending cancels
+    the rename instead of being consumed as the new name.
+    """
+    message = update.effective_message
+    if message is None or message.text is None or context.user_data is None:
+        return
+    telegram_id = context.user_data.get(PENDING_RENAME_KEY)
+    if telegram_id is None:
+        return
+    text = message.text.strip()
+    if text.startswith("/"):
+        context.user_data.pop(PENDING_RENAME_KEY, None)
+        await message.reply_text("Rename cancelled — you sent a command instead of a name.")
+        return
+    if not text:
+        await message.reply_text("Name can't be empty — send the new display name.")
+        return
+    old_name = rename_player(_conn(context), telegram_id, text)
+    context.user_data.pop(PENDING_RENAME_KEY, None)
+    if old_name is None:
+        await message.reply_text("That player is no longer on the roster.")
+        return
+    await message.reply_text(f"Renamed {old_name} → {text} ✅")
