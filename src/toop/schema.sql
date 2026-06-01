@@ -1,6 +1,17 @@
 -- توپ — SQLite schema. Applied idempotently on startup.
 -- Privacy invariant: vote_aggregates and answered_prompts are NEVER joined.
 
+-- Presence log of everyone who has DM'd the bot. Standalone — NEVER joined to
+-- players or any vote table. Exists only so the admin can see who is reachable
+-- (i.e. resolvable by /add_player) before adding them to the roster.
+CREATE TABLE IF NOT EXISTS contacts (
+    telegram_id     INTEGER PRIMARY KEY,
+    username        TEXT,
+    display_name    TEXT,
+    first_seen_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_seen_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS players (
     telegram_id     INTEGER PRIMARY KEY,
     username        TEXT,

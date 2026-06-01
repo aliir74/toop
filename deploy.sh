@@ -18,15 +18,14 @@ fi
 
 echo "Deploying to $VPS_SSH:$DEPLOY_PATH ..."
 
-scp "$SCRIPT_DIR/.env" "$VPS_SSH:$DEPLOY_PATH/.env" 2>/dev/null || true
-
 GIT_SHA=$(git rev-parse --short HEAD 2>/dev/null || echo unknown)
 
-ssh "$VPS_SSH" bash -s -- "$DEPLOY_PATH" "$REPO_URL" "$GIT_SHA" <<'REMOTE'
+# Step 1: ensure the repo is present and up to date on the VPS. This must run
+# before the .env scp so the destination directory exists on a fresh VPS.
+ssh "$VPS_SSH" bash -s -- "$DEPLOY_PATH" "$REPO_URL" <<'REMOTE'
 set -euo pipefail
 DEPLOY_PATH="$1"
 REPO_URL="$2"
-GIT_SHA="$3"
 
 if [[ ! -d "$DEPLOY_PATH" ]]; then
     echo "Cloning repo..."
@@ -42,6 +41,20 @@ fi
 
 cd "$DEPLOY_PATH"
 mkdir -p data
+REMOTE
+
+# Step 2: now that the repo dir exists, copy .env into place (docker compose
+# needs it before `up`). On a clean first deploy this previously ran before the
+# clone and failed with "env file /opt/toop/.env not found".
+scp "$SCRIPT_DIR/.env" "$VPS_SSH:$DEPLOY_PATH/.env"
+
+# Step 3: build and start with the .env in place.
+ssh "$VPS_SSH" bash -s -- "$DEPLOY_PATH" "$GIT_SHA" <<'REMOTE'
+set -euo pipefail
+DEPLOY_PATH="$1"
+GIT_SHA="$2"
+
+cd "$DEPLOY_PATH"
 
 echo "Building and starting (GIT_SHA=$GIT_SHA)..."
 GIT_SHA="$GIT_SHA" docker compose up -d --build

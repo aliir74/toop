@@ -9,6 +9,7 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
+from toop.contacts import list_contacts
 from toop.players import (
     add_player,
     list_active_players,
@@ -120,4 +121,40 @@ async def handle_list_players(update: Update, context: ContextTypes.DEFAULT_TYPE
         marker = "🟡 calibrating" if p.is_calibrating else "✅"
         handle = f"@{p.username}" if p.username else "(no username)"
         lines.append(f"{i}. {p.display_name} {handle} — {marker}")
+    await message.reply_text("\n".join(lines))
+
+
+@require_admin
+async def handle_contacts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """List everyone who has DM'd the bot, flagging who is not yet on the roster.
+
+    These are the people /add_player can resolve (Telegram only resolves a
+    @handle once they've messaged the bot). Contacts are a standalone presence
+    log — never joined to vote data.
+    """
+    message = update.effective_message
+    if message is None:
+        return
+    conn = _conn(context)
+    contacts = list_contacts(conn)
+    if not contacts:
+        await message.reply_text("Nobody has DM'd me yet. Ask people to send /start.")
+        return
+    roster_ids = {
+        row["telegram_id"] for row in conn.execute("SELECT telegram_id FROM players").fetchall()
+    }
+    lines = ["Contacts (people who've DM'd me):"]
+    addable = 0
+    for i, c in enumerate(contacts, start=1):
+        handle = f"@{c.username}" if c.username else "(no username)"
+        name = c.display_name or "?"
+        first_seen = c.first_seen_at[:10] if c.first_seen_at else "?"
+        if c.telegram_id in roster_ids:
+            flag = ""
+        else:
+            flag = "  🆕 not on roster"
+            addable += 1
+        lines.append(f"{i}. {handle} ({name}) — first seen {first_seen}{flag}")
+    if addable:
+        lines.append(f"\n🆕 = available to /add_player ({addable} not yet on the roster).")
     await message.reply_text("\n".join(lines))

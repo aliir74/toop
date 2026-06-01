@@ -12,6 +12,7 @@ from toop.handlers.ops import handle_backup_db, handle_version
 from toop.handlers.ratings import handle_refresh_ratings
 from toop.handlers.roster import (
     handle_add_player,
+    handle_contacts,
     handle_list_players,
     handle_remove_player,
 )
@@ -57,6 +58,7 @@ def main() -> None:
     app.add_handler(CommandHandler("add_player", handle_add_player))
     app.add_handler(CommandHandler("remove_player", handle_remove_player))
     app.add_handler(CommandHandler("list_players", handle_list_players))
+    app.add_handler(CommandHandler("contacts", handle_contacts))
     app.add_handler(CommandHandler("open_session", handle_open_session))
     app.add_handler(CommandHandler("close_session", handle_close_session))
     app.add_handler(CommandHandler("sessions", handle_list_sessions))

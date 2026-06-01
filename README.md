@@ -65,6 +65,7 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 | --- | --- |
 | `/start` | Friendly intro (DM vs group has different text) |
 | `/add_player @username "Display Name"` | Add to roster. Triggers calibration bootstrap. User must have DM'd the bot at least once. |
+| `/contacts` | Everyone who's DM'd the bot, flagging who's 🆕 not yet on the roster (i.e. resolvable by `/add_player`) |
 | `/remove_player @username` | Soft-delete from roster |
 | `/list_players` | Numbered roster, calibration markers |
 | `/open_session [YYYY-MM-DD]` | Opens session; auto-posts RSVP buttons to group |
@@ -110,7 +111,7 @@ prompts a week — takes 30 seconds.
 
 ## Troubleshooting
 
-- **"Couldn't find @username" when adding a player** — they need to DM the bot `/start` first so Telegram lets us resolve their numeric ID.
+- **"Couldn't find @username" when adding a player** — they need to DM the bot `/start` first so Telegram lets us resolve their numeric ID. Run `/contacts` to see who has already DM'd and is therefore addable.
 - **RSVP buttons don't show** — make sure the bot is a member of `GROUP_CHAT_ID` and has permission to send messages.
 - **Vote callbacks silently fail** — most often `BOT_TOKEN` is wrong or the bot isn't running. Check `logs/toop.log`.
 - **Scheduled snapshot didn't fire Monday noon** — JobQueue requires the bot process to be alive at the scheduled time. Verify with `make logs` (look for `auto_snapshot scheduled`) or trigger manually with `/snapshot`. Note `SNAPSHOT_HOUR` is interpreted as UTC inside the container.

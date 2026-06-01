@@ -24,7 +24,7 @@ def admin_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def _dm_update() -> MagicMock:
     u = MagicMock()
-    u.effective_user = MagicMock(id=1)
+    u.effective_user = MagicMock(id=1, username="user1", full_name="User 1")
     chat = MagicMock()
     chat.type = ChatType.PRIVATE
     u.effective_chat = chat

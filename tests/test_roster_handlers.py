@@ -6,12 +6,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from telegram.error import BadRequest
 
+from toop.contacts import upsert_contact
 from toop.handlers.roster import (
     handle_add_player,
+    handle_contacts,
     handle_list_players,
     handle_remove_player,
 )
-from toop.players import list_active_players
+from toop.players import add_player, list_active_players
 
 
 @pytest.fixture
@@ -201,3 +203,49 @@ async def test_list_players_returns_without_message(
     update = _admin_update("/list_players")
     update.effective_message = None
     await handle_list_players(update, _context(conn, args=[]))
+
+
+# ----- /contacts -----
+
+
+async def test_contacts_empty(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/contacts")
+    await handle_contacts(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Nobody has DM'd me yet" in reply
+
+
+async def test_contacts_flags_non_roster(admin_settings: None, conn: sqlite3.Connection) -> None:
+    # Bob is on the roster; Newbie has only DM'd the bot.
+    add_player(conn, 111, "Bob", "bob")
+    upsert_contact(conn, 111, username="bob", display_name="Bob")
+    upsert_contact(conn, 222, username="newbie", display_name="New Bie")
+
+    update = _admin_update("/contacts")
+    await handle_contacts(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "@bob" in reply
+    assert "@newbie" in reply
+    # Only the non-roster contact is flagged.
+    assert reply.count("🆕 not on roster") == 1
+    assert "available to /add_player (1" in reply
+
+
+async def test_contacts_all_on_roster_no_flag(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    upsert_contact(conn, 111, username="bob", display_name="Bob")
+    update = _admin_update("/contacts")
+    await handle_contacts(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "not on roster" not in reply
+    assert "available to /add_player" not in reply
+
+
+async def test_contacts_returns_without_message(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update("/contacts")
+    update.effective_message = None
+    await handle_contacts(update, _context(conn, args=[]))
