@@ -6,6 +6,7 @@ from toop.players import (
     add_player,
     get_player_by_username,
     list_active_players,
+    rename_player,
     soft_remove_player,
 )
 
@@ -48,3 +49,23 @@ def test_get_by_username_normalizes(conn: sqlite3.Connection) -> None:
     found = get_player_by_username(conn, "@ALICE")
     assert found is not None
     assert found.telegram_id == 1
+
+
+def test_rename_player_changes_only_display_name(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "H P", "hp")
+    old = rename_player(conn, 1, "Hamed Pour")
+    assert old == "H P"
+    p = list_active_players(conn)[0]
+    assert p.display_name == "Hamed Pour"
+    assert p.username == "hp"  # username untouched
+    assert p.telegram_id == 1
+
+
+def test_rename_player_unknown_id_returns_none(conn: sqlite3.Connection) -> None:
+    assert rename_player(conn, 999, "Nobody") is None
+
+
+def test_rename_player_inactive_returns_none(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    soft_remove_player(conn, 1)
+    assert rename_player(conn, 1, "Alice Renamed") is None

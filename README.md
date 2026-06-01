@@ -69,6 +69,8 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 | `/contacts` | Everyone who's DM'd the bot, flagging who's 🆕 not yet on the roster and emitting a copy-paste `/add_player <id> "Name"` line for each |
 | `/remove_player @username` | Soft-delete from roster |
 | `/list_players` | Numbered roster, calibration markers |
+| `/rename` | Tap a player from inline buttons, then type the new display name (DM-only). Updates `display_name` only. |
+| `/rename <@username\|telegram_id> "New Name"` | One-shot rename, skips the buttons |
 | `/open_session [YYYY-MM-DD]` | Opens session; auto-posts RSVP buttons to group |
 | `/close_session` | Marks the active session done |
 | `/sessions` | Recent sessions + status |
