@@ -93,14 +93,27 @@ def refill_queue(conn: sqlite3.Connection, voter_id: int, queue_depth: int) -> i
     return len(rows)
 
 
-def peek_next_prompt(conn: sqlite3.Connection, voter_id: int) -> Prompt | None:
-    """Return the highest-info-gain prompt without removing it."""
+def peek_next_prompt(
+    conn: sqlite3.Connection,
+    voter_id: int,
+    exclude_pair: tuple[int, int] | None = None,
+) -> Prompt | None:
+    """Return the highest-info-gain prompt without removing it.
+
+    ``exclude_pair`` is the player pair the voter just answered. When given,
+    prompts for that same pair sort last, so a *different* comparison surfaces
+    next whenever one exists. This stops the queue from showing the identical
+    two names across all three axes back-to-back (which reads as "stuck"); the
+    deferred pair stays in the queue and resurfaces on the following tap. When
+    no alternative pair is queued, the same pair is still returned.
+    """
+    pa, pb = exclude_pair if exclude_pair is not None else (None, None)
     row = conn.execute(
         "SELECT voter_id, player_a, player_b, axis, info_gain "
         "FROM pending_prompts WHERE voter_id=? "
-        "ORDER BY info_gain DESC, player_a, player_b, axis "
+        "ORDER BY (player_a=? AND player_b=?), info_gain DESC, player_a, player_b, axis "
         "LIMIT 1",
-        (voter_id,),
+        (voter_id, pa, pb),
     ).fetchone()
     if row is None:
         return None
