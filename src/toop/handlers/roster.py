@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 from toop.admin import require_admin
 from toop.contacts import get_contact, list_contacts
 from toop.players import (
+    Player,
     add_ghost_player,
     add_player,
     disable_player_pool,
@@ -44,12 +45,60 @@ RENAME_USAGE = 'Usage: /rename (no args) for buttons, or /rename <@username|tele
 RENAME_EMPTY_ROSTER = "No players on the roster yet — use /add_player first."
 PENDING_RENAME_KEY = "pending_rename"
 
+# Callback prefixes for the button-driven admin flows. Kept short because
+# callback_data is capped at 64 bytes; only telegram_ids ride behind them.
+RMPICK_PREFIX = "rmpick:"
+DISPICK_PREFIX = "dispick:"
+ENPICK_PREFIX = "enpick:"
+PAUSEPICK_PREFIX = "pausepick:"
+PAUSEDUR_PREFIX = "pausedur:"
+LNKGHOST_PREFIX = "lnkghost:"
+LNKREAL_PREFIX = "lnkreal:"
+ADDPICK_PREFIX = "addpick:"
+PENDING_ADD_KEY = "pending_add"
+
+# Button durations offered by /pause_voting after a player is picked — each
+# token round-trips through _parse_duration so the typed fallback stays in sync.
+PAUSE_DURATIONS: tuple[tuple[str, str], ...] = (
+    ("1 week", "1w"),
+    ("2 weeks", "2w"),
+    ("1 month", "1m"),
+)
+
 
 def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
     conn = context.bot_data.get("conn")
     if conn is None:
         raise RuntimeError("DB connection missing from bot_data")
     return conn
+
+
+def _player_label(display_name: str, username: str | None) -> str:
+    return f"{display_name} (@{username})" if username else display_name
+
+
+def _player_keyboard(players: list[Player], prefix: str) -> InlineKeyboardMarkup:
+    """One button per player, callback_data = prefix + telegram_id."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    _player_label(p.display_name, p.username),
+                    callback_data=f"{prefix}{p.telegram_id}",
+                )
+            ]
+            for p in players
+        ]
+    )
+
+
+def _pick_id(data: str, prefix: str) -> int | None:
+    """Recover the telegram_id (possibly a negative ghost id) from callback_data,
+    or None when the trailing token isn't an int (stale/forged data)."""
+    try:
+        return int(data.removeprefix(prefix))
+    except ValueError:
+        return None
 
 
 def _parse_add_args(text: str) -> tuple[int | str, str] | None:
@@ -153,13 +202,20 @@ async def handle_remove_player(update: Update, context: ContextTypes.DEFAULT_TYP
         await message.reply_text(f"@{username} wasn't in the active roster.")
 
 
+_DURATION_DAYS = {"d": 1, "w": 7, "m": 30}
+
+
 def _parse_duration(token: str) -> timedelta | None:
-    """Parse a pause duration like ``2w`` or ``10d`` into a timedelta, or None."""
-    match = re.fullmatch(r"(\d+)([dw])", token.lower())
+    """Parse a pause duration like ``2w``, ``10d`` or ``1m`` into a timedelta.
+
+    ``m`` is a coarse month (30 days) — exact enough for a "pull them for a
+    month" pause. Returns None when the token doesn't match.
+    """
+    match = re.fullmatch(r"(\d+)([dwm])", token.lower())
     if not match:
         return None
     amount = int(match.group(1))
-    return timedelta(days=amount * (7 if match.group(2) == "w" else 1))
+    return timedelta(days=amount * _DURATION_DAYS[match.group(2)])
 
 
 def _is_paused(pool_paused_until: str | None, now: datetime) -> bool:
@@ -415,10 +471,6 @@ async def handle_contacts(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 # ----- /rename: pick a player, then type the new display name -----
 
 
-def _player_label(display_name: str, username: str | None) -> str:
-    return f"{display_name} (@{username})" if username else display_name
-
-
 def _parse_rename_args(text: str) -> tuple[int | str, str] | None:
     """Parse the one-shot shortcut `/rename <@username|telegram_id> "New Name"`.
 
@@ -491,18 +543,10 @@ async def handle_rename(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not players:
         await message.reply_text(RENAME_EMPTY_ROSTER)
         return
-    keyboard = InlineKeyboardMarkup(
-        [
-            [
-                InlineKeyboardButton(
-                    _player_label(p.display_name, p.username),
-                    callback_data=f"{RENAME_PREFIX}{p.telegram_id}",
-                )
-            ]
-            for p in players
-        ]
+    await message.reply_text(
+        "Who do you want to rename?",
+        reply_markup=_player_keyboard(players, RENAME_PREFIX),
     )
-    await message.reply_text("Who do you want to rename?", reply_markup=keyboard)
 
 
 @require_admin

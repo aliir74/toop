@@ -614,3 +614,50 @@ async def test_contacts_excludes_ghosts(admin_settings: None, conn: sqlite3.Conn
     reply = update.effective_message.reply_text.await_args.args[0]
     assert "Ghosty" not in reply
     assert "@bob" in reply
+
+
+# ----- shared button helpers -----
+
+from datetime import timedelta  # noqa: E402
+
+from toop.handlers.roster import (  # noqa: E402
+    PAUSE_DURATIONS,
+    _parse_duration,
+    _pick_id,
+    _player_keyboard,
+)
+
+
+def test_parse_duration_months() -> None:
+    assert _parse_duration("1m") == timedelta(days=30)
+    assert _parse_duration("3m") == timedelta(days=90)
+
+
+def test_parse_duration_weeks_days_still_work() -> None:
+    assert _parse_duration("2w") == timedelta(days=14)
+    assert _parse_duration("10d") == timedelta(days=10)
+    assert _parse_duration("soon") is None
+
+
+def test_pause_durations_all_parse() -> None:
+    # Every button token must round-trip through the typed parser.
+    for _label, token in PAUSE_DURATIONS:
+        assert _parse_duration(token) is not None
+
+
+def test_player_keyboard_one_button_per_player(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "SHH", None)
+    kb = _player_keyboard(list_active_players(conn), "rmpick:")
+    labels = [b.text for row in kb.inline_keyboard for b in row]
+    callbacks = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert "Alice (@alice)" in labels
+    assert "SHH" in labels
+    assert "rmpick:1" in callbacks
+    assert "rmpick:2" in callbacks
+
+
+def test_pick_id_parses_positive_negative_and_rejects() -> None:
+    assert _pick_id("rmpick:5", "rmpick:") == 5
+    assert _pick_id("lnkghost:-3", "lnkghost:") == -3  # negative ghost id
+    assert _pick_id("rmpick:abc", "rmpick:") is None
