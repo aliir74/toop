@@ -1205,7 +1205,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="4.2" data-task-status="pending">
+  <article class="task" data-task-id="4.2" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">4.2</span><span class="task-name">link_ghost_player: migrate all FK rows onto the real account</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1217,24 +1217,24 @@
             <span class="label">Files</span> Modify: src/toop/players.py · Modify: tests/test_players.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests covering: (a) real id is NEW — ghost rows simply remap; (b) real id EXISTS — counts merge; (c) pair ORDER FLIP — remapping neg→pos reorders (player_a,player_b) and a_wins/b_wins swap accordingly; (d) pair COLLISION — remapped pair already exists, counts add; (e) player_ratings/rsvps/attendance remap and merge/skip on PK collision; (f) ghost player row deleted, result row has is_ghost=0</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Implement link_ghost_player(conn, ghost_id, real_id, username, display_name): in one transaction — ensure target player row exists (add_player if new, else keep); for vote_aggregates/pending_prompts/answered_prompts fetch every row where player_a=ghost OR player_b=ghost, recompute normalized (a,b) with real_id, swap a_wins/b_wins when order flips (vote_aggregates), UPSERT-merge into the target pair (sum counts) and delete the ghost rows; remap player_ratings/rsvps/attendance with INSERT OR IGNORE then DELETE leftover ghost rows; finally DELETE the ghost player row</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Refactor: extract a <code>_remap_pair_rows</code> helper so the three pair tables share one tested code path</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_players.py -v &amp;&amp; uv run ty check src/</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(players): link ghost player to a real account</span>
         </li>
           </ol>

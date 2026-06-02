@@ -6,6 +6,16 @@ from datetime import datetime
 
 
 @dataclass(frozen=True)
+class LinkResult:
+    """Counts of what link_ghost_player migrated onto the real account."""
+
+    vote_rows: int
+    ratings: int
+    rsvps: int
+    attendance: int
+
+
+@dataclass(frozen=True)
 class DontKnowStat:
     telegram_id: int
     display_name: str
@@ -75,6 +85,131 @@ def add_ghost_player(conn: sqlite3.Connection, display_name: str) -> Player:
     )
     conn.commit()
     return _row_to_player(_fetch_one(conn, ghost_id))
+
+
+def _relink_pair(
+    ghost_id: int, real_id: int, player_a: int, player_b: int
+) -> tuple[int, int, int] | None:
+    """Remap a pair (one side is the ghost) onto the real account.
+
+    Returns (other, new_a, new_b) with new_a < new_b, or None when the only other
+    endpoint IS the real account (comparing the ghost to itself → void row).
+    """
+    other = player_b if player_a == ghost_id else player_a
+    if other == real_id:
+        return None
+    new_a, new_b = (real_id, other) if real_id < other else (other, real_id)
+    return other, new_a, new_b
+
+
+def link_ghost_player(
+    conn: sqlite3.Connection,
+    ghost_id: int,
+    real_id: int,
+    username: str | None,
+    display_name: str,
+) -> LinkResult:
+    """Merge a ghost player into a real Telegram account.
+
+    Every row that referenced the ghost (votes, queued/answered prompts, ratings,
+    RSVPs, attendance) is remapped onto real_id, re-normalizing the player_a<player_b
+    pair ordering and merging counts on collision. Rows that would compare the real
+    account to itself, or queue a prompt to a voter now inside the pair, are dropped.
+    The ghost player row is deleted last so ON DELETE CASCADE clears any leftovers.
+    """
+    if conn.execute("SELECT 1 FROM players WHERE telegram_id=?", (real_id,)).fetchone() is None:
+        add_player(conn, real_id, display_name, username)
+
+    vote_rows = 0
+    for row in conn.execute(
+        "SELECT player_a, player_b, axis, a_wins, b_wins, dont_know FROM vote_aggregates "
+        "WHERE player_a=? OR player_b=?",
+        (ghost_id, ghost_id),
+    ).fetchall():
+        remap = _relink_pair(ghost_id, real_id, row["player_a"], row["player_b"])
+        if remap is None:
+            continue
+        _other, new_a, new_b = remap
+        ghost_wins = row["a_wins"] if row["player_a"] == ghost_id else row["b_wins"]
+        other_wins = row["b_wins"] if row["player_a"] == ghost_id else row["a_wins"]
+        # In the remapped pair, real_id carries the ghost's wins.
+        if new_a == real_id:
+            inc_a, inc_b = ghost_wins, other_wins
+        else:
+            inc_a, inc_b = other_wins, ghost_wins
+        conn.execute(
+            """
+            INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(player_a, player_b, axis) DO UPDATE SET
+                a_wins = a_wins + excluded.a_wins,
+                b_wins = b_wins + excluded.b_wins,
+                dont_know = dont_know + excluded.dont_know,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (new_a, new_b, row["axis"], inc_a, inc_b, row["dont_know"]),
+        )
+        vote_rows += 1
+
+    for row in conn.execute(
+        "SELECT voter_id, player_a, player_b, axis, info_gain FROM pending_prompts "
+        "WHERE player_a=? OR player_b=?",
+        (ghost_id, ghost_id),
+    ).fetchall():
+        remap = _relink_pair(ghost_id, real_id, row["player_a"], row["player_b"])
+        if remap is None or row["voter_id"] in (remap[1], remap[2]):
+            continue
+        conn.execute(
+            "INSERT OR IGNORE INTO pending_prompts (voter_id, player_a, player_b, axis, info_gain) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (row["voter_id"], remap[1], remap[2], row["axis"], row["info_gain"]),
+        )
+
+    for row in conn.execute(
+        "SELECT voter_id, player_a, player_b, axis FROM answered_prompts "
+        "WHERE player_a=? OR player_b=?",
+        (ghost_id, ghost_id),
+    ).fetchall():
+        remap = _relink_pair(ghost_id, real_id, row["player_a"], row["player_b"])
+        if remap is None or row["voter_id"] in (remap[1], remap[2]):
+            continue
+        conn.execute(
+            "INSERT OR IGNORE INTO answered_prompts (voter_id, player_a, player_b, axis) "
+            "VALUES (?, ?, ?, ?)",
+            (row["voter_id"], remap[1], remap[2], row["axis"]),
+        )
+
+    def _count(table: str) -> int:
+        return conn.execute(
+            f"SELECT COUNT(*) AS n FROM {table} WHERE telegram_id=?", (ghost_id,)
+        ).fetchone()["n"]
+
+    ratings, rsvps, attendance = _count("player_ratings"), _count("rsvps"), _count("attendance")
+    conn.execute(
+        "INSERT OR IGNORE INTO player_ratings "
+        "(telegram_id, axis, score, vote_count, calibrated, computed_at) "
+        "SELECT ?, axis, score, vote_count, calibrated, computed_at FROM player_ratings "
+        "WHERE telegram_id=?",
+        (real_id, ghost_id),
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO rsvps (session_id, telegram_id, status, locked_in, created_at) "
+        "SELECT session_id, ?, status, locked_in, created_at FROM rsvps WHERE telegram_id=?",
+        (real_id, ghost_id),
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO attendance (session_id, telegram_id, was_attendee) "
+        "SELECT session_id, ?, was_attendee FROM attendance WHERE telegram_id=?",
+        (real_id, ghost_id),
+    )
+
+    # Delete the ghost player last: ON DELETE CASCADE clears its remaining child rows.
+    conn.execute("DELETE FROM players WHERE telegram_id=?", (ghost_id,))
+    conn.execute(
+        "UPDATE players SET is_ghost=0, active=1 WHERE telegram_id=?", (real_id,)
+    )
+    conn.commit()
+    return LinkResult(vote_rows=vote_rows, ratings=ratings, rsvps=rsvps, attendance=attendance)
 
 
 def soft_remove_player(conn: sqlite3.Connection, telegram_id: int) -> bool:

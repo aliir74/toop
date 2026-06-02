@@ -10,6 +10,7 @@ from toop.players import (
     dont_know_stats,
     enable_player_pool,
     get_player_by_username,
+    link_ghost_player,
     list_active_players,
     pause_player_pool,
     rename_player,
@@ -189,3 +190,190 @@ def test_ghost_appears_in_active_roster(conn: sqlite3.Connection) -> None:
     add_ghost_player(conn, "Ghost")
     roster = list_active_players(conn)
     assert any(p.is_ghost for p in roster)
+
+
+# ----- link_ghost_player -----
+
+
+def _agg_row(conn: sqlite3.Connection, a: int, b: int, axis: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT a_wins, b_wins, dont_know FROM vote_aggregates "
+        "WHERE player_a=? AND player_b=? AND axis=?",
+        (a, b, axis),
+    ).fetchone()
+
+
+def test_link_ghost_to_new_real_remaps_and_flips_order(conn: sqlite3.Connection) -> None:
+    add_player(conn, 5, "Five", "five")
+    ghost = add_ghost_player(conn, "Ghost")  # negative id < 5
+    g = ghost.telegram_id
+    # Pair stored normalized: ghost is player_a (g < 5). Ghost won 3, Five won 1, 2 dk.
+    conn.execute(
+        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
+        "VALUES (?, 5, 'attack', 3, 1, 2)",
+        (g,),
+    )
+    conn.commit()
+    link_ghost_player(conn, ghost_id=g, real_id=10, username="ten", display_name="Ten")
+    # Remap g->10: pair becomes (5, 10) so order flips; ghost's wins follow real_id (now player_b).
+    row = _agg_row(conn, 5, 10, "attack")
+    assert row is not None
+    assert (row["a_wins"], row["b_wins"], row["dont_know"]) == (1, 3, 2)
+    # Ghost row and player gone; real player exists and is not a ghost.
+    assert _agg_row(conn, g, 5, "attack") is None
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=?", (g,)).fetchone() is None
+    real = conn.execute("SELECT is_ghost, active FROM players WHERE telegram_id=10").fetchone()
+    assert real["is_ghost"] == 0
+    assert real["active"] == 1
+
+
+def test_link_ghost_merges_into_existing_pair(conn: sqlite3.Connection) -> None:
+    add_player(conn, 5, "Five", "five")
+    add_player(conn, 10, "Ten", "ten")  # real account already exists
+    conn.execute(
+        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
+        "VALUES (5, 10, 'attack', 2, 0, 1)"
+    )
+    ghost = add_ghost_player(conn, "Ghost")
+    g = ghost.telegram_id
+    conn.execute(
+        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
+        "VALUES (?, 5, 'attack', 4, 1, 3)",
+        (g,),
+    )
+    conn.commit()
+    result = link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
+    # ghost pair (g,5): ghost won 4, five won 1 → remapped to (5,10) as five=1, ten(real)=4.
+    # Merge into existing (5,10) a=2,b=0,dk=1 → a=2+1=3, b=0+4=4, dk=1+3=4.
+    row = _agg_row(conn, 5, 10, "attack")
+    assert (row["a_wins"], row["b_wins"], row["dont_know"]) == (3, 4, 4)
+    assert result.vote_rows == 1
+
+
+def test_link_ghost_drops_self_pair(conn: sqlite3.Connection) -> None:
+    add_player(conn, 10, "Ten", "ten")
+    ghost = add_ghost_player(conn, "Ghost")
+    g = ghost.telegram_id
+    # Someone compared the ghost against person 10 (who turns out to BE the ghost).
+    conn.execute(
+        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
+        "VALUES (?, 10, 'attack', 2, 1, 0)",
+        (g,),
+    )
+    conn.commit()
+    link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
+    # No self-pair (10,10) created, no crash.
+    assert _agg_row(conn, 10, 10, "attack") is None
+    assert conn.execute("SELECT COUNT(*) AS n FROM vote_aggregates").fetchone()["n"] == 0
+
+
+def test_link_ghost_migrates_prompts_and_drops_voter_in_pair(conn: sqlite3.Connection) -> None:
+    add_player(conn, 5, "Five", "five")
+    add_player(conn, 10, "Ten", "ten")
+    ghost = add_ghost_player(conn, "Ghost")
+    g = ghost.telegram_id
+    a, b = (g, 5) if g < 5 else (5, g)
+    # Voter 7 answered ghost-vs-5: should remap to (5,10) answered by 7.
+    add_player(conn, 7, "Seven", "seven")
+    conn.execute(
+        "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis) VALUES (7, ?, ?, 'attack')",
+        (a, b),
+    )
+    # Voter 10 (the real account) has a pending prompt on ghost-vs-5: after remap the
+    # pair (5,10) would contain the voter → must be dropped, not migrated.
+    conn.execute(
+        "INSERT INTO pending_prompts (voter_id, player_a, player_b, axis, info_gain) "
+        "VALUES (10, ?, ?, 'attack', 1)",
+        (a, b),
+    )
+    conn.commit()
+    link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
+    answered = conn.execute(
+        "SELECT 1 FROM answered_prompts WHERE voter_id=7 AND player_a=5 AND player_b=10 "
+        "AND axis='attack'"
+    ).fetchone()
+    assert answered is not None
+    # The voter-in-pair pending prompt is gone (not re-inserted as an invalid row).
+    assert conn.execute("SELECT COUNT(*) AS n FROM pending_prompts").fetchone()["n"] == 0
+
+
+def test_link_ghost_migrates_ratings_rsvps_attendance(conn: sqlite3.Connection) -> None:
+    ghost = add_ghost_player(conn, "Ghost")
+    g = ghost.telegram_id
+    conn.execute(
+        "INSERT INTO player_ratings (telegram_id, axis, score, vote_count, calibrated) "
+        "VALUES (?, 'attack', 1.5, 5, 1)",
+        (g,),
+    )
+    conn.execute("INSERT INTO sessions (id, session_date) VALUES (1, '2026-06-08')")
+    conn.execute(
+        "INSERT INTO rsvps (session_id, telegram_id, status, locked_in) VALUES (1, ?, 'yes', 1)",
+        (g,),
+    )
+    conn.execute("INSERT INTO attendance (session_id, telegram_id, was_attendee) VALUES (1, ?, 1)", (g,))
+    conn.commit()
+    result = link_ghost_player(conn, ghost_id=g, real_id=10, username="ten", display_name="Ten")
+    assert conn.execute(
+        "SELECT 1 FROM player_ratings WHERE telegram_id=10 AND axis='attack'"
+    ).fetchone() is not None
+    assert conn.execute("SELECT 1 FROM rsvps WHERE session_id=1 AND telegram_id=10").fetchone()
+    assert conn.execute(
+        "SELECT 1 FROM attendance WHERE session_id=1 AND telegram_id=10"
+    ).fetchone() is not None
+    # Ghost rows cascade-deleted with the ghost player.
+    assert conn.execute("SELECT COUNT(*) AS n FROM player_ratings WHERE telegram_id=?", (g,)).fetchone()["n"] == 0
+    assert result.ratings == 1
+    assert result.rsvps == 1
+    assert result.attendance == 1
+
+
+def test_link_ghost_real_id_smaller_keeps_order(conn: sqlite3.Connection) -> None:
+    add_player(conn, 20, "Twenty", "twenty")
+    ghost = add_ghost_player(conn, "Ghost")
+    g = ghost.telegram_id
+    conn.execute(
+        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
+        "VALUES (?, 20, 'attack', 5, 2, 1)",
+        (g,),
+    )
+    conn.commit()
+    # real_id=3 < other=20 → real_id stays player_a and keeps the ghost's wins.
+    link_ghost_player(conn, ghost_id=g, real_id=3, username="three", display_name="Three")
+    row = _agg_row(conn, 3, 20, "attack")
+    assert (row["a_wins"], row["b_wins"], row["dont_know"]) == (5, 2, 1)
+
+
+def test_link_ghost_migrates_pending_for_other_voter(conn: sqlite3.Connection) -> None:
+    add_player(conn, 5, "Five", "five")
+    add_player(conn, 7, "Seven", "seven")
+    ghost = add_ghost_player(conn, "Ghost")
+    g = ghost.telegram_id
+    a, b = (g, 5) if g < 5 else (5, g)
+    conn.execute(
+        "INSERT INTO pending_prompts (voter_id, player_a, player_b, axis, info_gain) "
+        "VALUES (7, ?, ?, 'attack', 9)",
+        (a, b),
+    )
+    conn.commit()
+    link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
+    migrated = conn.execute(
+        "SELECT 1 FROM pending_prompts WHERE voter_id=7 AND player_a=5 AND player_b=10 "
+        "AND axis='attack'"
+    ).fetchone()
+    assert migrated is not None
+
+
+def test_link_ghost_drops_answered_self_pair(conn: sqlite3.Connection) -> None:
+    add_player(conn, 7, "Seven", "seven")
+    add_player(conn, 10, "Ten", "ten")
+    ghost = add_ghost_player(conn, "Ghost")
+    g = ghost.telegram_id
+    a, b = (g, 10) if g < 10 else (10, g)
+    # Voter 7 answered ghost-vs-10; 10 is the real account → self-pair, must drop.
+    conn.execute(
+        "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis) VALUES (7, ?, ?, 'attack')",
+        (a, b),
+    )
+    conn.commit()
+    link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
+    assert conn.execute("SELECT COUNT(*) AS n FROM answered_prompts").fetchone()["n"] == 0
