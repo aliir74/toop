@@ -509,9 +509,12 @@ async def test_link_player_by_username_success(
     assert conn.execute("SELECT 1 FROM players WHERE telegram_id=555").fetchone() is not None
 
 
-async def test_link_player_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
-    update = _admin_update("/link_player")
-    await handle_link_player(update, _context(conn, args=[]))
+async def test_link_player_one_arg_shows_usage(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    # No args is the ghost-button flow now; a single arg is incomplete typed use.
+    update = _admin_update("/link_player 5")
+    await handle_link_player(update, _context(conn, args=["5"]))
     reply = update.effective_message.reply_text.await_args.args[0]
     assert reply.startswith("Usage:")
 
@@ -957,3 +960,137 @@ async def test_pause_dur_callback_no_query_returns(
     update.effective_user = MagicMock(id=42)
     update.callback_query = None
     await handle_pause_dur_callback(update, _context(conn, args=[]))  # silent
+
+
+# ----- /link_player ghost → contact chain -----
+
+from toop.handlers.roster import (  # noqa: E402
+    handle_link_ghost_callback,
+    handle_link_real_callback,
+)
+
+
+async def test_link_no_args_lists_ghosts(admin_settings: None, conn: sqlite3.Connection) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    add_player(conn, 1, "Normal", "normal")  # real player — must NOT appear
+    update = _admin_update("/link_player")
+    await handle_link_player(update, _context(conn, args=[]))
+    kb = update.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+    callbacks = [b.callback_data for row in kb for b in row]
+    assert callbacks == [f"lnkghost:{ghost.telegram_id}"]
+
+
+async def test_link_no_args_no_ghosts(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/link_player")
+    await handle_link_player(update, _context(conn, args=[]))
+    assert "No ghost players" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_link_ghost_callback_lists_contacts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    upsert_contact(conn, 555, username="latejoiner", display_name="Late Joiner")
+    update = _callback_update(f"lnkghost:{g}")
+    answer, edit = _callbacks(update)
+    await handle_link_ghost_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    kb = edit.await_args.kwargs["reply_markup"].inline_keyboard
+    assert f"lnkreal:{g}:555" in [b.callback_data for row in kb for b in row]
+
+
+async def test_link_ghost_callback_no_contacts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    update = _callback_update(f"lnkghost:{ghost.telegram_id}")
+    answer, edit = _callbacks(update)
+    await handle_link_ghost_callback(update, _context(conn, args=[]))
+    assert "Nobody new" in edit.await_args.args[0]
+
+
+async def test_link_ghost_callback_not_a_ghost_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Real", "real")  # not a ghost
+    update = _callback_update("lnkghost:111")
+    answer, edit = _callbacks(update)
+    await handle_link_ghost_callback(update, _context(conn, args=[]))
+    assert "isn't a ghost" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_link_ghost_callback_bad_int_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("lnkghost:notanint")
+    answer, edit = _callbacks(update)
+    await handle_link_ghost_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+
+
+async def test_link_ghost_callback_no_query_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = MagicMock()
+    update.effective_user = MagicMock(id=42)
+    update.callback_query = None
+    await handle_link_ghost_callback(update, _context(conn, args=[]))  # silent
+
+
+async def test_link_real_callback_links_and_edits(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    upsert_contact(conn, 555, username="latejoiner", display_name="Late Joiner")
+    update = _callback_update(f"lnkreal:{g}:555")
+    answer, edit = _callbacks(update)
+    await handle_link_real_callback(update, _context(conn, args=[]))
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=555").fetchone() is not None
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=?", (g,)).fetchone() is None
+    answer.assert_awaited()
+    assert "Linked" in edit.await_args.args[0]
+
+
+async def test_link_real_callback_bad_int_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("lnkreal:abc:555")
+    answer, edit = _callbacks(update)
+    await handle_link_real_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+
+
+async def test_link_real_callback_ghost_gone_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    upsert_contact(conn, 555, username="latejoiner", display_name="Late Joiner")
+    update = _callback_update("lnkreal:-99:555")  # no such ghost
+    answer, edit = _callbacks(update)
+    await handle_link_real_callback(update, _context(conn, args=[]))
+    assert "ghost is no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_link_real_callback_contact_gone_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    update = _callback_update(f"lnkreal:{ghost.telegram_id}:555")  # 555 never DM'd
+    answer, edit = _callbacks(update)
+    await handle_link_real_callback(update, _context(conn, args=[]))
+    assert "contact is no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_link_real_callback_no_query_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = MagicMock()
+    update.effective_user = MagicMock(id=42)
+    update.callback_query = None
+    await handle_link_real_callback(update, _context(conn, args=[]))  # silent

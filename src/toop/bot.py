@@ -26,7 +26,9 @@ from toop.handlers.roster import (
     handle_dk_report,
     handle_enable_callback,
     handle_enable_voting,
+    handle_link_ghost_callback,
     handle_link_player,
+    handle_link_real_callback,
     handle_list_players,
     handle_pause_dur_callback,
     handle_pause_pick_callback,
@@ -132,6 +134,8 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_enable_callback, pattern=r"^enpick:"))
     app.add_handler(CallbackQueryHandler(handle_pause_pick_callback, pattern=r"^pausepick:"))
     app.add_handler(CallbackQueryHandler(handle_pause_dur_callback, pattern=r"^pausedur:"))
+    app.add_handler(CallbackQueryHandler(handle_link_ghost_callback, pattern=r"^lnkghost:"))
+    app.add_handler(CallbackQueryHandler(handle_link_real_callback, pattern=r"^lnkreal:"))
     # Lower-priority group so /commands still reach their CommandHandler above;
     # this only consumes a private text message when a rename is pending.
     app.add_handler(

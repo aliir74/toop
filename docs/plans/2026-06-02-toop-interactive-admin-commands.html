@@ -1201,32 +1201,32 @@
             <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests: no-args lists 👻 ghost buttons <code>lnkghost:&lt;gid&gt;</code>; no ghosts → &#x27;no ghost players&#x27; reply; ghost-pick edits into a contact keyboard <code>lnkreal:&lt;gid&gt;:&lt;rid&gt;</code> from list_addable_contacts; no contacts → alert/edit; ghost-pick on a non-ghost/gone id alerts; real-pick performs link_ghost_player and edits the migration summary; real-pick where ghost vanished alerts; real-pick where contact vanished alerts; bad-int + None returns on both callbacks.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>LNKGHOST_PREFIX = &quot;lnkghost:&quot;</code>, <code>LNKREAL_PREFIX = &quot;lnkreal:&quot;</code>; no-args branch lists ghosts (filter list_active_players for is_ghost); keep typed two-arg path unchanged.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>handle_link_ghost_callback</code>: parse gid, verify it is still a ghost, render contact keyboard (label <code>@username (Name)</code> or <code>Name</code>), edit message.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>handle_link_real_callback</code>: rsplit into gid + rid, re-verify ghost row + contact row, call link_ghost_player with contact.username and display_name, answer + edit summary.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Register both CallbackQueryHandlers (<code>^lnkghost:</code>, <code>^lnkreal:</code>); bump wiring 37 → 39.</span>
         </li>
         <li class="step" data-status="pending">
           <input type="checkbox" />
           <span class="step-text">Run the full gate.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(roster): button-driven /link_player ghost-to-contact chain</span>
         </li>
           </ol>

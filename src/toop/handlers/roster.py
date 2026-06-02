@@ -19,8 +19,9 @@ from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
-from toop.contacts import get_contact, list_contacts
+from toop.contacts import Contact, get_contact, list_addable_contacts, list_contacts
 from toop.players import (
+    LinkResult,
     Player,
     add_ghost_player,
     add_player,
@@ -106,6 +107,11 @@ def _pick_id(data: str, prefix: str) -> int | None:
         return int(data.removeprefix(prefix))
     except ValueError:
         return None
+
+
+def _contact_label(contact: Contact) -> str:
+    handle = f"@{contact.username}" if contact.username else "(no username)"
+    return f"{handle} · {contact.display_name or '?'}"
 
 
 async def _safe_edit(
@@ -529,10 +535,27 @@ async def handle_link_player(update: Update, context: ContextTypes.DEFAULT_TYPE)
     message = update.effective_message
     if message is None:
         return
+    conn = _conn(context)
+    if not context.args:
+        ghosts = [p for p in list_active_players(conn) if p.is_ghost]
+        if not ghosts:
+            await message.reply_text("No ghost players to link. Add one with /add_ghost first.")
+            return
+        keyboard = InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        f"👻 {p.display_name}", callback_data=f"{LNKGHOST_PREFIX}{p.telegram_id}"
+                    )
+                ]
+                for p in ghosts
+            ]
+        )
+        await message.reply_text("Which ghost do you want to link?", reply_markup=keyboard)
+        return
     if len(context.args) < 2:
         await message.reply_text(LINK_USAGE)
         return
-    conn = _conn(context)
     ghost_token = context.args[0]
     if not ghost_token.lstrip("-").isdigit():
         await message.reply_text(LINK_USAGE)
@@ -572,11 +595,90 @@ async def handle_link_player(update: Update, context: ContextTypes.DEFAULT_TYPE)
         contact.username,
         contact.display_name or ghost_row["display_name"],
     )
-    await message.reply_text(
-        f"🔗 Linked ghost {ghost_row['display_name']} → id {real_id}. Moved "
+    await message.reply_text(_link_summary(ghost_row["display_name"], real_id, result))
+
+
+def _link_summary(ghost_name: str, real_id: int, result: LinkResult) -> str:
+    return (
+        f"🔗 Linked ghost {ghost_name} → id {real_id}. Moved "
         f"{result.vote_rows} vote pairs, {result.ratings} ratings, {result.rsvps} RSVPs, "
         f"{result.attendance} attendance rows."
     )
+
+
+@require_admin
+async def handle_link_ghost_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin tapped a 👻 button from /link_player — offer the contacts to link to."""
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+    ghost_id = _pick_id(query.data, LNKGHOST_PREFIX)
+    if ghost_id is None:
+        await query.answer()
+        return
+    conn = _conn(context)
+    ghost_row = conn.execute(
+        "SELECT display_name, is_ghost FROM players WHERE telegram_id=? AND active=1",
+        (ghost_id,),
+    ).fetchone()
+    if ghost_row is None or ghost_row["is_ghost"] != 1:
+        await query.answer("That isn't a ghost player anymore.", show_alert=True)
+        return
+    contacts = list_addable_contacts(conn)
+    if not contacts:
+        await query.answer()
+        await _safe_edit(
+            query,
+            "Nobody new has DM'd the bot yet — ask them to /start, then /link_player again.",
+        )
+        return
+    keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    _contact_label(c), callback_data=f"{LNKREAL_PREFIX}{ghost_id}:{c.telegram_id}"
+                )
+            ]
+            for c in contacts
+        ]
+    )
+    await query.answer()
+    await _safe_edit(
+        query, f"Link 👻 {ghost_row['display_name']} to which account?", reply_markup=keyboard
+    )
+
+
+@require_admin
+async def handle_link_real_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin tapped a contact button — merge the ghost into that real account."""
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+    # callback_data is "<ghost_id>:<real_id>"; rpartition splits the trailing
+    # real id off so the negative ghost id keeps its sign.
+    ghost_str, _sep, real_str = query.data.removeprefix(LNKREAL_PREFIX).rpartition(":")
+    try:
+        ghost_id, real_id = int(ghost_str), int(real_str)
+    except ValueError:
+        await query.answer()
+        return
+    conn = _conn(context)
+    ghost_row = conn.execute(
+        "SELECT display_name, is_ghost FROM players WHERE telegram_id=? AND active=1",
+        (ghost_id,),
+    ).fetchone()
+    if ghost_row is None or ghost_row["is_ghost"] != 1:
+        await query.answer("That ghost is no longer available.", show_alert=True)
+        return
+    contact = get_contact(conn, real_id)
+    if contact is None:
+        await query.answer("That contact is no longer available.", show_alert=True)
+        return
+    result = link_ghost_player(
+        conn, ghost_id, real_id, contact.username, contact.display_name or ghost_row["display_name"]
+    )
+    await query.answer()
+    await _safe_edit(query, _link_summary(ghost_row["display_name"], real_id, result))
 
 
 @require_admin
