@@ -16,6 +16,7 @@ from toop.contacts import get_contact, list_contacts
 from toop.players import (
     add_player,
     disable_player_pool,
+    dont_know_stats,
     enable_player_pool,
     get_player_by_username,
     list_active_players,
@@ -228,6 +229,24 @@ async def handle_enable_voting(update: Update, context: ContextTypes.DEFAULT_TYP
         await message.reply_text(f"Restored {context.args[0]} to the rating pool. ✅")
     else:
         await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+
+
+@require_admin
+async def handle_dk_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show each active player's don't-know rate, highest first — the head of the
+    list is who the group can least confidently rate (a pause candidate)."""
+    message = update.effective_message
+    if message is None:
+        return
+    stats = dont_know_stats(_conn(context))
+    if not stats:
+        await message.reply_text("No players on the roster yet.")
+        return
+    lines = ["🤷 Don't-know report (highest rate first):"]
+    for i, s in enumerate(stats, start=1):
+        pct = round(s.dk_rate * 100)
+        lines.append(f"{i}. {s.display_name} — {s.dk_count}/{s.total} don't-know ({pct}%)")
+    await message.reply_text("\n".join(lines))
 
 
 @require_admin

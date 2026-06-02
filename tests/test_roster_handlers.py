@@ -11,6 +11,7 @@ from toop.handlers.roster import (
     handle_add_player,
     handle_contacts,
     handle_disable_voting,
+    handle_dk_report,
     handle_enable_voting,
     handle_list_players,
     handle_pause_voting,
@@ -416,7 +417,35 @@ async def test_enable_voting_unknown(admin_settings: None, conn: sqlite3.Connect
 async def test_pool_handlers_return_without_message(
     admin_settings: None, conn: sqlite3.Connection
 ) -> None:
-    for handler in (handle_pause_voting, handle_disable_voting, handle_enable_voting):
+    for handler in (
+        handle_pause_voting,
+        handle_disable_voting,
+        handle_enable_voting,
+        handle_dk_report,
+    ):
         update = _admin_update("/x")
         update.effective_message = None
         await handler(update, _context(conn, args=[]))
+
+
+async def test_dk_report_lists_by_rate(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    conn.execute(
+        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
+        "VALUES (1, 2, 'attack', 1, 1, 4)"
+    )
+    conn.commit()
+    update = _admin_update("/dk_report")
+    await handle_dk_report(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Alice" in reply
+    assert "Bob" in reply
+    assert "%" in reply
+
+
+async def test_dk_report_empty(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/dk_report")
+    await handle_dk_report(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "No players" in reply
