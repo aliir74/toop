@@ -67,8 +67,14 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 | `/add_player @username "Display Name"` | Add to roster by @handle. Triggers calibration bootstrap. User must have DM'd the bot at least once. |
 | `/add_player <telegram_id> "Display Name"` | Add to roster by numeric id — the only way to add a player who has **no** Telegram username. The id must already be a known contact (they've DM'd `/start`); grab the ready-to-copy line from `/contacts`. |
 | `/contacts` | Everyone who's DM'd the bot, flagging who's 🆕 not yet on the roster and emitting a copy-paste `/add_player <id> "Name"` line for each |
+| `/add_ghost "Display Name"` | Add an accountless "ghost" player others can vote on **before** they join Telegram. Seeds calibration prompts. Link them to a real account later with `/link_player`. |
+| `/link_player <ghost_id> <@username\|real_id>` | Merge a ghost into a real account once that person joins. Migrates all their votes, ratings, RSVPs, and attendance. The real account must have DM'd the bot first. |
 | `/remove_player @username` | Soft-delete from roster |
-| `/list_players` | Numbered roster, calibration markers |
+| `/pause_voting <@username\|id> <2w\|10d>` | Temporarily pull a player from the rating pool — others stop being asked to rate them (they can still vote). Auto-expires. |
+| `/disable_voting <@username\|id>` | Pull a player from the rating pool indefinitely (until `/enable_voting`). |
+| `/enable_voting <@username\|id>` | Restore a player to the rating pool, clearing any pause or disable. |
+| `/dk_report` | Per-player "don't know" rate, highest first — who the group can least confidently rate (pause candidates). |
+| `/list_players` | Numbered roster, calibration markers, plus 👻 ghost / ⏸ paused / 🚫 disabled flags |
 | `/rename` | Tap a player from inline buttons, then type the new display name (DM-only). Updates `display_name` only. |
 | `/rename <@username\|telegram_id> "New Name"` | One-shot rename, skips the buttons |
 | `/open_session [YYYY-MM-DD]` | Opens session; auto-posts RSVP buttons to group |
@@ -127,6 +133,8 @@ prompts a week — takes 30 seconds.
 ## Privacy
 
 See `docs/PRIVACY.md` for a full audit. TL;DR: by schema design, `vote_aggregates` (outcomes) and `answered_prompts` (voter dedupe) are never joined. Admin sees completion health, never vote content.
+
+"🤷 Don't know" taps are counted on `vote_aggregates.dont_know` as a per-pair aggregate with **no voter identity** — the same privacy invariant as win counts. A daily job DMs the admin a `/pause_voting` suggestion for players whose don't-know rate crosses `DK_ALERT_MIN_PROMPTS` + `DK_ALERT_RATE`; it reports only counts, never who tapped what.
 
 ## Plan
 

@@ -8,12 +8,18 @@ from telegram.error import BadRequest
 
 from toop.contacts import upsert_contact
 from toop.handlers.roster import (
+    handle_add_ghost,
     handle_add_player,
     handle_contacts,
+    handle_disable_voting,
+    handle_dk_report,
+    handle_enable_voting,
+    handle_link_player,
     handle_list_players,
+    handle_pause_voting,
     handle_remove_player,
 )
-from toop.players import add_player, list_active_players
+from toop.players import add_ghost_player, add_player, list_active_players
 
 
 @pytest.fixture
@@ -314,3 +320,297 @@ async def test_contacts_returns_without_message(
     update = _admin_update("/contacts")
     update.effective_message = None
     await handle_contacts(update, _context(conn, args=[]))
+
+
+# ----- pause / disable / enable voting -----
+
+
+def _pool(conn: sqlite3.Connection, telegram_id: int) -> sqlite3.Row:
+    return conn.execute(
+        "SELECT in_pool, pool_paused_until FROM players WHERE telegram_id=?",
+        (telegram_id,),
+    ).fetchone()
+
+
+async def test_pause_voting_by_id_sets_timer(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/pause_voting 111 2w")
+    await handle_pause_voting(update, _context(conn, args=["111", "2w"]))
+    assert _pool(conn, 111)["pool_paused_until"] is not None
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "rate" in reply.lower()
+
+
+async def test_pause_voting_by_username(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/pause_voting @bob 10d")
+    await handle_pause_voting(update, _context(conn, args=["@bob", "10d"]))
+    assert _pool(conn, 111)["pool_paused_until"] is not None
+
+
+async def test_pause_voting_bad_duration(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/pause_voting 111 soon")
+    await handle_pause_voting(update, _context(conn, args=["111", "soon"]))
+    assert _pool(conn, 111)["pool_paused_until"] is None
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "duration" in reply.lower() or "usage" in reply.lower()
+
+
+async def test_pause_voting_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/pause_voting")
+    await handle_pause_voting(update, _context(conn, args=[]))
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_pause_voting_unknown_player(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/pause_voting @ghost 2w")
+    await handle_pause_voting(update, _context(conn, args=["@ghost", "2w"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "couldn't find" in reply.lower() or "not" in reply.lower()
+
+
+async def test_disable_voting(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/disable_voting 111")
+    await handle_disable_voting(update, _context(conn, args=["111"]))
+    assert _pool(conn, 111)["in_pool"] == 0
+
+
+async def test_disable_voting_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/disable_voting")
+    await handle_disable_voting(update, _context(conn, args=[]))
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_disable_voting_unknown(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/disable_voting @ghost")
+    await handle_disable_voting(update, _context(conn, args=["@ghost"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "couldn't find" in reply.lower() or "not" in reply.lower()
+
+
+async def test_enable_voting_clears_both(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/disable_voting 111")
+    await handle_disable_voting(update, _context(conn, args=["111"]))
+    update2 = _admin_update("/enable_voting 111")
+    await handle_enable_voting(update2, _context(conn, args=["111"]))
+    row = _pool(conn, 111)
+    assert row["in_pool"] == 1
+    assert row["pool_paused_until"] is None
+
+
+async def test_enable_voting_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/enable_voting")
+    await handle_enable_voting(update, _context(conn, args=[]))
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_enable_voting_unknown(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/enable_voting 999")
+    await handle_enable_voting(update, _context(conn, args=["999"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "not" in reply.lower() or "couldn't" in reply.lower()
+
+
+async def test_pool_handlers_return_without_message(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    for handler in (
+        handle_pause_voting,
+        handle_disable_voting,
+        handle_enable_voting,
+        handle_dk_report,
+    ):
+        update = _admin_update("/x")
+        update.effective_message = None
+        await handler(update, _context(conn, args=[]))
+
+
+async def test_dk_report_lists_by_rate(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    conn.execute(
+        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
+        "VALUES (1, 2, 'attack', 1, 1, 4)"
+    )
+    conn.commit()
+    update = _admin_update("/dk_report")
+    await handle_dk_report(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Alice" in reply
+    assert "Bob" in reply
+    assert "%" in reply
+
+
+async def test_dk_report_empty(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/dk_report")
+    await handle_dk_report(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "No players" in reply
+
+
+async def test_add_ghost_creates_and_hints_link(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update('/add_ghost "Late Joiner"')
+    await handle_add_ghost(update, _context(conn, args=[]))
+    players = list_active_players(conn)
+    assert len(players) == 1
+    assert players[0].is_ghost is True
+    assert players[0].display_name == "Late Joiner"
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "/link_player" in reply
+    assert str(players[0].telegram_id) in reply
+
+
+async def test_add_ghost_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/add_ghost")
+    await handle_add_ghost(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert reply.startswith("Usage:")
+
+
+async def test_add_ghost_unbalanced_quote(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update('/add_ghost "Unclosed')
+    await handle_add_ghost(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert reply.startswith("Usage:")
+
+
+async def test_add_ghost_no_text_returns(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/add_ghost")
+    update.effective_message.text = None
+    await handle_add_ghost(update, _context(conn, args=[]))
+    update.effective_message.reply_text.assert_not_awaited()
+
+
+# ----- /link_player -----
+
+
+async def test_link_player_by_id_success(admin_settings: None, conn: sqlite3.Connection) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    upsert_contact(conn, 555, username="latejoiner", display_name="Late Joiner")
+    update = _admin_update(f"/link_player {g} 555")
+    await handle_link_player(update, _context(conn, args=[str(g), "555"], chat_id=None))
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=555").fetchone() is not None
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=?", (g,)).fetchone() is None
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Linked" in reply
+
+
+async def test_link_player_by_username_success(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    upsert_contact(conn, 555, username="latejoiner", display_name="Late Joiner")
+    update = _admin_update(f"/link_player {g} @latejoiner")
+    # chat_id=555 so get_chat resolves @latejoiner → 555.
+    await handle_link_player(update, _context(conn, args=[str(g), "@latejoiner"], chat_id=555))
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=555").fetchone() is not None
+
+
+async def test_link_player_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/link_player")
+    await handle_link_player(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert reply.startswith("Usage:")
+
+
+async def test_link_player_non_digit_ghost(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/link_player abc 555")
+    await handle_link_player(update, _context(conn, args=["abc", "555"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert reply.startswith("Usage:")
+
+
+async def test_link_player_not_a_ghost(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Real", "real")  # a normal player, not a ghost
+    update = _admin_update("/link_player 111 555")
+    await handle_link_player(update, _context(conn, args=["111", "555"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "isn't a ghost" in reply
+
+
+async def test_link_player_username_unresolved(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    update = _admin_update(f"/link_player {g} @nope")
+    await handle_link_player(update, _context(conn, args=[str(g), "@nope"], chat_id=None))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Couldn't find" in reply
+
+
+async def test_link_player_real_not_contact(admin_settings: None, conn: sqlite3.Connection) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    update = _admin_update(f"/link_player {g} 555")  # 555 never DM'd the bot
+    await handle_link_player(update, _context(conn, args=[str(g), "555"], chat_id=None))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "hasn't DM'd" in reply
+
+
+async def test_link_player_no_message_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update("/link_player")
+    update.effective_message = None
+    await handle_link_player(update, _context(conn, args=[]))
+
+
+# ----- list/contacts markers for ghost & paused players -----
+
+
+async def test_list_players_marks_ghost_paused_disabled(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    add_player(conn, 1, "Normal", "normal")
+    add_player(conn, 2, "Disabled", "disabled")
+    add_player(conn, 3, "Paused", "paused")
+    add_player(conn, 4, "Anon")  # real player, no username → "(no username)"
+    add_ghost_player(conn, "Ghosty")
+    conn.execute("UPDATE players SET in_pool=0 WHERE telegram_id=2")
+    future = (datetime.now(UTC) + timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("UPDATE players SET pool_paused_until=? WHERE telegram_id=3", (future,))
+    conn.commit()
+    update = _admin_update("/list_players")
+    await handle_list_players(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "👻 ghost" in reply
+    assert "🚫 voting disabled" in reply
+    assert "⏸ voting paused" in reply
+    assert "(no username)" in reply
+
+
+async def test_list_players_expired_pause_not_marked(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    add_player(conn, 1, "Expired", "expired")
+    past = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("UPDATE players SET pool_paused_until=? WHERE telegram_id=1", (past,))
+    conn.commit()
+    update = _admin_update("/list_players")
+    await handle_list_players(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "paused" not in reply
+
+
+async def test_contacts_excludes_ghosts(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_ghost_player(conn, "Ghosty")
+    upsert_contact(conn, 111, username="bob", display_name="Bob")
+    update = _admin_update("/contacts")
+    await handle_contacts(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Ghosty" not in reply
+    assert "@bob" in reply

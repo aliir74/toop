@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import re
 import shlex
 import sqlite3
+from datetime import UTC, datetime, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.constants import ChatType
@@ -12,9 +14,15 @@ from telegram.ext import ContextTypes
 from toop.admin import require_admin
 from toop.contacts import get_contact, list_contacts
 from toop.players import (
+    add_ghost_player,
     add_player,
+    disable_player_pool,
+    dont_know_stats,
+    enable_player_pool,
     get_player_by_username,
+    link_ghost_player,
     list_active_players,
+    pause_player_pool,
     rename_player,
     soft_remove_player,
 )
@@ -26,6 +34,11 @@ ADD_USAGE = (
     'Usage: /add_player @username "Display Name"  (or /add_player <telegram_id> "Display Name")'
 )
 REMOVE_USAGE = "Usage: /remove_player @username"
+PAUSE_USAGE = "Usage: /pause_voting <@username|telegram_id> <duration like 2w or 10d>"
+DISABLE_USAGE = "Usage: /disable_voting <@username|telegram_id>"
+ENABLE_USAGE = "Usage: /enable_voting <@username|telegram_id>"
+ADD_GHOST_USAGE = 'Usage: /add_ghost "Display Name"'
+LINK_USAGE = "Usage: /link_player <ghost_id> <@username|real_telegram_id>"
 RENAME_PREFIX = "rename:"
 RENAME_USAGE = 'Usage: /rename (no args) for buttons, or /rename <@username|telegram_id> "New Name"'
 RENAME_EMPTY_ROSTER = "No players on the roster yet — use /add_player first."
@@ -140,6 +153,199 @@ async def handle_remove_player(update: Update, context: ContextTypes.DEFAULT_TYP
         await message.reply_text(f"@{username} wasn't in the active roster.")
 
 
+def _parse_duration(token: str) -> timedelta | None:
+    """Parse a pause duration like ``2w`` or ``10d`` into a timedelta, or None."""
+    match = re.fullmatch(r"(\d+)([dw])", token.lower())
+    if not match:
+        return None
+    amount = int(match.group(1))
+    return timedelta(days=amount * (7 if match.group(2) == "w" else 1))
+
+
+def _is_paused(pool_paused_until: str | None, now: datetime) -> bool:
+    """True when a timed pause is set and still in the future (UTC)."""
+    if pool_paused_until is None:
+        return False
+    until = datetime.strptime(pool_paused_until, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+    return until > now
+
+
+def _resolve_pool_target(conn: sqlite3.Connection, token: str) -> int | None:
+    """Resolve a roster player from a digit id (incl. negative ghost ids) or a
+    @username already on the roster. No network call — pool targets are on-roster."""
+    raw = token.lstrip("@")
+    if raw.lstrip("-").isdigit():
+        return int(raw)
+    player = get_player_by_username(conn, raw)
+    return player.telegram_id if player else None
+
+
+@require_admin
+async def handle_pause_voting(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Temporarily pull a player from the rating pool. Others stop being asked to
+    rate them until the timer expires; the player can still vote on others."""
+    message = update.effective_message
+    if message is None:
+        return
+    if len(context.args) < 2:
+        await message.reply_text(PAUSE_USAGE)
+        return
+    delta = _parse_duration(context.args[1])
+    if delta is None:
+        await message.reply_text(PAUSE_USAGE)
+        return
+    conn = _conn(context)
+    target = _resolve_pool_target(conn, context.args[0])
+    until = datetime.now(UTC) + delta
+    if target is not None and pause_player_pool(conn, target, until):
+        await message.reply_text(
+            f"Paused {context.args[0]} until {until:%Y-%m-%d} — others won't be asked to "
+            "rate them, but they can still vote. /enable_voting to undo early."
+        )
+    else:
+        await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+
+
+@require_admin
+async def handle_disable_voting(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Pull a player from the rating pool indefinitely (until /enable_voting)."""
+    message = update.effective_message
+    if message is None:
+        return
+    if not context.args:
+        await message.reply_text(DISABLE_USAGE)
+        return
+    conn = _conn(context)
+    target = _resolve_pool_target(conn, context.args[0])
+    if target is not None and disable_player_pool(conn, target):
+        await message.reply_text(
+            f"Disabled {context.args[0]} from the rating pool — others won't be asked to "
+            "rate them. They can still vote. /enable_voting to restore."
+        )
+    else:
+        await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+
+
+@require_admin
+async def handle_enable_voting(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Restore a player to the rating pool, clearing any disable AND any pause."""
+    message = update.effective_message
+    if message is None:
+        return
+    if not context.args:
+        await message.reply_text(ENABLE_USAGE)
+        return
+    conn = _conn(context)
+    target = _resolve_pool_target(conn, context.args[0])
+    if target is not None and enable_player_pool(conn, target):
+        await message.reply_text(f"Restored {context.args[0]} to the rating pool. ✅")
+    else:
+        await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+
+
+@require_admin
+async def handle_add_ghost(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Add an accountless player others can vote on before they join Telegram."""
+    message = update.effective_message
+    if message is None or message.text is None:
+        return
+    try:
+        tokens = shlex.split(message.text)
+    except ValueError:
+        await message.reply_text(ADD_GHOST_USAGE)
+        return
+    name = " ".join(tokens[1:]).strip()
+    if not name:
+        await message.reply_text(ADD_GHOST_USAGE)
+        return
+    conn = _conn(context)
+    ghost = add_ghost_player(conn, name)
+    seeded = bootstrap_calibration_prompts(conn, ghost.telegram_id)
+    suffix = f" Seeded {seeded} calibration prompts." if seeded else ""
+    await message.reply_text(
+        f"👻 Added ghost {ghost.display_name} (id {ghost.telegram_id}).{suffix} "
+        f"When they join Telegram, run /link_player {ghost.telegram_id} @their_username."
+    )
+
+
+@require_admin
+async def handle_link_player(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Merge a ghost player into a real account once that person joins Telegram.
+
+    The real account must have DM'd the bot (contacts row) so we can message them
+    for voting — the same DM-ability rule as /add_player by id.
+    """
+    message = update.effective_message
+    if message is None:
+        return
+    if len(context.args) < 2:
+        await message.reply_text(LINK_USAGE)
+        return
+    conn = _conn(context)
+    ghost_token = context.args[0]
+    if not ghost_token.lstrip("-").isdigit():
+        await message.reply_text(LINK_USAGE)
+        return
+    ghost_id = int(ghost_token)
+    ghost_row = conn.execute(
+        "SELECT display_name, is_ghost FROM players WHERE telegram_id=?", (ghost_id,)
+    ).fetchone()
+    if ghost_row is None or ghost_row["is_ghost"] != 1:
+        await message.reply_text(
+            f"{ghost_id} isn't a ghost player. Run /list_players and use a 👻 id."
+        )
+        return
+
+    real_token = context.args[1]
+    if real_token.isdigit():
+        real_id = int(real_token)
+    else:
+        username = real_token.lstrip("@").lower()
+        resolved = await _resolve_telegram_id(context, username)
+        if resolved is None:
+            await message.reply_text(f"Couldn't find @{username}. Ask them to DM me /start first.")
+            return
+        real_id = resolved
+
+    contact = get_contact(conn, real_id)
+    if contact is None:
+        await message.reply_text(
+            f"That user (id {real_id}) hasn't DM'd the bot yet — they must /start so "
+            "I can message them for voting."
+        )
+        return
+    result = link_ghost_player(
+        conn,
+        ghost_id,
+        real_id,
+        contact.username,
+        contact.display_name or ghost_row["display_name"],
+    )
+    await message.reply_text(
+        f"🔗 Linked ghost {ghost_row['display_name']} → id {real_id}. Moved "
+        f"{result.vote_rows} vote pairs, {result.ratings} ratings, {result.rsvps} RSVPs, "
+        f"{result.attendance} attendance rows."
+    )
+
+
+@require_admin
+async def handle_dk_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show each active player's don't-know rate, highest first — the head of the
+    list is who the group can least confidently rate (a pause candidate)."""
+    message = update.effective_message
+    if message is None:
+        return
+    stats = dont_know_stats(_conn(context))
+    if not stats:
+        await message.reply_text("No players on the roster yet.")
+        return
+    lines = ["🤷 Don't-know report (highest rate first):"]
+    for i, s in enumerate(stats, start=1):
+        pct = round(s.dk_rate * 100)
+        lines.append(f"{i}. {s.display_name} — {s.dk_count}/{s.total} don't-know ({pct}%)")
+    await message.reply_text("\n".join(lines))
+
+
 @require_admin
 async def handle_list_players(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     message = update.effective_message
@@ -149,11 +355,22 @@ async def handle_list_players(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not players:
         await message.reply_text("Roster is empty. Use /add_player to start.")
         return
+    now = datetime.now(UTC)
     lines = ["Roster:"]
     for i, p in enumerate(players, start=1):
         marker = "🟡 calibrating" if p.is_calibrating else "✅"
-        handle = f"@{p.username}" if p.username else "(no username)"
-        lines.append(f"{i}. {p.display_name} {handle} — {marker}")
+        if p.is_ghost:
+            handle = "👻 ghost"
+        elif p.username:
+            handle = f"@{p.username}"
+        else:
+            handle = "(no username)"
+        tags = ""
+        if not p.in_pool:
+            tags = " — 🚫 voting disabled"
+        elif _is_paused(p.pool_paused_until, now):
+            tags = " — ⏸ voting paused"
+        lines.append(f"{i}. {p.display_name} {handle} — {marker}{tags}")
     await message.reply_text("\n".join(lines))
 
 

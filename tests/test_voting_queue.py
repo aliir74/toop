@@ -6,7 +6,9 @@ from datetime import UTC, datetime, timedelta
 from toop.players import add_player
 from toop.voting_queue import (
     add_snooze,
+    bootstrap_calibration_prompts,
     insert_priority_prompt,
+    mark_dont_know,
     peek_next_prompt,
     record_vote,
     refill_queue,
@@ -236,3 +238,112 @@ def test_peek_without_exclude_unchanged(conn: sqlite3.Connection) -> None:
     top = peek_next_prompt(conn, voter_id=1)
     assert top is not None
     assert top.axis == "defense"
+
+
+def _dont_know_count(conn: sqlite3.Connection, a: int, b: int, axis: str) -> int:
+    row = conn.execute(
+        "SELECT dont_know FROM vote_aggregates WHERE player_a=? AND player_b=? AND axis=?",
+        (a, b, axis),
+    ).fetchone()
+    return row["dont_know"] if row else 0
+
+
+def test_mark_dont_know_increments_pair_counter(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 4)
+    mark_dont_know(conn, voter_id=1, player_a=2, player_b=3, axis="attack")
+    row = conn.execute(
+        "SELECT a_wins, b_wins, dont_know FROM vote_aggregates "
+        "WHERE player_a=2 AND player_b=3 AND axis='attack'"
+    ).fetchone()
+    assert (row["a_wins"], row["b_wins"], row["dont_know"]) == (0, 0, 1)
+    # A second, different voter on the same pair bumps it to 2.
+    mark_dont_know(conn, voter_id=4, player_a=2, player_b=3, axis="attack")
+    assert _dont_know_count(conn, 2, 3, "attack") == 2
+
+
+def test_mark_dont_know_still_dedupes_and_clears_pending(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 3)
+    insert_priority_prompt(conn, voter_id=1, player_a=2, player_b=3, axis="attack")
+    mark_dont_know(conn, voter_id=1, player_a=2, player_b=3, axis="attack")
+    answered = conn.execute(
+        "SELECT 1 FROM answered_prompts WHERE voter_id=1 AND player_a=2 AND player_b=3 "
+        "AND axis='attack'"
+    ).fetchone()
+    assert answered is not None
+    pending = conn.execute(
+        "SELECT 1 FROM pending_prompts WHERE voter_id=1 AND player_a=2 AND player_b=3 "
+        "AND axis='attack'"
+    ).fetchone()
+    assert pending is None
+
+
+def test_vote_aggregates_has_no_voter_id_column(conn: sqlite3.Connection) -> None:
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(vote_aggregates)").fetchall()}
+    assert "voter_id" not in cols
+
+
+def _pair_partners(conn: sqlite3.Connection, voter_id: int) -> set[int]:
+    rows = conn.execute(
+        "SELECT player_a, player_b FROM pending_prompts WHERE voter_id=?", (voter_id,)
+    ).fetchall()
+    partners: set[int] = set()
+    for r in rows:
+        partners.add(r["player_a"])
+        partners.add(r["player_b"])
+    return partners
+
+
+def test_refill_excludes_disabled_pool_player(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 4)
+    conn.execute("UPDATE players SET in_pool=0 WHERE telegram_id=2")
+    conn.commit()
+    refill_queue(conn, voter_id=1, queue_depth=20)
+    assert 2 not in _pair_partners(conn, 1)
+
+
+def test_refill_excludes_future_paused_player(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 4)
+    future = (datetime.now(UTC) + timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("UPDATE players SET pool_paused_until=? WHERE telegram_id=2", (future,))
+    conn.commit()
+    refill_queue(conn, voter_id=1, queue_depth=20)
+    assert 2 not in _pair_partners(conn, 1)
+
+
+def test_refill_includes_expired_pause(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 4)
+    past = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("UPDATE players SET pool_paused_until=? WHERE telegram_id=2", (past,))
+    conn.commit()
+    refill_queue(conn, voter_id=1, queue_depth=20)
+    assert 2 in _pair_partners(conn, 1)
+
+
+def test_paused_subject_can_still_vote(conn: sqlite3.Connection) -> None:
+    """Pulling a player from the rating pool only stops others rating THEM; the
+    paused player can still vote on everyone else."""
+    _seed_players(conn, 4)
+    conn.execute("UPDATE players SET in_pool=0 WHERE telegram_id=1")
+    conn.commit()
+    inserted = refill_queue(conn, voter_id=1, queue_depth=20)
+    assert inserted > 0
+    # Voter 1 is paused as a subject but never appears in their own pairs anyway.
+    assert 1 not in _pair_partners(conn, 1)
+
+
+def test_bootstrap_never_queues_prompts_to_a_ghost(conn: sqlite3.Connection) -> None:
+    """A ghost has no chat to DM, so it must never be selected as a voter."""
+    _seed_players(conn, 3)
+    # Existing players are calibrating; make them veterans so they qualify as voters.
+    conn.execute("UPDATE players SET is_calibrating=0")
+    # A ghost veteran (is_calibrating=0) that the fallback query could otherwise pick.
+    conn.execute(
+        "INSERT INTO players (telegram_id, display_name, active, is_calibrating, is_ghost) "
+        "VALUES (-1, 'Ghost', 1, 0, 1)"
+    )
+    conn.commit()
+    bootstrap_calibration_prompts(conn, new_player_id=2, veteran_count=5)
+    voter_ids = {
+        r["voter_id"] for r in conn.execute("SELECT voter_id FROM pending_prompts").fetchall()
+    }
+    assert -1 not in voter_ids

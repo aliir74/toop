@@ -13,13 +13,20 @@ from telegram.ext import (
 
 from toop.config import settings
 from toop.db import get_connection, init_db
+from toop.handlers.alerts import dk_alert_job
 from toop.handlers.health import handle_coverage, handle_health
 from toop.handlers.ops import handle_backup_db, handle_version
 from toop.handlers.ratings import handle_refresh_ratings
 from toop.handlers.roster import (
+    handle_add_ghost,
     handle_add_player,
     handle_contacts,
+    handle_disable_voting,
+    handle_dk_report,
+    handle_enable_voting,
+    handle_link_player,
     handle_list_players,
+    handle_pause_voting,
     handle_remove_player,
     handle_rename,
     handle_rename_callback,
@@ -66,6 +73,12 @@ def main() -> None:
 
     app.add_handler(CommandHandler("add_player", handle_add_player))
     app.add_handler(CommandHandler("remove_player", handle_remove_player))
+    app.add_handler(CommandHandler("pause_voting", handle_pause_voting))
+    app.add_handler(CommandHandler("disable_voting", handle_disable_voting))
+    app.add_handler(CommandHandler("enable_voting", handle_enable_voting))
+    app.add_handler(CommandHandler("dk_report", handle_dk_report))
+    app.add_handler(CommandHandler("add_ghost", handle_add_ghost))
+    app.add_handler(CommandHandler("link_player", handle_link_player))
     app.add_handler(CommandHandler("list_players", handle_list_players))
     app.add_handler(CommandHandler("rename", handle_rename))
     app.add_handler(CommandHandler("contacts", handle_contacts))
@@ -99,6 +112,12 @@ def main() -> None:
             settings.SESSION_WEEKDAY,
             settings.SNAPSHOT_HOUR,
         )
+        app.job_queue.run_daily(
+            dk_alert_job,
+            time=time(hour=settings.SNAPSHOT_HOUR, minute=0, tzinfo=UTC),
+            name="dk_alert",
+        )
+        logger.info("dk_alert scheduled daily at hour=%s UTC", settings.SNAPSHOT_HOUR)
     app.add_handler(CallbackQueryHandler(handle_rsvp_callback, pattern=r"^rsvp:"))
     app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
     app.add_handler(CallbackQueryHandler(handle_rename_callback, pattern=r"^rename:"))
