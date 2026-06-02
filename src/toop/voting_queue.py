@@ -259,6 +259,7 @@ def bootstrap_calibration_prompts(
         WHERE active=1
           AND telegram_id != ?
           AND is_calibrating=0
+          AND is_ghost=0
         ORDER BY RANDOM()
         LIMIT ?
         """,
@@ -268,7 +269,7 @@ def bootstrap_calibration_prompts(
         veterans = conn.execute(
             """
             SELECT telegram_id FROM players
-            WHERE active=1 AND telegram_id != ?
+            WHERE active=1 AND telegram_id != ? AND is_ghost=0
             ORDER BY RANDOM() LIMIT ?
             """,
             (new_player_id, veteran_count),

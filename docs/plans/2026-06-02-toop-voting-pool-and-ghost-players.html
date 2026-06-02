@@ -888,7 +888,7 @@
     <span class="phase-progress">0 / 0</span>
   </div>
   <div class="phase-bar"><div class="fill"></div></div>
-  <article class="task" data-task-id="2.1" data-task-status="pending">
+  <article class="task" data-task-id="2.1" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">2.1</span><span class="task-name">mark_dont_know increments the pair counter</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -912,8 +912,8 @@
           <input type="checkbox" checked />
           <span class="step-text">Edit mark_dont_know(): add an <code>INSERT INTO vote_aggregates (...dont_know...) VALUES (...,1,...) ON CONFLICT(player_a,player_b,axis) DO UPDATE SET dont_know = dont_know + 1, updated_at = CURRENT_TIMESTAMP</code> alongside the existing dedupe + pending delete (normalize a&lt;b first)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_voting_queue.py -v</span>
         </li>
         <li class="step" data-status="done">
@@ -935,7 +935,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="2.2" data-task-status="pending">
+  <article class="task" data-task-id="2.2" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">2.2</span><span class="task-name">CANDIDATE_SQL: active CTE → rateable CTE</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -959,8 +959,8 @@
           <input type="checkbox" checked />
           <span class="step-text">Edit CANDIDATE_SQL: rename the <code>active</code> CTE to <code>rateable</code> filtering <code>active=1 AND in_pool=1 AND (pool_paused_until IS NULL OR pool_paused_until &lt;= CURRENT_TIMESTAMP) AND telegram_id != :voter</code>; keep the voter (:voter) unconstrained by pool flags</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_voting_queue.py -v</span>
         </li>
         <li class="step" data-status="done">
@@ -981,7 +981,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="2.3" data-task-status="pending">
+  <article class="task" data-task-id="2.3" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">2.3</span><span class="task-name">Exclude ghosts from being chosen as voters</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -993,20 +993,20 @@
             <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: bootstrap_calibration_prompts() never inserts a pending_prompts row with voter_id pointing at an is_ghost=1 player (a ghost can&#x27;t answer a DM)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Edit both veteran-selection queries in bootstrap_calibration_prompts to add <code>AND is_ghost=0</code>; anchors may still be ghosts (they are subjects, fine)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_voting_queue.py -v</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(voting): never queue prompts to ghost players</span>
         </li>
           </ol>

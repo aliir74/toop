@@ -329,3 +329,21 @@ def test_paused_subject_can_still_vote(conn: sqlite3.Connection) -> None:
     assert inserted > 0
     # Voter 1 is paused as a subject but never appears in their own pairs anyway.
     assert 1 not in _pair_partners(conn, 1)
+
+
+def test_bootstrap_never_queues_prompts_to_a_ghost(conn: sqlite3.Connection) -> None:
+    """A ghost has no chat to DM, so it must never be selected as a voter."""
+    _seed_players(conn, 3)
+    # Existing players are calibrating; make them veterans so they qualify as voters.
+    conn.execute("UPDATE players SET is_calibrating=0")
+    # A ghost veteran (is_calibrating=0) that the fallback query could otherwise pick.
+    conn.execute(
+        "INSERT INTO players (telegram_id, display_name, active, is_calibrating, is_ghost) "
+        "VALUES (-1, 'Ghost', 1, 0, 1)"
+    )
+    conn.commit()
+    bootstrap_calibration_prompts(conn, new_player_id=2, veteran_count=5)
+    voter_ids = {
+        r["voter_id"] for r in conn.execute("SELECT voter_id FROM pending_prompts").fetchall()
+    }
+    assert -1 not in voter_ids
