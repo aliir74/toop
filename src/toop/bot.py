@@ -34,7 +34,7 @@ from toop.handlers.roster import (
     handle_rename_callback,
     handle_rename_text,
 )
-from toop.handlers.rsvp import handle_lock_in, handle_rsvp_callback
+from toop.handlers.rsvp import handle_lock_in, handle_lock_in_callback, handle_rsvp_callback
 from toop.handlers.sessions import (
     handle_close_session,
     handle_list_sessions,
@@ -125,6 +125,7 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_rename_callback, pattern=r"^rename:"))
     app.add_handler(CallbackQueryHandler(handle_remove_callback, pattern=r"^rmpick:"))
     app.add_handler(CallbackQueryHandler(handle_disable_callback, pattern=r"^dispick:"))
+    app.add_handler(CallbackQueryHandler(handle_lock_in_callback, pattern=r"^lockpick:"))
     # Lower-priority group so /commands still reach their CommandHandler above;
     # this only consumes a private text message when a rename is pending.
     app.add_handler(

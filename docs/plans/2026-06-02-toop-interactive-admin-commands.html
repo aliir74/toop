@@ -1034,28 +1034,28 @@
             <span class="label">Files</span> Modify: src/toop/handlers/rsvp.py · Modify: src/toop/bot.py · Modify: tests/test_rsvp_handlers.py · Modify: tests/test_bot_wiring.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests: no-args with active session lists <code>lockpick:&lt;id&gt;</code> buttons; no-args with NO active session replies &#x27;No active session&#x27;; callback locks the player and edits message; callback with no active session answers alert; gone-player alert; bad-int answer/return; None return.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>LOCKPICK_PREFIX = &quot;lockpick:&quot;</code> and a local player keyboard in rsvp.py (or import the roster helper) ; no-args branch renders active-roster buttons (only when a session is active); keep typed id/@handle path unchanged.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>handle_lock_in_callback</code>: resolve active session, look up active player, <code>lock_in_player</code>, answer + edit.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Register <code>CallbackQueryHandler(handle_lock_in_callback, pattern=r&quot;^lockpick:&quot;)</code>; bump wiring 33 → 34.</span>
         </li>
         <li class="step" data-status="pending">
           <input type="checkbox" />
           <span class="step-text">Run the full gate.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(rsvp): button-driven /lock_in</span>
         </li>
           </ol>
