@@ -4,6 +4,7 @@ import sqlite3
 from datetime import UTC, datetime, timedelta
 
 from toop.players import (
+    add_ghost_player,
     add_player,
     disable_player_pool,
     dont_know_stats,
@@ -164,3 +165,27 @@ def test_dont_know_stats_zero_total_is_zero_rate(conn: sqlite3.Connection) -> No
     assert stats[0].dk_count == 0
     assert stats[0].total == 0
     assert stats[0].dk_rate == 0.0
+
+
+def test_add_ghost_player_mints_negative_id(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Real", "real")
+    ghost = add_ghost_player(conn, "Late Joiner")
+    assert ghost.telegram_id < 0
+    assert ghost.username is None
+    assert ghost.display_name == "Late Joiner"
+    assert ghost.is_ghost is True
+    assert ghost.in_pool is True
+    assert ghost.is_calibrating is True
+    assert ghost.active is True
+
+
+def test_add_ghost_players_get_distinct_descending_ids(conn: sqlite3.Connection) -> None:
+    first = add_ghost_player(conn, "Ghost A")
+    second = add_ghost_player(conn, "Ghost B")
+    assert second.telegram_id < first.telegram_id < 0
+
+
+def test_ghost_appears_in_active_roster(conn: sqlite3.Connection) -> None:
+    add_ghost_player(conn, "Ghost")
+    roster = list_active_players(conn)
+    assert any(p.is_ghost for p in roster)

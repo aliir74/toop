@@ -56,6 +56,27 @@ def add_player(
     return _row_to_player(_fetch_one(conn, telegram_id))
 
 
+def add_ghost_player(conn: sqlite3.Connection, display_name: str) -> Player:
+    """Add an accountless "ghost" player others can vote on before they join.
+
+    Real Telegram ids are positive, so a ghost gets the next free NEGATIVE id —
+    a collision-free namespace that still satisfies the INTEGER PK and every FK.
+    A ghost is rateable (is_ghost=1, in_pool=1) but never receives prompts and is
+    never selected as a voter. Link it to a real account later via link_ghost_player.
+    """
+    lowest = conn.execute("SELECT COALESCE(MIN(telegram_id), 0) AS m FROM players").fetchone()["m"]
+    ghost_id = min(lowest, 0) - 1
+    conn.execute(
+        """
+        INSERT INTO players (telegram_id, username, display_name, active, is_calibrating, is_ghost)
+        VALUES (?, NULL, ?, 1, 1, 1)
+        """,
+        (ghost_id, display_name),
+    )
+    conn.commit()
+    return _row_to_player(_fetch_one(conn, ghost_id))
+
+
 def soft_remove_player(conn: sqlite3.Connection, telegram_id: int) -> bool:
     """Set active=0. Returns True if a player row was changed."""
     cur = conn.execute(

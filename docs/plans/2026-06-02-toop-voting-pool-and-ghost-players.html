@@ -1162,7 +1162,7 @@
     <span class="phase-progress">0 / 0</span>
   </div>
   <div class="phase-bar"><div class="fill"></div></div>
-  <article class="task" data-task-id="4.1" data-task-status="pending">
+  <article class="task" data-task-id="4.1" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">4.1</span><span class="task-name">add_ghost_player with synthetic negative id</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1174,20 +1174,20 @@
             <span class="label">Files</span> Modify: src/toop/players.py · Modify: tests/test_players.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: add_ghost_player(conn, &#x27;Late Joiner&#x27;) returns a Player with telegram_id&lt;0, username=None, is_ghost=True, in_pool=True, is_calibrating=True; a second ghost gets a distinct, lower negative id</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Implement: next_id = (SELECT MIN(MIN(telegram_id),0) FROM players) - 1; INSERT player row with that id, username NULL, active=1, is_calibrating=1, in_pool=1, is_ghost=1; return the Player</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_players.py -v &amp;&amp; uv run ty check src/</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(players): add accountless ghost players</span>
         </li>
           </ol>
