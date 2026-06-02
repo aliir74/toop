@@ -1385,7 +1385,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="5.4" data-task-status="pending">
+  <article class="task" data-task-id="5.4" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">5.4</span><span class="task-name">/link_player</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1397,20 +1397,20 @@
             <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: /link_player &lt;ghost_id&gt; @realuser (admin-only) resolves the real id; requires a contacts row (same DM-ability rule as add-by-id) else friendly error; rejects a non-ghost or unknown ghost id; on success runs link_ghost_player and replies with merged counts (votes/ratings/rsvps moved)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Implement handler: validate ghost_id&lt;0 + is_ghost, resolve real id (digit or @username via get_contact / _resolve_telegram_id), call link_ghost_player, summarize; register + wiring test</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_roster_handlers.py tests/test_bot_wiring.py -v</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(roster): /link_player merges a ghost into a real account</span>
         </li>
           </ol>

@@ -23,6 +23,7 @@ from toop.handlers.roster import (
     handle_disable_voting,
     handle_dk_report,
     handle_enable_voting,
+    handle_link_player,
     handle_list_players,
     handle_pause_voting,
     handle_remove_player,
@@ -76,6 +77,7 @@ def main() -> None:
     app.add_handler(CommandHandler("enable_voting", handle_enable_voting))
     app.add_handler(CommandHandler("dk_report", handle_dk_report))
     app.add_handler(CommandHandler("add_ghost", handle_add_ghost))
+    app.add_handler(CommandHandler("link_player", handle_link_player))
     app.add_handler(CommandHandler("list_players", handle_list_players))
     app.add_handler(CommandHandler("rename", handle_rename))
     app.add_handler(CommandHandler("contacts", handle_contacts))

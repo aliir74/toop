@@ -14,11 +14,12 @@ from toop.handlers.roster import (
     handle_disable_voting,
     handle_dk_report,
     handle_enable_voting,
+    handle_link_player,
     handle_list_players,
     handle_pause_voting,
     handle_remove_player,
 )
-from toop.players import add_player, list_active_players
+from toop.players import add_ghost_player, add_player, list_active_players
 
 
 @pytest.fixture
@@ -485,3 +486,80 @@ async def test_add_ghost_no_text_returns(admin_settings: None, conn: sqlite3.Con
     update.effective_message.text = None
     await handle_add_ghost(update, _context(conn, args=[]))
     update.effective_message.reply_text.assert_not_awaited()
+
+
+# ----- /link_player -----
+
+
+async def test_link_player_by_id_success(admin_settings: None, conn: sqlite3.Connection) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    upsert_contact(conn, 555, username="latejoiner", display_name="Late Joiner")
+    update = _admin_update(f"/link_player {g} 555")
+    await handle_link_player(update, _context(conn, args=[str(g), "555"], chat_id=None))
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=555").fetchone() is not None
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=?", (g,)).fetchone() is None
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Linked" in reply
+
+
+async def test_link_player_by_username_success(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    upsert_contact(conn, 555, username="latejoiner", display_name="Late Joiner")
+    update = _admin_update(f"/link_player {g} @latejoiner")
+    # chat_id=555 so get_chat resolves @latejoiner → 555.
+    await handle_link_player(update, _context(conn, args=[str(g), "@latejoiner"], chat_id=555))
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=555").fetchone() is not None
+
+
+async def test_link_player_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/link_player")
+    await handle_link_player(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert reply.startswith("Usage:")
+
+
+async def test_link_player_non_digit_ghost(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/link_player abc 555")
+    await handle_link_player(update, _context(conn, args=["abc", "555"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert reply.startswith("Usage:")
+
+
+async def test_link_player_not_a_ghost(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Real", "real")  # a normal player, not a ghost
+    update = _admin_update("/link_player 111 555")
+    await handle_link_player(update, _context(conn, args=["111", "555"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "isn't a ghost" in reply
+
+
+async def test_link_player_username_unresolved(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    update = _admin_update(f"/link_player {g} @nope")
+    await handle_link_player(update, _context(conn, args=[str(g), "@nope"], chat_id=None))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Couldn't find" in reply
+
+
+async def test_link_player_real_not_contact(admin_settings: None, conn: sqlite3.Connection) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    update = _admin_update(f"/link_player {g} 555")  # 555 never DM'd the bot
+    await handle_link_player(update, _context(conn, args=[str(g), "555"], chat_id=None))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "hasn't DM'd" in reply
+
+
+async def test_link_player_no_message_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update("/link_player")
+    update.effective_message = None
+    await handle_link_player(update, _context(conn, args=[]))

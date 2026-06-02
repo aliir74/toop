@@ -20,6 +20,7 @@ from toop.players import (
     dont_know_stats,
     enable_player_pool,
     get_player_by_username,
+    link_ghost_player,
     list_active_players,
     pause_player_pool,
     rename_player,
@@ -37,6 +38,7 @@ PAUSE_USAGE = "Usage: /pause_voting <@username|telegram_id> <duration like 2w or
 DISABLE_USAGE = "Usage: /disable_voting <@username|telegram_id>"
 ENABLE_USAGE = "Usage: /enable_voting <@username|telegram_id>"
 ADD_GHOST_USAGE = 'Usage: /add_ghost "Display Name"'
+LINK_USAGE = "Usage: /link_player <ghost_id> <@username|real_telegram_id>"
 RENAME_PREFIX = "rename:"
 RENAME_USAGE = 'Usage: /rename (no args) for buttons, or /rename <@username|telegram_id> "New Name"'
 RENAME_EMPTY_ROSTER = "No players on the roster yet — use /add_player first."
@@ -255,6 +257,66 @@ async def handle_add_ghost(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await message.reply_text(
         f"👻 Added ghost {ghost.display_name} (id {ghost.telegram_id}).{suffix} "
         f"When they join Telegram, run /link_player {ghost.telegram_id} @their_username."
+    )
+
+
+@require_admin
+async def handle_link_player(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Merge a ghost player into a real account once that person joins Telegram.
+
+    The real account must have DM'd the bot (contacts row) so we can message them
+    for voting — the same DM-ability rule as /add_player by id.
+    """
+    message = update.effective_message
+    if message is None:
+        return
+    if len(context.args) < 2:
+        await message.reply_text(LINK_USAGE)
+        return
+    conn = _conn(context)
+    ghost_token = context.args[0]
+    if not ghost_token.lstrip("-").isdigit():
+        await message.reply_text(LINK_USAGE)
+        return
+    ghost_id = int(ghost_token)
+    ghost_row = conn.execute(
+        "SELECT display_name, is_ghost FROM players WHERE telegram_id=?", (ghost_id,)
+    ).fetchone()
+    if ghost_row is None or ghost_row["is_ghost"] != 1:
+        await message.reply_text(
+            f"{ghost_id} isn't a ghost player. Run /list_players and use a 👻 id."
+        )
+        return
+
+    real_token = context.args[1]
+    if real_token.isdigit():
+        real_id = int(real_token)
+    else:
+        username = real_token.lstrip("@").lower()
+        resolved = await _resolve_telegram_id(context, username)
+        if resolved is None:
+            await message.reply_text(f"Couldn't find @{username}. Ask them to DM me /start first.")
+            return
+        real_id = resolved
+
+    contact = get_contact(conn, real_id)
+    if contact is None:
+        await message.reply_text(
+            f"That user (id {real_id}) hasn't DM'd the bot yet — they must /start so "
+            "I can message them for voting."
+        )
+        return
+    result = link_ghost_player(
+        conn,
+        ghost_id,
+        real_id,
+        contact.username,
+        contact.display_name or ghost_row["display_name"],
+    )
+    await message.reply_text(
+        f"🔗 Linked ghost {ghost_row['display_name']} → id {real_id}. Moved "
+        f"{result.vote_rows} vote pairs, {result.ratings} ratings, {result.rsvps} RSVPs, "
+        f"{result.attendance} attendance rows."
     )
 
 
