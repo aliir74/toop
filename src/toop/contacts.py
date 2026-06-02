@@ -70,3 +70,26 @@ def list_contacts(conn: sqlite3.Connection) -> list[Contact]:
         )
         for r in rows
     ]
+
+
+def list_addable_contacts(conn: sqlite3.Connection) -> list[Contact]:
+    """Contacts who have DM'd the bot but aren't on the players roster yet.
+
+    These are exactly the people the button-driven /add_player and /link_player
+    flows can offer. Ghosts have negative ids and no contact row, so the
+    NOT IN players subquery excludes them for free. Oldest first.
+    """
+    rows = conn.execute(
+        "SELECT telegram_id, username, display_name, first_seen_at FROM contacts "
+        "WHERE telegram_id NOT IN (SELECT telegram_id FROM players) "
+        "ORDER BY first_seen_at ASC, telegram_id ASC"
+    ).fetchall()
+    return [
+        Contact(
+            telegram_id=r["telegram_id"],
+            username=r["username"],
+            display_name=r["display_name"],
+            first_seen_at=r["first_seen_at"],
+        )
+        for r in rows
+    ]

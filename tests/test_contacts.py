@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import sqlite3
 
-from toop.contacts import get_contact, list_contacts, upsert_contact
+from toop.contacts import (
+    get_contact,
+    list_addable_contacts,
+    list_contacts,
+    upsert_contact,
+)
+from toop.players import add_ghost_player, add_player
 
 
 def test_upsert_inserts_new_contact(conn: sqlite3.Connection) -> None:
@@ -65,6 +71,41 @@ def test_list_contacts_oldest_first(conn: sqlite3.Connection) -> None:
     conn.commit()
     ids = [c.telegram_id for c in list_contacts(conn)]
     assert ids == [11, 10]
+
+
+def test_list_addable_contacts_excludes_roster(conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    upsert_contact(conn, 111, username="bob", display_name="Bob")  # on roster
+    upsert_contact(conn, 222, username="newbie", display_name="New Bie")  # addable
+    addable = list_addable_contacts(conn)
+    assert [c.telegram_id for c in addable] == [222]
+
+
+def test_list_addable_contacts_empty_when_all_on_roster(conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    upsert_contact(conn, 111, username="bob", display_name="Bob")
+    assert list_addable_contacts(conn) == []
+
+
+def test_list_addable_contacts_oldest_first(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        "INSERT INTO contacts (telegram_id, username, first_seen_at) "
+        "VALUES (10, 'second', '2026-01-02 00:00:00')"
+    )
+    conn.execute(
+        "INSERT INTO contacts (telegram_id, username, first_seen_at) "
+        "VALUES (11, 'first', '2026-01-01 00:00:00')"
+    )
+    conn.commit()
+    assert [c.telegram_id for c in list_addable_contacts(conn)] == [11, 10]
+
+
+def test_list_addable_contacts_ignores_ghosts(conn: sqlite3.Connection) -> None:
+    # Ghosts have negative ids and no contact row — they never appear here.
+    add_ghost_player(conn, "Ghosty")
+    upsert_contact(conn, 222, username="newbie", display_name="New Bie")
+    addable = list_addable_contacts(conn)
+    assert [c.telegram_id for c in addable] == [222]
 
 
 def test_contacts_table_holds_no_vote_columns(conn: sqlite3.Connection) -> None:

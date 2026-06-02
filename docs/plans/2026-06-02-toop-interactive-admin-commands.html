@@ -875,7 +875,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="1.2" data-task-status="pending">
+  <article class="task" data-task-id="1.2" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">1.2</span><span class="task-name">list_addable_contacts helper</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -887,20 +887,20 @@
             <span class="label">Files</span> Modify: src/toop/contacts.py · Modify: tests/test_contacts.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests in test_contacts.py: returns contacts whose telegram_id is NOT in players; excludes on-roster contacts; empty when all on roster; oldest-first order preserved.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>list_addable_contacts(conn)</code> → list[Contact]: <code>SELECT ... FROM contacts WHERE telegram_id NOT IN (SELECT telegram_id FROM players) ORDER BY first_seen_at ASC, telegram_id ASC</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run pytest; confirm contacts.py stays 100% and ty check passes (contacts.py is type-checked).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(contacts): add list_addable_contacts for button add flow</span>
         </li>
           </ol>
