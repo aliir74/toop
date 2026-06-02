@@ -11,8 +11,11 @@
 This is enforced at the schema layer by deliberately splitting the two
 storage tables:
 
-- `vote_aggregates(player_a, player_b, axis, a_wins, b_wins)` — outcome counts
-  for a pair on an axis. **Has no `voter_id` column.**
+- `vote_aggregates(player_a, player_b, axis, a_wins, b_wins, dont_know)` — outcome
+  counts for a pair on an axis, including "🤷 Don't know" taps. **Has no `voter_id`
+  column.** The `dont_know` counter is an aggregate signal only (used to flag
+  hard-to-rate players to the admin); like the win counts, it can never be traced
+  back to who tapped it.
 - `answered_prompts(voter_id, player_a, player_b, axis, answered_at)` — voter
   dedupe ledger. **Has no `a_wins`, `b_wins`, or any outcome column.**
 
