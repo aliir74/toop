@@ -192,34 +192,66 @@ async def handle_add_player(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     message = update.effective_message
     if message is None or message.text is None:
         return
-    parsed = _parse_add_args(message.text)
-    if parsed is None:
-        await message.reply_text(ADD_USAGE)
-        return
-    identifier, display_name = parsed
     conn = _conn(context)
-    if isinstance(identifier, int):
-        # Add-by-id: the contacts row proves we can DM them later for voting.
-        contact = get_contact(conn, identifier)
-        if contact is None:
-            await message.reply_text(
-                f"That user (id {identifier}) hasn't DM'd the bot yet — they must "
-                "DM /start first so I can message them for voting."
-            )
+    # Args present (more than just "/add_player") → the typed one-shot.
+    if len(message.text.split()) > 1:
+        parsed = _parse_add_args(message.text)
+        if parsed is None:
+            await message.reply_text(ADD_USAGE)
             return
-        telegram_id = identifier
-        username = contact.username  # may be None — that's fine.
-    else:
-        username = identifier
-        resolved = await _resolve_telegram_id(context, username)
-        if resolved is None:
-            await message.reply_text(
-                f"Couldn't find @{username}. Ask them to DM me /start, then try again. "
-                "If they have no Telegram username, run /contacts and use "
-                '/add_player <id> "Name" instead.'
-            )
-            return
-        telegram_id = resolved
+        identifier, display_name = parsed
+        if isinstance(identifier, int):
+            # Add-by-id: the contacts row proves we can DM them later for voting.
+            contact = get_contact(conn, identifier)
+            if contact is None:
+                await message.reply_text(
+                    f"That user (id {identifier}) hasn't DM'd the bot yet — they must "
+                    "DM /start first so I can message them for voting."
+                )
+                return
+            telegram_id = identifier
+            username = contact.username  # may be None — that's fine.
+        else:
+            username = identifier
+            resolved = await _resolve_telegram_id(context, username)
+            if resolved is None:
+                await message.reply_text(
+                    f"Couldn't find @{username}. Ask them to DM me /start, then try again. "
+                    "If they have no Telegram username, run /contacts and use "
+                    '/add_player <id> "Name" instead.'
+                )
+                return
+            telegram_id = resolved
+        await message.reply_text(_add_and_describe(conn, telegram_id, username, display_name))
+        return
+    # No args → button flow: pick an addable contact, then type a display name.
+    # DM-only because the name step consumes a private text message.
+    chat = update.effective_chat
+    if chat is not None and chat.type != ChatType.PRIVATE:
+        await message.reply_text("DM me to add players. 🤫")
+        return
+    contacts = list_addable_contacts(conn)
+    if not contacts:
+        await message.reply_text("No new contacts to add — ask people to DM me /start first.")
+        return
+    keyboard = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    _contact_label(c), callback_data=f"{ADDPICK_PREFIX}{c.telegram_id}"
+                )
+            ]
+            for c in contacts
+        ]
+    )
+    await message.reply_text("Who do you want to add?", reply_markup=keyboard)
+
+
+def _add_and_describe(
+    conn: sqlite3.Connection, telegram_id: int, username: str | None, display_name: str
+) -> str:
+    """Insert or revive a player and return the confirmation line. Shared by the
+    typed one-shot and the button + typed-name flow."""
     existed = conn.execute(
         "SELECT active FROM players WHERE telegram_id=?", (telegram_id,)
     ).fetchone()
@@ -232,7 +264,58 @@ async def handle_add_player(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         was_inactive = existed is not None and existed["active"] == 0
         suffix = " (revived from soft-delete)" if was_inactive else ""
     handle = f"@{player.username}" if player.username else "(no username)"
-    await message.reply_text(f"Added {player.display_name} {handle} — calibrating.{suffix}")
+    return f"Added {player.display_name} {handle} — calibrating.{suffix}"
+
+
+@require_admin
+async def handle_add_pick_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin tapped a contact button from /add_player — stash it and ask for a name."""
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+    telegram_id = _pick_id(query.data, ADDPICK_PREFIX)
+    if telegram_id is None:
+        await query.answer()
+        return
+    conn = _conn(context)
+    contact = get_contact(conn, telegram_id)
+    if contact is None:
+        await query.answer("That contact is no longer available.", show_alert=True)
+        return
+    if context.user_data is not None:
+        context.user_data[PENDING_ADD_KEY] = telegram_id
+    await query.answer()
+    await _safe_edit(query, f"Send the display name for {_contact_label(contact)}:")
+
+
+async def handle_add_player_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Apply a pending /add_player from a plain DM text message.
+
+    Registered in a lower-priority group (separate from the rename consumer) so
+    every private text is seen; acts only when this admin has an add pending,
+    otherwise returns silently. A command cancels the pending add.
+    """
+    message = update.effective_message
+    if message is None or message.text is None or context.user_data is None:
+        return
+    telegram_id = context.user_data.get(PENDING_ADD_KEY)
+    if telegram_id is None:
+        return
+    text = message.text.strip()
+    if text.startswith("/"):
+        context.user_data.pop(PENDING_ADD_KEY, None)
+        await message.reply_text("Add cancelled — you sent a command instead of a name.")
+        return
+    if not text:
+        await message.reply_text("Name can't be empty — send the display name.")
+        return
+    conn = _conn(context)
+    contact = get_contact(conn, telegram_id)
+    context.user_data.pop(PENDING_ADD_KEY, None)
+    if contact is None:
+        await message.reply_text("That contact is no longer available.")
+        return
+    await message.reply_text(_add_and_describe(conn, telegram_id, contact.username, text))
 
 
 @require_admin

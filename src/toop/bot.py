@@ -19,7 +19,9 @@ from toop.handlers.ops import handle_backup_db, handle_version
 from toop.handlers.ratings import handle_refresh_ratings
 from toop.handlers.roster import (
     handle_add_ghost,
+    handle_add_pick_callback,
     handle_add_player,
+    handle_add_player_text,
     handle_contacts,
     handle_disable_callback,
     handle_disable_voting,
@@ -136,11 +138,17 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_pause_dur_callback, pattern=r"^pausedur:"))
     app.add_handler(CallbackQueryHandler(handle_link_ghost_callback, pattern=r"^lnkghost:"))
     app.add_handler(CallbackQueryHandler(handle_link_real_callback, pattern=r"^lnkreal:"))
-    # Lower-priority group so /commands still reach their CommandHandler above;
-    # this only consumes a private text message when a rename is pending.
+    app.add_handler(CallbackQueryHandler(handle_add_pick_callback, pattern=r"^addpick:"))
+    # Lower-priority groups so /commands still reach their CommandHandler above.
+    # Each consumes a private text only when its own flow is pending; rename and
+    # add live in separate groups so both get to inspect every private message.
     app.add_handler(
         MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_rename_text),
         group=1,
+    )
+    app.add_handler(
+        MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_add_player_text),
+        group=2,
     )
 
     logger.info(

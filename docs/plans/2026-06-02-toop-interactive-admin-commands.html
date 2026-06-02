@@ -1266,36 +1266,36 @@
             <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests: no-args in a PRIVATE chat lists addable-contact buttons <code>addpick:&lt;id&gt;</code>; no-args in a GROUP replies &#x27;DM me&#x27;; no addable contacts → reply; the one-shot <code>/add_player @x &quot;Name&quot;</code> path is unchanged (existing tests stay green); addpick callback stashes contact id in user_data[PENDING_ADD_KEY] and edits &#x27;Send the display name&#x27;; addpick on a non-contact alerts; bad-int + None returns; handle_add_player_text adds the player when pending (asserts roster + calibration), clears pending; no-pending text is ignored silently; a command while pending cancels; empty name keeps pending.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">In <code>handle_add_player</code>: branch first on <code>len(message.text.split()) &gt; 1</code> → existing one-shot logic; else require PRIVATE chat (else &#x27;DM me&#x27;); else render <code>list_addable_contacts</code> as <code>addpick:&lt;id&gt;</code> buttons (label <code>@username (Name)</code> / <code>Name</code>), or an empty-state reply.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>PENDING_ADD_KEY = &quot;pending_add&quot;</code> and <code>ADDPICK_PREFIX = &quot;addpick:&quot;</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>handle_add_pick_callback</code>: <code>_pick_id</code>, re-check the contact still exists, stash id in user_data, answer + edit &#x27;Send the display name for &lt;handle&gt;&#x27;.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>handle_add_player_text</code>: mirror handle_rename_text — only act when PENDING_ADD_KEY set; &#x27;/&#x27; prefix cancels; empty keeps pending; else add_player(conn, id, name, contact.username) + bootstrap_calibration_prompts, clear pending, confirm.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Register <code>CallbackQueryHandler(handle_add_pick_callback, pattern=r&quot;^addpick:&quot;)</code> and <code>MessageHandler(filters.TEXT &amp; filters.ChatType.PRIVATE, handle_add_player_text, group=2)</code>; bump wiring 39 → 41.</span>
         </li>
         <li class="step" data-status="pending">
           <input type="checkbox" />
           <span class="step-text">Run the full gate.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(roster): button-driven /add_player from contacts with typed name</span>
         </li>
           </ol>

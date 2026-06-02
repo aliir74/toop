@@ -38,8 +38,8 @@ def test_main_registers_all_handlers_and_schedules_snapshot(
 
     bot.main()
 
-    # 27 command handlers + 11 callback-query handlers + 1 message handler.
-    assert mock_app.add_handler.call_count == 39
+    # 27 command handlers + 12 callback-query handlers + 2 message handlers.
+    assert mock_app.add_handler.call_count == 41
     assert mock_app.job_queue.run_daily.call_count == 2
     assert "conn" in mock_app.bot_data
     assert "started_at" in mock_app.bot_data
@@ -53,7 +53,7 @@ def test_main_skips_scheduling_when_no_job_queue(patched_main: MagicMock) -> Non
     bot.main()
 
     # Handlers still register even without a job queue.
-    assert mock_app.add_handler.call_count == 39
+    assert mock_app.add_handler.call_count == 41
     mock_app.run_polling.assert_called_once()
 
 
