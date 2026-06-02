@@ -8,6 +8,7 @@ from telegram.error import BadRequest
 
 from toop.contacts import upsert_contact
 from toop.handlers.roster import (
+    handle_add_ghost,
     handle_add_player,
     handle_contacts,
     handle_disable_voting,
@@ -449,3 +450,38 @@ async def test_dk_report_empty(admin_settings: None, conn: sqlite3.Connection) -
     await handle_dk_report(update, _context(conn, args=[]))
     reply = update.effective_message.reply_text.await_args.args[0]
     assert "No players" in reply
+
+
+async def test_add_ghost_creates_and_hints_link(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update('/add_ghost "Late Joiner"')
+    await handle_add_ghost(update, _context(conn, args=[]))
+    players = list_active_players(conn)
+    assert len(players) == 1
+    assert players[0].is_ghost is True
+    assert players[0].display_name == "Late Joiner"
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "/link_player" in reply
+    assert str(players[0].telegram_id) in reply
+
+
+async def test_add_ghost_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/add_ghost")
+    await handle_add_ghost(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert reply.startswith("Usage:")
+
+
+async def test_add_ghost_unbalanced_quote(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update('/add_ghost "Unclosed')
+    await handle_add_ghost(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert reply.startswith("Usage:")
+
+
+async def test_add_ghost_no_text_returns(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/add_ghost")
+    update.effective_message.text = None
+    await handle_add_ghost(update, _context(conn, args=[]))
+    update.effective_message.reply_text.assert_not_awaited()

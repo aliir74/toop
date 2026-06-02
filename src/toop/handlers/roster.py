@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 from toop.admin import require_admin
 from toop.contacts import get_contact, list_contacts
 from toop.players import (
+    add_ghost_player,
     add_player,
     disable_player_pool,
     dont_know_stats,
@@ -35,6 +36,7 @@ REMOVE_USAGE = "Usage: /remove_player @username"
 PAUSE_USAGE = "Usage: /pause_voting <@username|telegram_id> <duration like 2w or 10d>"
 DISABLE_USAGE = "Usage: /disable_voting <@username|telegram_id>"
 ENABLE_USAGE = "Usage: /enable_voting <@username|telegram_id>"
+ADD_GHOST_USAGE = 'Usage: /add_ghost "Display Name"'
 RENAME_PREFIX = "rename:"
 RENAME_USAGE = 'Usage: /rename (no args) for buttons, or /rename <@username|telegram_id> "New Name"'
 RENAME_EMPTY_ROSTER = "No players on the roster yet — use /add_player first."
@@ -229,6 +231,31 @@ async def handle_enable_voting(update: Update, context: ContextTypes.DEFAULT_TYP
         await message.reply_text(f"Restored {context.args[0]} to the rating pool. ✅")
     else:
         await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+
+
+@require_admin
+async def handle_add_ghost(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Add an accountless player others can vote on before they join Telegram."""
+    message = update.effective_message
+    if message is None or message.text is None:
+        return
+    try:
+        tokens = shlex.split(message.text)
+    except ValueError:
+        await message.reply_text(ADD_GHOST_USAGE)
+        return
+    name = " ".join(tokens[1:]).strip()
+    if not name:
+        await message.reply_text(ADD_GHOST_USAGE)
+        return
+    conn = _conn(context)
+    ghost = add_ghost_player(conn, name)
+    seeded = bootstrap_calibration_prompts(conn, ghost.telegram_id)
+    suffix = f" Seeded {seeded} calibration prompts." if seeded else ""
+    await message.reply_text(
+        f"👻 Added ghost {ghost.display_name} (id {ghost.telegram_id}).{suffix} "
+        f"When they join Telegram, run /link_player {ghost.telegram_id} @their_username."
+    )
 
 
 @require_admin

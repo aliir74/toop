@@ -1349,7 +1349,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="5.3" data-task-status="pending">
+  <article class="task" data-task-id="5.3" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">5.3</span><span class="task-name">/add_ghost</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1361,20 +1361,20 @@
             <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: /add_ghost &quot;Display Name&quot; (admin-only, shlex-parsed) creates a ghost, seeds calibration prompts, replies with the ghost id and a hint about /link_player; missing name → usage</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Implement handler: add_ghost_player then bootstrap_calibration_prompts(conn, ghost_id); register + wiring test</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_roster_handlers.py tests/test_bot_wiring.py -v</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(roster): /add_ghost for accountless players</span>
         </li>
           </ol>

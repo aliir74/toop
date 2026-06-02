@@ -17,6 +17,7 @@ from toop.handlers.health import handle_coverage, handle_health
 from toop.handlers.ops import handle_backup_db, handle_version
 from toop.handlers.ratings import handle_refresh_ratings
 from toop.handlers.roster import (
+    handle_add_ghost,
     handle_add_player,
     handle_contacts,
     handle_disable_voting,
@@ -74,6 +75,7 @@ def main() -> None:
     app.add_handler(CommandHandler("disable_voting", handle_disable_voting))
     app.add_handler(CommandHandler("enable_voting", handle_enable_voting))
     app.add_handler(CommandHandler("dk_report", handle_dk_report))
+    app.add_handler(CommandHandler("add_ghost", handle_add_ghost))
     app.add_handler(CommandHandler("list_players", handle_list_players))
     app.add_handler(CommandHandler("rename", handle_rename))
     app.add_handler(CommandHandler("contacts", handle_contacts))
