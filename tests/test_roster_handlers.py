@@ -238,12 +238,6 @@ async def test_remove_player_returns_without_message(
     await handle_remove_player(update, _context(conn, args=["@x"], chat_id=111))
 
 
-async def test_remove_player_no_args(admin_settings: None, conn: sqlite3.Connection) -> None:
-    update = _admin_update("/remove_player")
-    await handle_remove_player(update, _context(conn, args=[], chat_id=111))
-    assert update.effective_message.reply_text.await_args.args[0].startswith("Usage")
-
-
 async def test_remove_player_empty_username(admin_settings: None, conn: sqlite3.Connection) -> None:
     update = _admin_update("/remove_player @")
     await handle_remove_player(update, _context(conn, args=["@"], chat_id=111))
@@ -661,3 +655,89 @@ def test_pick_id_parses_positive_negative_and_rejects() -> None:
     assert _pick_id("rmpick:5", "rmpick:") == 5
     assert _pick_id("lnkghost:-3", "lnkghost:") == -3  # negative ghost id
     assert _pick_id("rmpick:abc", "rmpick:") is None
+
+
+# ----- callback test helper -----
+
+
+def _callback_update(data: str) -> MagicMock:
+    u = MagicMock()
+    u.effective_user = MagicMock(id=42)
+    q = MagicMock()
+    q.data = data
+    q.from_user = MagicMock(id=42)
+    q.answer = AsyncMock()
+    q.edit_message_text = AsyncMock()
+    u.callback_query = q
+    return u
+
+
+def _callbacks(update: MagicMock) -> tuple:
+    return update.callback_query.answer, update.callback_query.edit_message_text
+
+
+# ----- /remove_player buttons -----
+
+from toop.handlers.roster import handle_remove_callback  # noqa: E402
+
+
+async def test_remove_player_no_args_lists_buttons(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "SHH", None)
+    update = _admin_update("/remove_player")
+    await handle_remove_player(update, _context(conn, args=[]))
+    kb = update.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+    callbacks = [b.callback_data for row in kb for b in row]
+    assert "rmpick:1" in callbacks
+    assert "rmpick:2" in callbacks
+
+
+async def test_remove_player_no_args_empty_roster(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update("/remove_player")
+    await handle_remove_player(update, _context(conn, args=[]))
+    assert "empty" in update.effective_message.reply_text.await_args.args[0].lower()
+
+
+async def test_remove_callback_removes_and_edits(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _callback_update("rmpick:111")
+    answer, edit = _callbacks(update)
+    await handle_remove_callback(update, _context(conn, args=[]))
+    assert list_active_players(conn) == []
+    answer.assert_awaited()
+    assert "Removed Bob" in edit.await_args.args[0]
+
+
+async def test_remove_callback_gone_player_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("rmpick:999")
+    answer, edit = _callbacks(update)
+    await handle_remove_callback(update, _context(conn, args=[]))
+    assert "no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_remove_callback_bad_int_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("rmpick:notanint")
+    answer, edit = _callbacks(update)
+    await handle_remove_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+
+
+async def test_remove_callback_no_query_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = MagicMock()
+    update.effective_user = MagicMock(id=42)
+    update.callback_query = None
+    await handle_remove_callback(update, _context(conn, args=[]))  # silent

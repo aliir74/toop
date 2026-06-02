@@ -6,7 +6,13 @@ import shlex
 import sqlite3
 from datetime import UTC, datetime, timedelta
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
+from telegram import (
+    CallbackQuery,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Message,
+    Update,
+)
 from telegram.constants import ChatType
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
@@ -101,6 +107,17 @@ def _pick_id(data: str, prefix: str) -> int | None:
         return None
 
 
+async def _safe_edit(
+    query: CallbackQuery, text: str, reply_markup: InlineKeyboardMarkup | None = None
+) -> None:
+    """Edit a callback's message, swallowing the BadRequest Telegram raises when
+    the message is unchanged or too old to edit."""
+    try:
+        await query.edit_message_text(text, reply_markup=reply_markup)
+    except BadRequest as exc:  # pragma: no cover - only on stale/identical message
+        logger.warning("failed to edit message: %s", exc)
+
+
 def _parse_add_args(text: str) -> tuple[int | str, str] | None:
     """Parse `/add_player <@username|telegram_id> "Display Name"`.
 
@@ -183,10 +200,21 @@ async def handle_add_player(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 @require_admin
 async def handle_remove_player(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Soft-remove a player. With no args, lists the active roster as buttons;
+    with a @username, runs the typed one-shot (resolves the handle via Telegram)."""
     message = update.effective_message
-    if message is None or not context.args:
-        if message is not None:
-            await message.reply_text(REMOVE_USAGE)
+    if message is None:
+        return
+    conn = _conn(context)
+    if not context.args:
+        players = list_active_players(conn)
+        if not players:
+            await message.reply_text("Roster is empty — nobody to remove.")
+            return
+        await message.reply_text(
+            "Who do you want to remove?",
+            reply_markup=_player_keyboard(players, RMPICK_PREFIX),
+        )
         return
     username = context.args[0].lstrip("@").lower()
     if not username:
@@ -196,10 +224,33 @@ async def handle_remove_player(update: Update, context: ContextTypes.DEFAULT_TYP
     if telegram_id is None:
         await message.reply_text(f"Couldn't find @{username}.")
         return
-    if soft_remove_player(_conn(context), telegram_id):
+    if soft_remove_player(conn, telegram_id):
         await message.reply_text(f"Removed @{username}.")
     else:
         await message.reply_text(f"@{username} wasn't in the active roster.")
+
+
+@require_admin
+async def handle_remove_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin tapped a player button from /remove_player — soft-remove them."""
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+    telegram_id = _pick_id(query.data, RMPICK_PREFIX)
+    if telegram_id is None:
+        await query.answer()
+        return
+    conn = _conn(context)
+    row = conn.execute(
+        "SELECT display_name FROM players WHERE telegram_id=? AND active=1",
+        (telegram_id,),
+    ).fetchone()
+    if row is None:
+        await query.answer("That player is no longer on the roster.", show_alert=True)
+        return
+    soft_remove_player(conn, telegram_id)
+    await query.answer()
+    await _safe_edit(query, f"Removed {row['display_name']}. ✅")
 
 
 _DURATION_DAYS = {"d": 1, "w": 7, "m": 30}
@@ -572,10 +623,7 @@ async def handle_rename_callback(update: Update, context: ContextTypes.DEFAULT_T
     if context.user_data is not None:
         context.user_data[PENDING_RENAME_KEY] = telegram_id
     await query.answer()
-    try:
-        await query.edit_message_text(f"Send the new display name for {row['display_name']}:")
-    except BadRequest as exc:  # pragma: no cover - only on stale/identical message
-        logger.warning("failed to edit rename prompt: %s", exc)
+    await _safe_edit(query, f"Send the new display name for {row['display_name']}:")
 
 
 async def handle_rename_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

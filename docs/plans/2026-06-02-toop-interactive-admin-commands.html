@@ -927,7 +927,7 @@
     <span class="phase-progress">0 / 0</span>
   </div>
   <div class="phase-bar"><div class="fill"></div></div>
-  <article class="task" data-task-id="2.1" data-task-status="pending">
+  <article class="task" data-task-id="2.1" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">2.1</span><span class="task-name">/remove_player buttons</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -939,28 +939,28 @@
             <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests: no-args <code>/remove_player</code> lists active players as <code>rmpick:&lt;id&gt;</code> buttons; callback removes the player and edits the message; callback for an already-removed id answers an alert; non-int data answers and returns; query/data None returns silently.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>RMPICK_PREFIX = &quot;rmpick:&quot;</code>; in <code>handle_remove_player</code>, when <code>context.args</code> is empty render <code>_player_keyboard(list_active_players, RMPICK_PREFIX)</code> (empty-roster reply preserved); keep the typed <code>@username</code> path unchanged.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>handle_remove_callback</code>: <code>_pick_id</code>, look up active player, <code>soft_remove_player</code>, <code>query.answer</code> + <code>edit_message_text</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Register <code>CallbackQueryHandler(handle_remove_callback, pattern=r&quot;^rmpick:&quot;)</code> in bot.py; bump test_bot_wiring counts 31 → 32 (both assertions).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run the full gate (ruff format, make check, env-pinned pytest).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(roster): button-driven /remove_player</span>
         </li>
           </ol>
