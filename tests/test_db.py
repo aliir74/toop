@@ -62,9 +62,7 @@ def test_migration_adds_columns_to_legacy_db(db_path: Path) -> None:
         );
         """
     )
-    legacy.execute(
-        "INSERT INTO players (telegram_id, display_name) VALUES (?, ?)", (7, "Legacy")
-    )
+    legacy.execute("INSERT INTO players (telegram_id, display_name) VALUES (?, ?)", (7, "Legacy"))
     legacy.execute(
         "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins) "
         "VALUES (?, ?, ?, ?, ?)",

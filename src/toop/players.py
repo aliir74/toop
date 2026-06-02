@@ -205,9 +205,7 @@ def link_ghost_player(
 
     # Delete the ghost player last: ON DELETE CASCADE clears its remaining child rows.
     conn.execute("DELETE FROM players WHERE telegram_id=?", (ghost_id,))
-    conn.execute(
-        "UPDATE players SET is_ghost=0, active=1 WHERE telegram_id=?", (real_id,)
-    )
+    conn.execute("UPDATE players SET is_ghost=0, active=1 WHERE telegram_id=?", (real_id,))
     conn.commit()
     return LinkResult(vote_rows=vote_rows, ratings=ratings, rsvps=rsvps, attendance=attendance)
 
@@ -279,8 +277,7 @@ def rename_player(conn: sqlite3.Connection, telegram_id: int, new_display_name: 
 
 def list_active_players(conn: sqlite3.Connection) -> list[Player]:
     rows = conn.execute(
-        f"SELECT {_PLAYER_COLS} "
-        "FROM players WHERE active=1 ORDER BY display_name COLLATE NOCASE"
+        f"SELECT {_PLAYER_COLS} FROM players WHERE active=1 ORDER BY display_name COLLATE NOCASE"
     ).fetchall()
     return [_row_to_player(r) for r in rows]
 

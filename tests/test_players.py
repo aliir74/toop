@@ -276,7 +276,8 @@ def test_link_ghost_migrates_prompts_and_drops_voter_in_pair(conn: sqlite3.Conne
     # Voter 7 answered ghost-vs-5: should remap to (5,10) answered by 7.
     add_player(conn, 7, "Seven", "seven")
     conn.execute(
-        "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis) VALUES (7, ?, ?, 'attack')",
+        "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis) "
+        "VALUES (7, ?, ?, 'attack')",
         (a, b),
     )
     # Voter 10 (the real account) has a pending prompt on ghost-vs-5: after remap the
@@ -310,18 +311,29 @@ def test_link_ghost_migrates_ratings_rsvps_attendance(conn: sqlite3.Connection) 
         "INSERT INTO rsvps (session_id, telegram_id, status, locked_in) VALUES (1, ?, 'yes', 1)",
         (g,),
     )
-    conn.execute("INSERT INTO attendance (session_id, telegram_id, was_attendee) VALUES (1, ?, 1)", (g,))
+    conn.execute(
+        "INSERT INTO attendance (session_id, telegram_id, was_attendee) VALUES (1, ?, 1)", (g,)
+    )
     conn.commit()
     result = link_ghost_player(conn, ghost_id=g, real_id=10, username="ten", display_name="Ten")
-    assert conn.execute(
-        "SELECT 1 FROM player_ratings WHERE telegram_id=10 AND axis='attack'"
-    ).fetchone() is not None
+    assert (
+        conn.execute(
+            "SELECT 1 FROM player_ratings WHERE telegram_id=10 AND axis='attack'"
+        ).fetchone()
+        is not None
+    )
     assert conn.execute("SELECT 1 FROM rsvps WHERE session_id=1 AND telegram_id=10").fetchone()
-    assert conn.execute(
-        "SELECT 1 FROM attendance WHERE session_id=1 AND telegram_id=10"
-    ).fetchone() is not None
+    assert (
+        conn.execute("SELECT 1 FROM attendance WHERE session_id=1 AND telegram_id=10").fetchone()
+        is not None
+    )
     # Ghost rows cascade-deleted with the ghost player.
-    assert conn.execute("SELECT COUNT(*) AS n FROM player_ratings WHERE telegram_id=?", (g,)).fetchone()["n"] == 0
+    assert (
+        conn.execute(
+            "SELECT COUNT(*) AS n FROM player_ratings WHERE telegram_id=?", (g,)
+        ).fetchone()["n"]
+        == 0
+    )
     assert result.ratings == 1
     assert result.rsvps == 1
     assert result.attendance == 1
@@ -371,7 +383,8 @@ def test_link_ghost_drops_answered_self_pair(conn: sqlite3.Connection) -> None:
     a, b = (g, 10) if g < 10 else (10, g)
     # Voter 7 answered ghost-vs-10; 10 is the real account → self-pair, must drop.
     conn.execute(
-        "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis) VALUES (7, ?, ?, 'attack')",
+        "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis) "
+        "VALUES (7, ?, ?, 'attack')",
         (a, b),
     )
     conn.commit()

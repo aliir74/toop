@@ -1268,7 +1268,7 @@
     <span class="phase-progress">0 / 0</span>
   </div>
   <div class="phase-bar"><div class="fill"></div></div>
-  <article class="task" data-task-id="5.1" data-task-status="pending">
+  <article class="task" data-task-id="5.1" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">5.1</span><span class="task-name">/pause_voting /disable_voting /enable_voting</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1280,24 +1280,24 @@
             <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing integration tests (fake Update/Context per existing roster tests): non-admin rejected; /pause_voting @user 2w resolves the id, parses 2w→14d future timestamp, calls pause_player_pool, replies confirmation; bad duration → usage; /disable_voting and /enable_voting resolve + toggle + reply; unknown user → friendly error</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add a <code>_parse_duration(text)-&gt;timedelta|None</code> helper (supports Nd/Nw, reuse for default) and the three @require_admin handlers; resolve target via existing _resolve_telegram_id (and digit-id branch like _parse_add_args)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Register the three CommandHandlers in bot.py; update test_bot_wiring expected command set</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_roster_handlers.py tests/test_bot_wiring.py -v</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(roster): pause/disable/enable a player from voting</span>
         </li>
           </ol>

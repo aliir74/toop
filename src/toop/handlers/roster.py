@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import re
 import shlex
 import sqlite3
+from datetime import UTC, datetime, timedelta
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, Update
 from telegram.constants import ChatType
@@ -13,8 +15,11 @@ from toop.admin import require_admin
 from toop.contacts import get_contact, list_contacts
 from toop.players import (
     add_player,
+    disable_player_pool,
+    enable_player_pool,
     get_player_by_username,
     list_active_players,
+    pause_player_pool,
     rename_player,
     soft_remove_player,
 )
@@ -26,6 +31,9 @@ ADD_USAGE = (
     'Usage: /add_player @username "Display Name"  (or /add_player <telegram_id> "Display Name")'
 )
 REMOVE_USAGE = "Usage: /remove_player @username"
+PAUSE_USAGE = "Usage: /pause_voting <@username|telegram_id> <duration like 2w or 10d>"
+DISABLE_USAGE = "Usage: /disable_voting <@username|telegram_id>"
+ENABLE_USAGE = "Usage: /enable_voting <@username|telegram_id>"
 RENAME_PREFIX = "rename:"
 RENAME_USAGE = 'Usage: /rename (no args) for buttons, or /rename <@username|telegram_id> "New Name"'
 RENAME_EMPTY_ROSTER = "No players on the roster yet — use /add_player first."
@@ -138,6 +146,88 @@ async def handle_remove_player(update: Update, context: ContextTypes.DEFAULT_TYP
         await message.reply_text(f"Removed @{username}.")
     else:
         await message.reply_text(f"@{username} wasn't in the active roster.")
+
+
+def _parse_duration(token: str) -> timedelta | None:
+    """Parse a pause duration like ``2w`` or ``10d`` into a timedelta, or None."""
+    match = re.fullmatch(r"(\d+)([dw])", token.lower())
+    if not match:
+        return None
+    amount = int(match.group(1))
+    return timedelta(days=amount * (7 if match.group(2) == "w" else 1))
+
+
+def _resolve_pool_target(conn: sqlite3.Connection, token: str) -> int | None:
+    """Resolve a roster player from a digit id (incl. negative ghost ids) or a
+    @username already on the roster. No network call — pool targets are on-roster."""
+    raw = token.lstrip("@")
+    if raw.lstrip("-").isdigit():
+        return int(raw)
+    player = get_player_by_username(conn, raw)
+    return player.telegram_id if player else None
+
+
+@require_admin
+async def handle_pause_voting(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Temporarily pull a player from the rating pool. Others stop being asked to
+    rate them until the timer expires; the player can still vote on others."""
+    message = update.effective_message
+    if message is None:
+        return
+    if len(context.args) < 2:
+        await message.reply_text(PAUSE_USAGE)
+        return
+    delta = _parse_duration(context.args[1])
+    if delta is None:
+        await message.reply_text(PAUSE_USAGE)
+        return
+    conn = _conn(context)
+    target = _resolve_pool_target(conn, context.args[0])
+    until = datetime.now(UTC) + delta
+    if target is not None and pause_player_pool(conn, target, until):
+        await message.reply_text(
+            f"Paused {context.args[0]} until {until:%Y-%m-%d} — others won't be asked to "
+            "rate them, but they can still vote. /enable_voting to undo early."
+        )
+    else:
+        await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+
+
+@require_admin
+async def handle_disable_voting(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Pull a player from the rating pool indefinitely (until /enable_voting)."""
+    message = update.effective_message
+    if message is None:
+        return
+    if not context.args:
+        await message.reply_text(DISABLE_USAGE)
+        return
+    conn = _conn(context)
+    target = _resolve_pool_target(conn, context.args[0])
+    if target is not None and disable_player_pool(conn, target):
+        await message.reply_text(
+            f"Disabled {context.args[0]} from the rating pool — others won't be asked to "
+            "rate them. They can still vote. /enable_voting to restore."
+        )
+    else:
+        await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+
+
+@require_admin
+async def handle_enable_voting(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Restore a player to the rating pool, clearing any disable AND any pause."""
+    message = update.effective_message
+    if message is None:
+        return
+    if not context.args:
+        await message.reply_text(ENABLE_USAGE)
+        return
+    conn = _conn(context)
+    target = _resolve_pool_target(conn, context.args[0])
+    if target is not None and enable_player_pool(conn, target):
+        await message.reply_text(f"Restored {context.args[0]} to the rating pool. ✅")
+    else:
+        await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
 
 
 @require_admin

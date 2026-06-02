@@ -10,7 +10,10 @@ from toop.contacts import upsert_contact
 from toop.handlers.roster import (
     handle_add_player,
     handle_contacts,
+    handle_disable_voting,
+    handle_enable_voting,
     handle_list_players,
+    handle_pause_voting,
     handle_remove_player,
 )
 from toop.players import add_player, list_active_players
@@ -314,3 +317,106 @@ async def test_contacts_returns_without_message(
     update = _admin_update("/contacts")
     update.effective_message = None
     await handle_contacts(update, _context(conn, args=[]))
+
+
+# ----- pause / disable / enable voting -----
+
+
+def _pool(conn: sqlite3.Connection, telegram_id: int) -> sqlite3.Row:
+    return conn.execute(
+        "SELECT in_pool, pool_paused_until FROM players WHERE telegram_id=?",
+        (telegram_id,),
+    ).fetchone()
+
+
+async def test_pause_voting_by_id_sets_timer(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/pause_voting 111 2w")
+    await handle_pause_voting(update, _context(conn, args=["111", "2w"]))
+    assert _pool(conn, 111)["pool_paused_until"] is not None
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "rate" in reply.lower()
+
+
+async def test_pause_voting_by_username(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/pause_voting @bob 10d")
+    await handle_pause_voting(update, _context(conn, args=["@bob", "10d"]))
+    assert _pool(conn, 111)["pool_paused_until"] is not None
+
+
+async def test_pause_voting_bad_duration(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/pause_voting 111 soon")
+    await handle_pause_voting(update, _context(conn, args=["111", "soon"]))
+    assert _pool(conn, 111)["pool_paused_until"] is None
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "duration" in reply.lower() or "usage" in reply.lower()
+
+
+async def test_pause_voting_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/pause_voting")
+    await handle_pause_voting(update, _context(conn, args=[]))
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_pause_voting_unknown_player(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/pause_voting @ghost 2w")
+    await handle_pause_voting(update, _context(conn, args=["@ghost", "2w"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "couldn't find" in reply.lower() or "not" in reply.lower()
+
+
+async def test_disable_voting(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/disable_voting 111")
+    await handle_disable_voting(update, _context(conn, args=["111"]))
+    assert _pool(conn, 111)["in_pool"] == 0
+
+
+async def test_disable_voting_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/disable_voting")
+    await handle_disable_voting(update, _context(conn, args=[]))
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_disable_voting_unknown(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/disable_voting @ghost")
+    await handle_disable_voting(update, _context(conn, args=["@ghost"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "couldn't find" in reply.lower() or "not" in reply.lower()
+
+
+async def test_enable_voting_clears_both(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/disable_voting 111")
+    await handle_disable_voting(update, _context(conn, args=["111"]))
+    update2 = _admin_update("/enable_voting 111")
+    await handle_enable_voting(update2, _context(conn, args=["111"]))
+    row = _pool(conn, 111)
+    assert row["in_pool"] == 1
+    assert row["pool_paused_until"] is None
+
+
+async def test_enable_voting_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/enable_voting")
+    await handle_enable_voting(update, _context(conn, args=[]))
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_enable_voting_unknown(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/enable_voting 999")
+    await handle_enable_voting(update, _context(conn, args=["999"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "not" in reply.lower() or "couldn't" in reply.lower()
+
+
+async def test_pool_handlers_return_without_message(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    for handler in (handle_pause_voting, handle_disable_voting, handle_enable_voting):
+        update = _admin_update("/x")
+        update.effective_message = None
+        await handler(update, _context(conn, args=[]))
