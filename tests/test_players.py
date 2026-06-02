@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from toop.players import (
     add_player,
     disable_player_pool,
+    dont_know_stats,
     enable_player_pool,
     get_player_by_username,
     list_active_players,
@@ -120,3 +121,46 @@ def test_enable_player_pool_clears_both(conn: sqlite3.Connection) -> None:
     assert row["in_pool"] == 1
     assert row["pool_paused_until"] is None
     assert enable_player_pool(conn, 999) is False
+
+
+def _agg(conn: sqlite3.Connection, a: int, b: int, axis: str, aw: int, bw: int, dk: int) -> None:
+    conn.execute(
+        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (a, b, axis, aw, bw, dk),
+    )
+    conn.commit()
+
+
+def test_dont_know_stats_aggregates_per_player(conn: sqlite3.Connection) -> None:
+    for tid in (1, 2, 3):
+        add_player(conn, tid, f"P{tid}", f"p{tid}")
+    add_player(conn, 4, "P4", "p4")
+    soft_remove_player(conn, 4)  # inactive — must be excluded from results
+    _agg(conn, 1, 2, "attack", 2, 1, 3)
+    _agg(conn, 1, 3, "attack", 0, 0, 1)
+    _agg(conn, 2, 3, "defense", 1, 0, 0)
+
+    stats = dont_know_stats(conn)
+    by_id = {s.telegram_id: s for s in stats}
+    assert set(by_id) == {1, 2, 3}  # player 4 excluded
+
+    # Player 1: pairs (1,2)+(1,3) → dk 3+1=4, total 6+1=7.
+    assert by_id[1].dk_count == 4
+    assert by_id[1].total == 7
+    assert by_id[1].dk_rate == 4 / 7
+    # Player 3: pairs (1,3)+(2,3) → dk 1+0=1, total 1+1=2.
+    assert by_id[3].dk_count == 1
+    assert by_id[3].total == 2
+
+    # Sorted by dk_rate descending.
+    rates = [s.dk_rate for s in stats]
+    assert rates == sorted(rates, reverse=True)
+
+
+def test_dont_know_stats_zero_total_is_zero_rate(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Lonely", "lonely")
+    stats = dont_know_stats(conn)
+    assert stats[0].dk_count == 0
+    assert stats[0].total == 0
+    assert stats[0].dk_rate == 0.0

@@ -1114,7 +1114,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="3.3" data-task-status="pending">
+  <article class="task" data-task-id="3.3" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">3.3</span><span class="task-name">dont_know_stats aggregation</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1126,20 +1126,20 @@
             <span class="label">Files</span> Modify: src/toop/players.py · Modify: tests/test_players.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: with crafted vote_aggregates rows, dont_know_stats returns per-active-player dk_count = sum of dont_know over every pair containing them, total = sum of (a_wins+b_wins+dont_know) over those pairs, dk_rate = dk_count/total (0.0 when total=0); excludes inactive players; sorted by dk_rate desc</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Implement dont_know_stats(conn) -&gt; list[DontKnowStat] (a small typed dataclass/NamedTuple) with a UNION/OR query summing across pairs where telegram_id matches player_a OR player_b</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_players.py -v &amp;&amp; uv run ty check src/</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(players): per-player don&#x27;t-know stats</span>
         </li>
           </ol>

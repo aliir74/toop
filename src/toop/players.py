@@ -6,6 +6,15 @@ from datetime import datetime
 
 
 @dataclass(frozen=True)
+class DontKnowStat:
+    telegram_id: int
+    display_name: str
+    dk_count: int
+    total: int
+    dk_rate: float
+
+
+@dataclass(frozen=True)
 class Player:
     telegram_id: int
     username: str | None
@@ -126,6 +135,38 @@ def get_player_by_username(conn: sqlite3.Connection, username: str) -> Player | 
         (username.lstrip("@").lower(),),
     ).fetchone()
     return _row_to_player(row) if row else None
+
+
+def dont_know_stats(conn: sqlite3.Connection) -> list[DontKnowStat]:
+    """Per-active-player "don't know" signal, summed across every pair the player
+    appears in. dk_rate = dk_count / total prompts answered on those pairs (0.0
+    when none). Sorted by dk_rate descending, then name — the head of the list is
+    the player the group can least confidently rate.
+    """
+    rows = conn.execute(
+        """
+        SELECT p.telegram_id, p.display_name,
+               COALESCE(SUM(va.dont_know), 0) AS dk_count,
+               COALESCE(SUM(va.a_wins + va.b_wins + va.dont_know), 0) AS total
+        FROM players p
+        LEFT JOIN vote_aggregates va
+            ON va.player_a = p.telegram_id OR va.player_b = p.telegram_id
+        WHERE p.active = 1
+        GROUP BY p.telegram_id, p.display_name
+        """
+    ).fetchall()
+    stats = [
+        DontKnowStat(
+            telegram_id=r["telegram_id"],
+            display_name=r["display_name"],
+            dk_count=r["dk_count"],
+            total=r["total"],
+            dk_rate=(r["dk_count"] / r["total"]) if r["total"] else 0.0,
+        )
+        for r in rows
+    ]
+    stats.sort(key=lambda s: (-s.dk_rate, s.display_name.lower()))
+    return stats
 
 
 def _fetch_one(conn: sqlite3.Connection, telegram_id: int) -> sqlite3.Row:
