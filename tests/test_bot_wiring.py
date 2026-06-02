@@ -40,7 +40,7 @@ def test_main_registers_all_handlers_and_schedules_snapshot(
 
     # 27 command handlers + 3 callback-query handlers + 1 message handler.
     assert mock_app.add_handler.call_count == 31
-    mock_app.job_queue.run_daily.assert_called_once()
+    assert mock_app.job_queue.run_daily.call_count == 2
     assert "conn" in mock_app.bot_data
     assert "started_at" in mock_app.bot_data
     mock_app.run_polling.assert_called_once()

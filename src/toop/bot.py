@@ -13,6 +13,7 @@ from telegram.ext import (
 
 from toop.config import settings
 from toop.db import get_connection, init_db
+from toop.handlers.alerts import dk_alert_job
 from toop.handlers.health import handle_coverage, handle_health
 from toop.handlers.ops import handle_backup_db, handle_version
 from toop.handlers.ratings import handle_refresh_ratings
@@ -111,6 +112,12 @@ def main() -> None:
             settings.SESSION_WEEKDAY,
             settings.SNAPSHOT_HOUR,
         )
+        app.job_queue.run_daily(
+            dk_alert_job,
+            time=time(hour=settings.SNAPSHOT_HOUR, minute=0, tzinfo=UTC),
+            name="dk_alert",
+        )
+        logger.info("dk_alert scheduled daily at hour=%s UTC", settings.SNAPSHOT_HOUR)
     app.add_handler(CallbackQueryHandler(handle_rsvp_callback, pattern=r"^rsvp:"))
     app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
     app.add_handler(CallbackQueryHandler(handle_rename_callback, pattern=r"^rename:"))

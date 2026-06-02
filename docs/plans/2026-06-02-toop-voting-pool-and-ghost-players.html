@@ -1502,7 +1502,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="6.2" data-task-status="pending">
+  <article class="task" data-task-id="6.2" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">6.2</span><span class="task-name">dk_alert_job daily admin DM</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1514,24 +1514,24 @@
             <span class="label">Files</span> Create: src/toop/handlers/alerts.py · Modify: src/toop/bot.py · Create: tests/test_alerts.py · Modify: tests/test_bot_wiring.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test (fake context with conn + a recording bot, mirroring test_auto_snapshot): players over both thresholds AND still in-pool/not-paused produce a single admin DM containing a ready-to-copy /pause_voting command per flagged player; nobody flagged → no DM sent; already-paused players are skipped</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Implement async dk_alert_job(context) reading conn from context.bot_data, filtering dont_know_stats by DK_ALERT_MIN_PROMPTS + DK_ALERT_RATE and excluding paused/disabled, sending one message to settings.ADMIN_TELEGRAM_ID (guard TelegramError like auto_snapshot_job)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Register app.job_queue.run_daily(dk_alert_job, ...) in bot.py; assert in wiring test that the job is scheduled</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_alerts.py tests/test_bot_wiring.py -v</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(alerts): daily don&#x27;t-know pause suggestions to admin</span>
         </li>
           </ol>
