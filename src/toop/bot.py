@@ -19,20 +19,29 @@ from toop.handlers.ops import handle_backup_db, handle_version
 from toop.handlers.ratings import handle_refresh_ratings
 from toop.handlers.roster import (
     handle_add_ghost,
+    handle_add_pick_callback,
     handle_add_player,
+    handle_add_player_text,
     handle_contacts,
+    handle_disable_callback,
     handle_disable_voting,
     handle_dk_report,
+    handle_enable_callback,
     handle_enable_voting,
+    handle_link_ghost_callback,
     handle_link_player,
+    handle_link_real_callback,
     handle_list_players,
+    handle_pause_dur_callback,
+    handle_pause_pick_callback,
     handle_pause_voting,
+    handle_remove_callback,
     handle_remove_player,
     handle_rename,
     handle_rename_callback,
     handle_rename_text,
 )
-from toop.handlers.rsvp import handle_lock_in, handle_rsvp_callback
+from toop.handlers.rsvp import handle_lock_in, handle_lock_in_callback, handle_rsvp_callback
 from toop.handlers.sessions import (
     handle_close_session,
     handle_list_sessions,
@@ -121,11 +130,25 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_rsvp_callback, pattern=r"^rsvp:"))
     app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
     app.add_handler(CallbackQueryHandler(handle_rename_callback, pattern=r"^rename:"))
-    # Lower-priority group so /commands still reach their CommandHandler above;
-    # this only consumes a private text message when a rename is pending.
+    app.add_handler(CallbackQueryHandler(handle_remove_callback, pattern=r"^rmpick:"))
+    app.add_handler(CallbackQueryHandler(handle_disable_callback, pattern=r"^dispick:"))
+    app.add_handler(CallbackQueryHandler(handle_lock_in_callback, pattern=r"^lockpick:"))
+    app.add_handler(CallbackQueryHandler(handle_enable_callback, pattern=r"^enpick:"))
+    app.add_handler(CallbackQueryHandler(handle_pause_pick_callback, pattern=r"^pausepick:"))
+    app.add_handler(CallbackQueryHandler(handle_pause_dur_callback, pattern=r"^pausedur:"))
+    app.add_handler(CallbackQueryHandler(handle_link_ghost_callback, pattern=r"^lnkghost:"))
+    app.add_handler(CallbackQueryHandler(handle_link_real_callback, pattern=r"^lnkreal:"))
+    app.add_handler(CallbackQueryHandler(handle_add_pick_callback, pattern=r"^addpick:"))
+    # Lower-priority groups so /commands still reach their CommandHandler above.
+    # Each consumes a private text only when its own flow is pending; rename and
+    # add live in separate groups so both get to inspect every private message.
     app.add_handler(
         MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_rename_text),
         group=1,
+    )
+    app.add_handler(
+        MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_add_player_text),
+        group=2,
     )
 
     logger.info(

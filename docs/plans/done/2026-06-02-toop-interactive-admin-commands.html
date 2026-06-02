@@ -1,0 +1,1681 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Interactive (button-driven) admin commands — Plan</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #F5F4EF;
+    --ink: #0A0A0A;
+    --ink-2: #5A5A55;
+    --paper: #FFFFFF;
+    --accent: #5856D6;
+    --accent-2: #00C7BE;
+    --accent-3: #FF6392;
+    --success: #00C781;
+    --warn: #FFB020;
+    --rule: rgba(10,10,10,0.10);
+    --rule-2: rgba(10,10,10,0.18);
+    --shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px -12px rgba(10,10,10,0.10);
+    --display: "Instrument Serif", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0F1014;
+      --ink: #ECECEC;
+      --ink-2: #9B9B9B;
+      --paper: #181920;
+      --rule: rgba(255,255,255,0.10);
+      --rule-2: rgba(255,255,255,0.18);
+      --shadow: 0 1px 0 rgba(0,0,0,0.4), 0 8px 24px -12px rgba(0,0,0,0.6);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .container { max-width: 1280px; margin: 0 auto; padding: 56px 48px 120px; }
+
+  /* HERO */
+  .hero {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 40px;
+    align-items: end;
+    margin-bottom: 48px;
+    padding-bottom: 28px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .hero h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(44px, 7vw, 84px);
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    margin: 0 0 18px;
+  }
+  .hero .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 18px;
+  }
+  .meta { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pill {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    background: var(--paper);
+    padding: 5px 12px;
+    border: 1px solid var(--rule-2);
+    border-radius: 999px;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .pill.status-planning { background: #FFE8A3; color: #5A4500; border-color: #E8C766; }
+  .pill.status-in_progress { background: var(--accent); color: white; border-color: transparent; }
+  .pill.status-done { background: var(--success); color: white; border-color: transparent; }
+
+  .progress-ring {
+    width: 132px; height: 132px; flex-shrink: 0;
+  }
+  .progress-ring circle { fill: none; stroke-width: 10; }
+  .progress-ring .bg { stroke: var(--rule-2); }
+  .progress-ring .fg { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 0.5s ease; }
+  .progress-ring text {
+    font-family: var(--display);
+    font-size: 38px;
+    fill: var(--ink);
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+
+  /* ARCHITECTURE */
+  .architecture {
+    background: var(--paper);
+    border-left: 4px solid var(--accent);
+    padding: 22px 28px;
+    margin-bottom: 56px;
+    box-shadow: var(--shadow);
+    border-radius: 0 8px 8px 0;
+  }
+  .architecture h2 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .architecture p {
+    margin: 0;
+    font-size: 19px;
+    line-height: 1.6;
+    font-family: var(--sans);
+    font-weight: 500;
+    letter-spacing: -0.005em;
+  }
+
+  /* PHASE */
+  .phase { margin-bottom: 56px; }
+  .phase-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 14px;
+  }
+  .phase-header h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 44px;
+    line-height: 1.05;
+    margin: 0;
+    letter-spacing: -0.012em;
+  }
+  .phase-header h2 .num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-2);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    vertical-align: middle;
+    margin-right: 14px;
+    background: var(--paper);
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--rule-2);
+  }
+  .phase-progress {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-2);
+    letter-spacing: 0.06em;
+  }
+  .phase-bar {
+    height: 4px;
+    background: var(--rule);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 22px;
+  }
+  .phase-bar .fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  /* TASK */
+  .task {
+    background: var(--paper);
+    border: 1px solid var(--rule-2);
+    border-radius: 12px;
+    margin-bottom: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    transition: opacity 0.2s ease;
+  }
+  .task[data-task-status="done"] { opacity: 0.55; }
+  .task[data-task-status="done"] .task-header h3 .task-name { text-decoration: line-through; }
+
+  .task-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 24px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .task-header h3 {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 19px;
+    margin: 0;
+    line-height: 1.3;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .task-header h3 .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+  .task-header .right {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+    letter-spacing: 0.04em;
+  }
+  .task-header .chevron {
+    transition: transform 0.2s ease;
+    color: var(--ink-2);
+    font-size: 14px;
+  }
+  .task[data-open="true"] .chevron { transform: rotate(180deg); }
+  .task-body {
+    display: none;
+    padding: 18px 24px 22px;
+    border-top: 1px solid var(--rule);
+  }
+  .task[data-open="true"] .task-body { display: block; }
+
+  .files {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.7;
+  }
+  .files .label {
+    font-weight: 600;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 11px;
+    margin-right: 10px;
+  }
+
+  /* TASK GRID — main column + optional notes rail */
+  .task-grid { display: block; }
+  .task-grid.with-notes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 720px) {
+    .task-grid.with-notes { grid-template-columns: minmax(0, 1fr); }
+  }
+  .task-main { min-width: 0; }
+  .notes {
+    background: linear-gradient(180deg, var(--bg) 0%, transparent 100%);
+    border-left: 2px solid var(--accent-2);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 18px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+  .notes .notes-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .notes .notes-label + p,
+  .notes .notes-label + ul { margin: 0 0 12px; }
+  .notes .notes-label + p:last-child,
+  .notes .notes-label + ul:last-child { margin-bottom: 0; }
+  .notes p { color: var(--ink); }
+  .notes ul {
+    padding-left: 16px;
+    margin: 0;
+  }
+  .notes li { margin-bottom: 4px; color: var(--ink); }
+  .notes a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--accent);
+  }
+  .notes a:hover { border-bottom-style: solid; }
+  .notes code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    background: var(--paper);
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--rule);
+  }
+
+  /* DIFF — unified git-style diff for before/after code */
+  .diff-card {
+    margin-top: 18px;
+    background: var(--paper);
+    border: 1px solid var(--rule-2);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .diff-card-header {
+    padding: 9px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+  .diff-card-header .diff-file {
+    color: var(--ink);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+  .diff {
+    margin: 0;
+    padding: 12px 0;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  .diff code { font-family: inherit; display: block; }
+  .diff .line {
+    display: block;
+    padding: 0 16px 0 36px;
+    position: relative;
+    white-space: pre;
+    min-height: 1.2em;
+  }
+  .diff .line::before {
+    position: absolute;
+    left: 12px;
+    width: 16px;
+    text-align: center;
+    font-weight: 600;
+    content: " ";
+    color: var(--ink-2);
+    opacity: 0.4;
+  }
+  .diff .add { background: rgba(0, 199, 129, 0.10); }
+  .diff .add::before { content: "+"; color: #008859; opacity: 1; }
+  .diff .del { background: rgba(232, 67, 127, 0.10); }
+  .diff .del::before { content: "-"; color: #B0264A; opacity: 1; }
+  @media (prefers-color-scheme: dark) {
+    .diff .add { background: rgba(0, 199, 129, 0.16); }
+    .diff .add::before { color: #6FE2A6; }
+    .diff .del { background: rgba(232, 67, 127, 0.16); }
+    .diff .del::before { color: #FF95B4; }
+  }
+
+  /* COMPARE — before / after side-by-side */
+  .compare {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 720px) {
+    .compare { grid-template-columns: 1fr; }
+  }
+  .compare-col {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 14px 16px;
+    border: 1px solid var(--rule);
+    overflow: hidden;
+  }
+  .compare-col.before { border-left: 3px solid var(--warn); }
+  .compare-col.after { border-left: 3px solid var(--success); }
+  .compare-col .compare-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .compare-col.before .compare-label { color: #B07A00; }
+  .compare-col.after .compare-label { color: #008859; }
+  .compare-col pre {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--ink);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* ARCHITECTURE DIAGRAM — sits under the architecture callout */
+  .architecture-diagram {
+    background: var(--paper);
+    border-radius: 12px;
+    padding: 24px;
+    margin: -32px 0 56px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--rule);
+    overflow-x: auto;
+  }
+  .architecture-diagram svg { display: block; width: 100%; height: auto; }
+
+  /* PLAN NOTES — free-form top-level notes box */
+  .plan-notes {
+    margin: -32px 0 56px;
+    padding: 16px 20px;
+    background: var(--paper);
+    border-radius: 12px;
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow);
+  }
+  .plan-notes label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .plan-notes textarea {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 60px;
+  }
+  .plan-notes textarea:focus { outline: none; }
+  .plan-notes textarea::placeholder { color: var(--ink-2); font-style: italic; }
+
+  /* TASK COMMENT — per-task annotation injected by JS into each task body */
+  .task-comment {
+    width: 100%;
+    margin-top: 16px;
+    padding: 10px 12px;
+    border: 1px dashed var(--rule-2);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    resize: vertical;
+    min-height: 44px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .task-comment::placeholder { color: var(--ink-2); font-style: italic; }
+  .task-comment:focus {
+    outline: none;
+    border-style: solid;
+    border-color: var(--accent);
+    background: var(--paper);
+  }
+  .task-comment.has-content {
+    border-style: solid;
+    border-color: var(--accent-2);
+    background: var(--paper);
+  }
+
+  /* INLINE ANNOTATIONS — click any element to attach a note */
+  .annotatable { position: relative; }
+  .annotate-btn {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid var(--rule-2);
+    background: var(--paper);
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 5;
+  }
+  .annotatable:hover > .annotate-btn,
+  .annotate-btn:focus { display: flex; }
+  .annotatable.has-comment > .annotate-btn {
+    display: flex;
+    background: var(--accent-2);
+    color: var(--paper);
+    border-color: var(--accent-2);
+  }
+  .annotatable.has-comment { box-shadow: inset 3px 0 0 var(--accent-2); }
+  .diff .line.annotatable.has-comment { box-shadow: inset 2px 0 0 var(--accent-2); }
+  .inline-comment {
+    margin: 6px 0 8px;
+    padding: 8px 12px;
+    border-left: 2px solid var(--accent-2);
+    background: linear-gradient(180deg, rgba(0, 199, 190, 0.06) 0%, transparent 100%);
+    border-radius: 0 6px 6px 0;
+    display: none;
+  }
+  .inline-comment.open { display: block; }
+  .inline-comment .key {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 4px;
+  }
+  .inline-comment textarea {
+    width: 100%;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 38px;
+  }
+  .inline-comment textarea:focus { outline: none; border-color: var(--accent); }
+
+  /* COPY RESULT — sticky action bar */
+  .actionbar {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    gap: 10px;
+    z-index: 900;
+  }
+  .actionbar button {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--rule-2);
+    cursor: pointer;
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: var(--shadow);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  .actionbar button:hover { transform: translateY(-1px); }
+  .actionbar button.primary {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  .actionbar button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .actionbar button .count {
+    background: rgba(255,255,255,0.18);
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-left: 6px;
+    font-size: 11px;
+  }
+  .actionbar button:not(.primary) .count { background: var(--rule); }
+  .toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 1000;
+    box-shadow: var(--shadow);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .steps { list-style: none; padding: 0; margin: 0; }
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 0;
+    border-top: 1px dashed var(--rule);
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  .step:first-child { border-top: none; padding-top: 4px; }
+  .step input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 22px; height: 22px;
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    background: var(--paper);
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 1px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    position: relative;
+  }
+  .step input[type="checkbox"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .step input[type="checkbox"]:checked::after {
+    content: "✓";
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    line-height: 1;
+  }
+  .step[data-status="done"] .step-text {
+    text-decoration: line-through;
+    color: var(--ink-2);
+  }
+  .step-text { flex: 1; }
+  .step-text code {
+    font-family: var(--mono);
+    font-size: 0.93em;
+    background: var(--bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+  }
+
+  /* SECTION (Decisions / Errors) */
+  .section { margin-top: 56px; }
+  .section h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 36px;
+    margin: 0 0 18px;
+    letter-spacing: -0.01em;
+  }
+  .section table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--paper);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .section th, .section td {
+    padding: 13px 18px;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+    font-size: 15px;
+    vertical-align: top;
+  }
+  .section th {
+    background: var(--bg);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  .section tr:last-child td { border-bottom: none; }
+
+  /* DIAGRAMS */
+  .diagrams { margin-top: 56px; }
+  .diagrams .caption {
+    font-style: italic;
+    color: var(--ink-2);
+    margin: 8px 0 12px;
+    font-family: var(--display);
+    font-size: 18px;
+  }
+  .diagrams svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: var(--paper);
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+
+  /* FOOTER */
+  .footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-2);
+    letter-spacing: 0.04em;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .footer code {
+    background: var(--paper);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+    color: var(--ink);
+  }
+
+  /* PRINT */
+  @media print {
+    body { background: white; }
+    .task-body { display: block !important; }
+    .chevron { display: none; }
+    .container { max-width: none; padding: 24px; }
+    .task { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
+    .architecture, .architecture-diagram { box-shadow: none; }
+    .task-grid.with-notes { grid-template-columns: minmax(0, 1fr) 200px; }
+    .notes { break-inside: avoid; }
+    .compare { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="hero" data-status="done" data-slug="2026-06-02-toop-interactive-admin-commands" data-feature="Interactive (button-driven) admin commands" data-tdd="true">
+    <div>
+      <div class="eyebrow">Implementation Plan · 2026-06-02</div>
+      <h1>Interactive (button-driven) admin commands</h1>
+      <div class="meta">
+        <span class="pill status-planning" data-status-pill>Planning</span>
+        <span class="pill" data-task-count>0 / 0 tasks</span>
+        <span class="pill" data-step-count>0 / 0 steps</span>
+        <span class="pill">TDD</span>
+      </div>
+    </div>
+    <svg class="progress-ring" viewBox="0 0 132 132">
+      <circle class="bg" cx="66" cy="66" r="56" />
+      <circle class="fg" cx="66" cy="66" r="56" stroke-dasharray="351.86" stroke-dashoffset="351.86" transform="rotate(-90 66 66)" />
+      <text x="66" y="68" data-progress-label>0%</text>
+    </svg>
+  </header>
+
+  <section class="architecture">
+    <h2>Architecture</h2>
+    <p data-architecture>Convert seven typed-args admin commands to inline-keyboard flows, mirroring the existing /rename pattern: a CommandHandler with no args renders InlineKeyboardMarkup of players/contacts/durations (callback_data carries short prefixes + ids), and per-prefix CallbackQueryHandlers resolve each tap. Single-step picks (remove, disable, enable, lock_in) act immediately; chained picks (pause, link) edit the message into a second keyboard; /add_player stashes the picked contact in context.user_data and consumes the next DM via a group=2 MessageHandler. Every typed one-shot form is preserved as a fallback. No new CommandHandlers; +9 CallbackQueryHandlers and +1 MessageHandler bring add_handler.call_count from 31 to 41.</p>
+  </section>
+
+  <section class="architecture-diagram"><svg class="chart" viewBox="0 0 720 230" role="img" aria-label="Three callback patterns: single-step pick acts immediately; chained pick edits into a second keyboard; add_player picks a contact then consumes a typed name."><style>.fbox{fill:var(--paper,#fff);stroke:var(--rule-2,rgba(10,10,10,.18));stroke-width:1.2}.b-indigo{fill:rgba(88,86,214,.14);stroke:#5856D6}.b-mint{fill:rgba(0,199,129,.14);stroke:#00C781}.b-orange{fill:rgba(255,176,32,.16);stroke:#FFB020}.flbl{font-family:var(--sans,system-ui);font-size:12px;fill:var(--ink,#0a0a0a);font-weight:600}.fsub{font-family:var(--mono,monospace);font-size:10px;fill:var(--ink-2,#5a5a55)}.ftag{font-family:var(--sans,system-ui);font-size:11px;fill:var(--ink-2,#5a5a55);font-weight:600}@media(prefers-color-scheme:dark){.fbox{fill:#181920;stroke:rgba(255,255,255,.18)}.flbl{fill:#ececec}.fsub,.ftag{fill:#9b9b9b}}</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2,#5a5a55)"/></marker></defs><text x="8" y="22" class="ftag">Single-step pick (remove / disable / enable / lock_in)</text><g><rect class="fbox b-indigo" x="8" y="30" width="150" height="40" rx="7"/><text x="83" y="49" text-anchor="middle" class="flbl">/cmd no args</text><text x="83" y="63" text-anchor="middle" class="fsub">player buttons</text><rect class="fbox b-mint" x="280" y="30" width="160" height="40" rx="7"/><text x="360" y="49" text-anchor="middle" class="flbl">rmpick:&lt;id&gt;</text><text x="360" y="63" text-anchor="middle" class="fsub">act + edit message</text><line x1="158" y1="50" x2="280" y2="50" stroke="var(--ink-2,#5a5a55)" marker-end="url(#arrow)"/></g><text x="8" y="104" class="ftag">Chained pick (pause player to duration; link ghost to contact)</text><g><rect class="fbox b-indigo" x="8" y="112" width="150" height="40" rx="7"/><text x="83" y="131" text-anchor="middle" class="flbl">/pause no args</text><text x="83" y="145" text-anchor="middle" class="fsub">player buttons</text><rect class="fbox b-orange" x="280" y="112" width="160" height="40" rx="7"/><text x="360" y="131" text-anchor="middle" class="flbl">pausepick:&lt;id&gt;</text><text x="360" y="145" text-anchor="middle" class="fsub">edit to durations</text><rect class="fbox b-mint" x="540" y="112" width="172" height="40" rx="7"/><text x="626" y="131" text-anchor="middle" class="flbl">pausedur:&lt;id&gt;:&lt;tok&gt;</text><text x="626" y="145" text-anchor="middle" class="fsub">apply + confirm</text><line x1="158" y1="132" x2="280" y2="132" stroke="var(--ink-2,#5a5a55)" marker-end="url(#arrow)"/><line x1="440" y1="132" x2="540" y2="132" stroke="var(--ink-2,#5a5a55)" marker-end="url(#arrow)"/></g><text x="8" y="186" class="ftag">Typed-name flow (add_player from contacts)</text><g><rect class="fbox b-indigo" x="8" y="194" width="150" height="30" rx="7"/><text x="83" y="213" text-anchor="middle" class="flbl">addpick:&lt;id&gt;</text><rect class="fbox b-orange" x="280" y="194" width="160" height="30" rx="7"/><text x="360" y="213" text-anchor="middle" class="flbl">stash in user_data</text><rect class="fbox b-mint" x="540" y="194" width="172" height="30" rx="7"/><text x="626" y="213" text-anchor="middle" class="flbl">group=2 text → add</text><line x1="158" y1="209" x2="280" y2="209" stroke="var(--ink-2,#5a5a55)" marker-end="url(#arrow)"/><line x1="440" y1="209" x2="540" y2="209" stroke="var(--ink-2,#5a5a55)" marker-end="url(#arrow)"/></g></svg></section>
+
+  <section class="plan-notes">
+    <label for="plan-notes-input">Plan-wide notes</label>
+    <textarea id="plan-notes-input" placeholder="General comments, blockers, scope changes, or context for Claude that doesn't belong to a single element..."></textarea>
+  </section>
+
+  <section class="phase" data-phase-id="1">
+  <div class="phase-header">
+    <h2><span class="num">Phase 1</span>Phase 1 — Shared foundations</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="1.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.1</span><span class="task-name">Duration months + shared keyboard/pick helpers</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: tests/test_roster_handlers.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests: <code>_parse_duration(&quot;1m&quot;)</code> returns timedelta(days=30); <code>_parse_duration(&quot;3m&quot;)</code> returns 90 days; existing <code>2w</code>/<code>10d</code>/<code>soon</code> cases still pass.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Extend <code>_parse_duration</code> regex to <code>(\d+)([dwm])</code> and map <code>m</code> → amount*30 days.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add a <code>PAUSE_DURATIONS</code> constant: list of (label, token) like <code>[(&quot;1 week&quot;,&quot;1w&quot;),(&quot;2 weeks&quot;,&quot;2w&quot;),(&quot;1 month&quot;,&quot;1m&quot;)]</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>_player_keyboard(players, prefix)</code> building one button per player via <code>_player_label</code>, callback_data <code>f&quot;{prefix}{p.telegram_id}&quot;</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>_pick_id(data, prefix)</code> → int|None: <code>removeprefix</code>, then <code>int()</code> in try/except returning None on ValueError (covers negative ghost ids).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run: <code>GROUP_CHAT_ID=0 ADMIN_TELEGRAM_ID=0 BOT_TOKEN=&quot;&quot; uv run pytest -q</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(roster): add month durations and shared button helpers</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Every button command reuses the player keyboard and id parser; building them once keeps the seven flows DRY and individually testable.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>callback_data 64-byte cap — prefixes stay short, ids only (never names)</li>
+            <li>negative ghost ids must round-trip through `_pick_id` — int(&quot;-3&quot;) is fine, but the regex pick must not lstrip the sign</li>
+          </ul>
+        </aside>
+      </div>
+      <div class="diff-card">
+        <div class="diff-card-header">
+          <span class="diff-file">Diff</span>
+          <span>unified diff</span>
+        </div>
+        <pre class="diff"><code><span class="line del">_parse_duration: re.fullmatch(r&quot;(\d+)([dw])&quot;, token) ; &#x27;d&#x27; or &#x27;w&#x27; only</span><span class="line add">_parse_duration: re.fullmatch(r&quot;(\d+)([dwm])&quot;, token) ; &#x27;m&#x27; → 30*amount days</span></code></pre>
+      </div>
+    </div>
+  </article>
+
+  <article class="task" data-task-id="1.2" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.2</span><span class="task-name">list_addable_contacts helper</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/contacts.py · Modify: tests/test_contacts.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests in test_contacts.py: returns contacts whose telegram_id is NOT in players; excludes on-roster contacts; empty when all on roster; oldest-first order preserved.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>list_addable_contacts(conn)</code> → list[Contact]: <code>SELECT ... FROM contacts WHERE telegram_id NOT IN (SELECT telegram_id FROM players) ORDER BY first_seen_at ASC, telegram_id ASC</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run pytest; confirm contacts.py stays 100% and ty check passes (contacts.py is type-checked).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(contacts): add list_addable_contacts for button add flow</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>/add_player and /link_player both need &#x27;contacts not yet on the roster&#x27; as buttons; a typed SQL helper is type-checked and reusable, vs recomputing roster_ids in handlers.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>ghosts have negative ids and no contact row, so NOT IN players naturally excludes them</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="2">
+  <div class="phase-header">
+    <h2><span class="num">Phase 2</span>Phase 2 — Single-step pick commands</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="2.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.1</span><span class="task-name">/remove_player buttons</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests: no-args <code>/remove_player</code> lists active players as <code>rmpick:&lt;id&gt;</code> buttons; callback removes the player and edits the message; callback for an already-removed id answers an alert; non-int data answers and returns; query/data None returns silently.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>RMPICK_PREFIX = &quot;rmpick:&quot;</code>; in <code>handle_remove_player</code>, when <code>context.args</code> is empty render <code>_player_keyboard(list_active_players, RMPICK_PREFIX)</code> (empty-roster reply preserved); keep the typed <code>@username</code> path unchanged.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>handle_remove_callback</code>: <code>_pick_id</code>, look up active player, <code>soft_remove_player</code>, <code>query.answer</code> + <code>edit_message_text</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Register <code>CallbackQueryHandler(handle_remove_callback, pattern=r&quot;^rmpick:&quot;)</code> in bot.py; bump test_bot_wiring counts 31 → 32 (both assertions).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run the full gate (ruff format, make check, env-pinned pytest).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(roster): button-driven /remove_player</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Removing by typed @handle requires a network get_chat resolve; buttons act directly on roster telegram_ids with zero typing or lookups.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>the typed path resolves @handle via get_chat — keep it so power use still works</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="2.2" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.2</span><span class="task-name">/disable_voting buttons</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests: no-args lists <code>dispick:&lt;id&gt;</code> buttons; callback disables (in_pool=0) and edits message; gone-player alert; bad-int answer/return; None return.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>DISPICK_PREFIX = &quot;dispick:&quot;</code>; no-args branch in <code>handle_disable_voting</code> renders the player keyboard; typed path unchanged.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>handle_disable_callback</code> calling <code>disable_player_pool</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Register <code>CallbackQueryHandler(..., pattern=r&quot;^dispick:&quot;)</code>; bump wiring 32 → 33.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run the full gate.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(roster): button-driven /disable_voting</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="2.3" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.3</span><span class="task-name">/lock_in buttons</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/rsvp.py · Modify: src/toop/bot.py · Modify: tests/test_rsvp_handlers.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests: no-args with active session lists <code>lockpick:&lt;id&gt;</code> buttons; no-args with NO active session replies &#x27;No active session&#x27;; callback locks the player and edits message; callback with no active session answers alert; gone-player alert; bad-int answer/return; None return.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>LOCKPICK_PREFIX = &quot;lockpick:&quot;</code> and a local player keyboard in rsvp.py (or import the roster helper) ; no-args branch renders active-roster buttons (only when a session is active); keep typed id/@handle path unchanged.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>handle_lock_in_callback</code>: resolve active session, look up active player, <code>lock_in_player</code>, answer + edit.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Register <code>CallbackQueryHandler(handle_lock_in_callback, pattern=r&quot;^lockpick:&quot;)</code>; bump wiring 33 → 34.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run the full gate.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(rsvp): button-driven /lock_in</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>lock_in lives in handlers/rsvp.py, not roster.py — its button keyboard/label helper must be available there (small local helper or import from roster).</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>lock_in needs an active session before showing buttons — render the &#x27;no active session&#x27; reply instead of an empty keyboard</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="2.4" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.4</span><span class="task-name">/enable_voting buttons (paused/disabled only)</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests: no-args lists ONLY players that are disabled (<code>in_pool=0</code>) or actively paused (<code>_is_paused</code>), as <code>enpick:&lt;id&gt;</code>; a fully-enabled-only roster replies &#x27;nobody is paused/disabled&#x27;; callback restores and edits; gone-player alert; bad-int; None return.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>ENPICK_PREFIX = &quot;enpick:&quot;</code>; in the no-args branch filter <code>list_active_players</code> to <code>not in_pool or _is_paused(pool_paused_until, now)</code>; render keyboard or the empty-state reply.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>handle_enable_callback</code> calling <code>enable_player_pool</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Register <code>CallbackQueryHandler(..., pattern=r&quot;^enpick:&quot;)</code>; bump wiring 34 → 35.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run the full gate.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(roster): button-driven /enable_voting showing only paused/disabled</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Only paused/disabled players are restorable — listing the whole roster would bury the two or three that actually need enabling.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>expired timed pauses must NOT appear (reuse _is_paused with now=datetime.now(UTC))</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="3">
+  <div class="phase-header">
+    <h2><span class="num">Phase 3</span>Phase 3 — Chained-pick commands</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="3.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">3.1</span><span class="task-name">/pause_voting player → duration chain</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests: no-args lists <code>pausepick:&lt;id&gt;</code> buttons; pick callback edits into a duration keyboard of <code>pausedur:&lt;id&gt;:&lt;tok&gt;</code> from PAUSE_DURATIONS; pick on gone player alerts; dur callback parses id+token, calls pause_player_pool, edits confirmation; dur callback bad token answers; dur callback gone player alerts; bad-int and None returns on both callbacks.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>PAUSEPICK_PREFIX = &quot;pausepick:&quot;</code>, <code>PAUSEDUR_PREFIX = &quot;pausedur:&quot;</code>; no-args branch renders player keyboard; typed two-arg path unchanged.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>handle_pause_pick_callback</code>: <code>_pick_id</code>, verify active player, build duration keyboard <code>f&quot;{PAUSEDUR_PREFIX}{id}:{tok}&quot;</code>, edit message.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>handle_pause_dur_callback</code>: strip prefix, <code>rsplit(&quot;:&quot;, 1)</code> into id + token, <code>_parse_duration(token)</code>, <code>pause_player_pool(conn, id, now+delta)</code>, answer + edit.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Register both CallbackQueryHandlers (<code>^pausepick:</code>, <code>^pausedur:</code>); bump wiring 35 → 37.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run the full gate.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(roster): button-driven /pause_voting with duration buttons</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Pause is the one command needing two values; chaining callback prefixes means no free-text duration step at all, the brief&#x27;s explicit goal.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>negative ghost id in `pausedur:-3:2w` — use rsplit(&#x27;:&#x27;,1) so only the trailing token splits off, id parses as -3</li>
+            <li>token must re-validate via _parse_duration in case of a stale/forged callback</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="3.2" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">3.2</span><span class="task-name">/link_player ghost → contact chain</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests: no-args lists 👻 ghost buttons <code>lnkghost:&lt;gid&gt;</code>; no ghosts → &#x27;no ghost players&#x27; reply; ghost-pick edits into a contact keyboard <code>lnkreal:&lt;gid&gt;:&lt;rid&gt;</code> from list_addable_contacts; no contacts → alert/edit; ghost-pick on a non-ghost/gone id alerts; real-pick performs link_ghost_player and edits the migration summary; real-pick where ghost vanished alerts; real-pick where contact vanished alerts; bad-int + None returns on both callbacks.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>LNKGHOST_PREFIX = &quot;lnkghost:&quot;</code>, <code>LNKREAL_PREFIX = &quot;lnkreal:&quot;</code>; no-args branch lists ghosts (filter list_active_players for is_ghost); keep typed two-arg path unchanged.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>handle_link_ghost_callback</code>: parse gid, verify it is still a ghost, render contact keyboard (label <code>@username (Name)</code> or <code>Name</code>), edit message.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>handle_link_real_callback</code>: rsplit into gid + rid, re-verify ghost row + contact row, call link_ghost_player with contact.username and display_name, answer + edit summary.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Register both CallbackQueryHandlers (<code>^lnkghost:</code>, <code>^lnkreal:</code>); bump wiring 37 → 39.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run the full gate.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(roster): button-driven /link_player ghost-to-contact chain</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Linking previously meant copying a negative ghost id AND a @handle/id; both ends now come from buttons (👻 list, then DM&#x27;d-contacts list).</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>re-verify both the ghost row and the contact row inside the real-pick callback — state can change between the two taps</li>
+            <li>callback_data lnkreal:&lt;gid&gt;:&lt;rid&gt; has two ids; rsplit(&#x27;:&#x27;,1) splits only the real id off, gid keeps its sign</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="4">
+  <div class="phase-header">
+    <h2><span class="num">Phase 4</span>Phase 4 — Typed-name flow</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="4.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">4.1</span><span class="task-name">/add_player from contacts + name text consumer</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests: no-args in a PRIVATE chat lists addable-contact buttons <code>addpick:&lt;id&gt;</code>; no-args in a GROUP replies &#x27;DM me&#x27;; no addable contacts → reply; the one-shot <code>/add_player @x &quot;Name&quot;</code> path is unchanged (existing tests stay green); addpick callback stashes contact id in user_data[PENDING_ADD_KEY] and edits &#x27;Send the display name&#x27;; addpick on a non-contact alerts; bad-int + None returns; handle_add_player_text adds the player when pending (asserts roster + calibration), clears pending; no-pending text is ignored silently; a command while pending cancels; empty name keeps pending.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">In <code>handle_add_player</code>: branch first on <code>len(message.text.split()) &gt; 1</code> → existing one-shot logic; else require PRIVATE chat (else &#x27;DM me&#x27;); else render <code>list_addable_contacts</code> as <code>addpick:&lt;id&gt;</code> buttons (label <code>@username (Name)</code> / <code>Name</code>), or an empty-state reply.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>PENDING_ADD_KEY = &quot;pending_add&quot;</code> and <code>ADDPICK_PREFIX = &quot;addpick:&quot;</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>handle_add_pick_callback</code>: <code>_pick_id</code>, re-check the contact still exists, stash id in user_data, answer + edit &#x27;Send the display name for &lt;handle&gt;&#x27;.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>handle_add_player_text</code>: mirror handle_rename_text — only act when PENDING_ADD_KEY set; &#x27;/&#x27; prefix cancels; empty keeps pending; else add_player(conn, id, name, contact.username) + bootstrap_calibration_prompts, clear pending, confirm.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Register <code>CallbackQueryHandler(handle_add_pick_callback, pattern=r&quot;^addpick:&quot;)</code> and <code>MessageHandler(filters.TEXT &amp; filters.ChatType.PRIVATE, handle_add_player_text, group=2)</code>; bump wiring 39 → 41.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run the full gate.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(roster): button-driven /add_player from contacts with typed name</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Display names are free text, so add_player keeps a typed step — but the id/username no longer get copy-pasted. A group=2 MessageHandler runs independently of rename&#x27;s group=1 consumer, each keyed on its own pending flag.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>two private-text MessageHandlers must be in DIFFERENT groups (1 and 2) or only the first runs per update</li>
+            <li>the one-shot path must NOT impose the PRIVATE-chat guard (admins add from the group today) — branch on args first</li>
+            <li>re-fetch the contact in the text consumer so a vanished contact does not crash add_player</li>
+          </ul>
+        </aside>
+      </div>
+      <div class="diff-card">
+        <div class="diff-card-header">
+          <span class="diff-file">Diff</span>
+          <span>unified diff</span>
+        </div>
+        <pre class="diff"><code><span class="line del">/add_player no args → ADD_USAGE text. Admin copies &#x27;/add_player &lt;id&gt; &quot;Name&quot;&#x27; from /contacts output.</span><span class="line add">/add_player no args (DM) → addable-contact buttons → tap → &#x27;Send the display name&#x27; → type name → added.</span></code></pre>
+      </div>
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="5">
+  <div class="phase-header">
+    <h2><span class="num">Phase 5</span>Phase 5 — Final verification</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="5.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">5.1</span><span class="task-name">Full green gate + manual smoke check</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Reference: src/toop/bot.py · Reference: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Confirm <code>add_handler.call_count == 41</code> and <code>run_daily.call_count == 2</code> in both wiring tests.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>uv run ruff format src/ tests/</code> then <code>uv run ruff check src/ tests/</code> + <code>uv run ruff format --check src/ tests/</code> + <code>uv run ty check src/</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>GROUP_CHAT_ID=0 ADMIN_TELEGRAM_ID=0 BOT_TOKEN=&quot;&quot; uv run pytest -q</code> — expect 100% coverage, all green.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Review the diff for leftover typed-only usage strings that should mention the button flow.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Leave the branch <code>feat/interactive-admin-commands</code> for review — do NOT merge or open a PR unless Ali asks.</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>100% coverage is CI-enforced (fail_under=100); the wiring test broke on every prior command, so it is the canonical last check.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>the local .env GROUP_CHAT_ID makes one session test crash under bare `make check` — always run pytest with the env vars pinned</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+  <section class="section">
+    <h2>Decisions Made</h2>
+    <table>
+      <thead><tr><th>Decision</th><th>Rationale</th></tr></thead>
+      <tbody data-decisions>
+        <tr data-empty><td colspan="2"><em>(add as you go)</em></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section">
+    <h2>Errors Encountered</h2>
+    <table>
+      <thead><tr><th>Error</th><th>Attempt</th><th>Resolution</th></tr></thead>
+      <tbody data-errors>
+        <tr data-empty><td colspan="3"><em>(none yet)</em></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  
+
+  <footer class="footer">
+    <span>2026-06-02-toop-interactive-admin-commands.html</span>
+    <span>Run <code>/execute-plan &lt;path&gt;</code> to start</span>
+  </footer>
+
+</div>
+
+<div class="actionbar" role="region" aria-label="Comments export">
+  <button type="button" id="reset-btn" title="Clear all comments">Clear comments</button>
+  <button type="button" id="copy-btn" class="primary" disabled aria-label="Copy all comments as JSON to clipboard">Copy comments<span class="count" id="copy-count">0</span></button>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  function recomputeProgress() {
+    const allSteps = document.querySelectorAll('.step');
+    const doneSteps = document.querySelectorAll('.step[data-status="done"]');
+    const pct = allSteps.length ? Math.round(doneSteps.length / allSteps.length * 100) : 0;
+
+    const ring = document.querySelector('.progress-ring .fg');
+    if (ring) {
+      const dash = 2 * Math.PI * 56;
+      ring.setAttribute('stroke-dasharray', dash.toFixed(2));
+      ring.setAttribute('stroke-dashoffset', (dash - (dash * pct / 100)).toFixed(2));
+    }
+    const ringLabel = document.querySelector('[data-progress-label]');
+    if (ringLabel) ringLabel.textContent = pct + '%';
+
+    const taskCount = document.querySelector('[data-task-count]');
+    const allTasks = document.querySelectorAll('.task');
+    const doneTasks = document.querySelectorAll('.task[data-task-status="done"]');
+    if (taskCount) taskCount.textContent = doneTasks.length + ' / ' + allTasks.length + ' tasks';
+
+    const stepCount = document.querySelector('[data-step-count]');
+    if (stepCount) stepCount.textContent = doneSteps.length + ' / ' + allSteps.length + ' steps';
+
+    document.querySelectorAll('.phase').forEach(phase => {
+      const ps = phase.querySelectorAll('.step');
+      const pd = phase.querySelectorAll('.step[data-status="done"]');
+      const ppct = ps.length ? pd.length / ps.length * 100 : 0;
+      const fill = phase.querySelector('.phase-bar .fill');
+      if (fill) fill.style.width = ppct + '%';
+      const label = phase.querySelector('.phase-progress');
+      if (label) label.textContent = pd.length + ' / ' + ps.length;
+    });
+
+    const hero = document.querySelector('.hero');
+    const pill = document.querySelector('[data-status-pill]');
+    if (hero && pill) {
+      const s = hero.dataset.status || 'planning';
+      pill.className = 'pill status-' + s;
+      pill.textContent = ({ planning: 'Planning', in_progress: 'In Progress', done: 'Done' })[s] || s;
+    }
+  }
+
+  document.querySelectorAll('.task-header').forEach(h => {
+    h.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      const task = h.closest('.task');
+      task.dataset.open = task.dataset.open === 'true' ? 'false' : 'true';
+    });
+  });
+
+  document.querySelectorAll('.step input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const step = cb.closest('.step');
+      step.dataset.status = cb.checked ? 'done' : 'pending';
+      const task = step.closest('.task');
+      const stepsInTask = task.querySelectorAll('.step');
+      const doneInTask = task.querySelectorAll('.step[data-status="done"]');
+      task.dataset.taskStatus = (stepsInTask.length > 0 && stepsInTask.length === doneInTask.length) ? 'done' : 'pending';
+      recomputeProgress();
+    });
+  });
+
+  const tasks = document.querySelectorAll('.task');
+  tasks.forEach(t => t.dataset.open = (tasks.length <= 3) ? 'true' : 'false');
+
+  document.querySelectorAll('.step input[type="checkbox"]').forEach(cb => {
+    const step = cb.closest('.step');
+    if (step && step.dataset.status === 'done') cb.checked = true;
+  });
+
+  recomputeProgress();
+
+  // ---- Round-trip comments ----
+  const planNotesInput = document.getElementById('plan-notes-input');
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  // Inject one comment textarea per task
+  document.querySelectorAll('.task').forEach(task => {
+    const body = task.querySelector('.task-body');
+    if (!body || body.querySelector('.task-comment')) return;
+    const id = task.dataset.taskId || '';
+    const ta = document.createElement('textarea');
+    ta.className = 'task-comment';
+    ta.dataset.commentFor = 'task ' + id;
+    ta.placeholder = 'Comment on task ' + id + '... (questions, scope tweaks, references, anything)';
+    ta.rows = 2;
+    ta.addEventListener('input', () => {
+      ta.classList.toggle('has-content', ta.value.trim().length > 0);
+      updateCopyButton();
+    });
+    body.appendChild(ta);
+  });
+  planNotesInput?.addEventListener('input', updateCopyButton);
+
+  // Inline annotations: click any annotatable element to leave a note
+  const ANNOTATABLE_SELECTORS = [
+    '.step',
+    '.diff .line',
+    '.architecture p',
+    '.phase-header h2',
+    '.task-header h3',
+    '.notes p',
+    '.notes ul li',
+    '[data-decisions] tr',
+  ];
+  const inlineComments = new Map();
+
+  function anchorKey(el) {
+    if (el.matches('.step')) {
+      const task = el.closest('.task');
+      const tid = task?.dataset.taskId || '?';
+      const steps = [...task.querySelectorAll('.step')];
+      return 'step ' + tid + '.' + (steps.indexOf(el) + 1);
+    }
+    if (el.matches('.diff .line')) {
+      const card = el.closest('.diff-card');
+      const file = (card?.querySelector('.diff-file')?.textContent || 'diff').trim();
+      const lines = [...card.querySelectorAll('.line')];
+      return file + ' L' + (lines.indexOf(el) + 1);
+    }
+    if (el.matches('.phase-header h2')) {
+      const p = el.closest('.phase');
+      return 'phase ' + (p?.dataset.phaseId || '?');
+    }
+    if (el.matches('.task-header h3')) {
+      const t = el.closest('.task');
+      return 'task ' + (t?.dataset.taskId || '?') + ' (heading)';
+    }
+    if (el.matches('.architecture p')) return 'architecture';
+    const ctx = el.closest('.notes')
+      ? 'notes'
+      : (el.closest('[data-decisions]') ? 'decision' : 'note');
+    const txt = (el.textContent || '').trim().slice(0, 60).replace(/\s+/g, ' ');
+    return ctx + ': ' + txt;
+  }
+
+  function ensureCommentPanel(el) {
+    const next = el.nextElementSibling;
+    if (next && next.classList.contains('inline-comment')) return next;
+    const key = anchorKey(el);
+    const panel = document.createElement('div');
+    panel.className = 'inline-comment';
+    const keySpan = document.createElement('span');
+    keySpan.className = 'key';
+    keySpan.textContent = key;
+    const ta = document.createElement('textarea');
+    ta.rows = 2;
+    ta.placeholder = 'Comment on this...';
+    panel.appendChild(keySpan);
+    panel.appendChild(ta);
+    el.parentNode.insertBefore(panel, el.nextSibling);
+    ta.addEventListener('input', () => {
+      const v = ta.value.trim();
+      if (v) {
+        inlineComments.set(key, v);
+        el.classList.add('has-comment');
+      } else {
+        inlineComments.delete(key);
+        el.classList.remove('has-comment');
+      }
+      updateCopyButton();
+    });
+    return panel;
+  }
+
+  document.querySelectorAll(ANNOTATABLE_SELECTORS.join(', ')).forEach(el => {
+    if (el.classList.contains('annotatable')) return;
+    el.classList.add('annotatable');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'annotate-btn';
+    btn.title = 'Add a comment';
+    btn.setAttribute('aria-label', 'Add a comment');
+    btn.textContent = '+';
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const panel = ensureCommentPanel(el);
+      panel.classList.toggle('open');
+      if (panel.classList.contains('open')) {
+        panel.querySelector('textarea').focus();
+      }
+    });
+    el.appendChild(btn);
+  });
+
+  function buildResult() {
+    const hero = document.querySelector('.hero');
+    const slug = hero?.dataset.slug || '';
+    const feature = hero?.dataset.feature || '';
+    const planNotes = (planNotesInput?.value || '').trim();
+    const comments = {};
+    document.querySelectorAll('.task-comment').forEach(ta => {
+      const v = ta.value.trim();
+      if (v) comments[ta.dataset.commentFor] = v;
+    });
+    inlineComments.forEach((v, k) => {
+      if (v && v.trim()) comments[k] = v.trim();
+    });
+    return {
+      slug,
+      feature,
+      generated_at: new Date().toISOString(),
+      plan_notes: planNotes || null,
+      comments,
+    };
+  }
+
+  function countNonEmpty() {
+    let n = 0;
+    document.querySelectorAll('.task-comment').forEach(ta => { if (ta.value.trim()) n += 1; });
+    inlineComments.forEach(v => { if (v && v.trim()) n += 1; });
+    if (planNotesInput?.value.trim()) n += 1;
+    return n;
+  }
+
+  function updateCopyButton() {
+    const btn = document.getElementById('copy-btn');
+    const count = document.getElementById('copy-count');
+    if (!btn || !count) return;
+    const n = countNonEmpty();
+    count.textContent = String(n);
+    btn.disabled = n === 0;
+  }
+
+  document.getElementById('copy-btn')?.addEventListener('click', async () => {
+    const result = buildResult();
+    const text = JSON.stringify(result, null, 2);
+    const n = countNonEmpty();
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Copied ' + n + ' comment' + (n === 1 ? '' : 's') + '. Paste into Claude.');
+    } catch (err) {
+      window.prompt('Copy this JSON manually:', text);
+    }
+  });
+
+  document.getElementById('reset-btn')?.addEventListener('click', () => {
+    document.querySelectorAll('.task-comment').forEach(ta => {
+      ta.value = '';
+      ta.classList.remove('has-content');
+    });
+    if (planNotesInput) planNotesInput.value = '';
+    inlineComments.clear();
+    document.querySelectorAll('.inline-comment textarea').forEach(ta => { ta.value = ''; });
+    document.querySelectorAll('.inline-comment.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.annotatable.has-comment').forEach(el => el.classList.remove('has-comment'));
+    updateCopyButton();
+    showToast('Cleared all comments');
+  });
+
+  updateCopyButton();
+</script>
+
+</body>
+</html>

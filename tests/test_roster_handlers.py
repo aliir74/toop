@@ -238,12 +238,6 @@ async def test_remove_player_returns_without_message(
     await handle_remove_player(update, _context(conn, args=["@x"], chat_id=111))
 
 
-async def test_remove_player_no_args(admin_settings: None, conn: sqlite3.Connection) -> None:
-    update = _admin_update("/remove_player")
-    await handle_remove_player(update, _context(conn, args=[], chat_id=111))
-    assert update.effective_message.reply_text.await_args.args[0].startswith("Usage")
-
-
 async def test_remove_player_empty_username(admin_settings: None, conn: sqlite3.Connection) -> None:
     update = _admin_update("/remove_player @")
     await handle_remove_player(update, _context(conn, args=["@"], chat_id=111))
@@ -515,9 +509,12 @@ async def test_link_player_by_username_success(
     assert conn.execute("SELECT 1 FROM players WHERE telegram_id=555").fetchone() is not None
 
 
-async def test_link_player_bad_usage(admin_settings: None, conn: sqlite3.Connection) -> None:
-    update = _admin_update("/link_player")
-    await handle_link_player(update, _context(conn, args=[]))
+async def test_link_player_one_arg_shows_usage(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    # No args is the ghost-button flow now; a single arg is incomplete typed use.
+    update = _admin_update("/link_player 5")
+    await handle_link_player(update, _context(conn, args=["5"]))
     reply = update.effective_message.reply_text.await_args.args[0]
     assert reply.startswith("Usage:")
 
@@ -614,3 +611,628 @@ async def test_contacts_excludes_ghosts(admin_settings: None, conn: sqlite3.Conn
     reply = update.effective_message.reply_text.await_args.args[0]
     assert "Ghosty" not in reply
     assert "@bob" in reply
+
+
+# ----- shared button helpers -----
+
+from datetime import timedelta  # noqa: E402
+
+from toop.handlers.roster import (  # noqa: E402
+    PAUSE_DURATIONS,
+    _parse_duration,
+    _pick_id,
+    _player_keyboard,
+)
+
+
+def test_parse_duration_months() -> None:
+    assert _parse_duration("1m") == timedelta(days=30)
+    assert _parse_duration("3m") == timedelta(days=90)
+
+
+def test_parse_duration_weeks_days_still_work() -> None:
+    assert _parse_duration("2w") == timedelta(days=14)
+    assert _parse_duration("10d") == timedelta(days=10)
+    assert _parse_duration("soon") is None
+
+
+def test_pause_durations_all_parse() -> None:
+    # Every button token must round-trip through the typed parser.
+    for _label, token in PAUSE_DURATIONS:
+        assert _parse_duration(token) is not None
+
+
+def test_player_keyboard_one_button_per_player(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "SHH", None)
+    kb = _player_keyboard(list_active_players(conn), "rmpick:")
+    labels = [b.text for row in kb.inline_keyboard for b in row]
+    callbacks = [b.callback_data for row in kb.inline_keyboard for b in row]
+    assert "Alice (@alice)" in labels
+    assert "SHH" in labels
+    assert "rmpick:1" in callbacks
+    assert "rmpick:2" in callbacks
+
+
+def test_pick_id_parses_positive_negative_and_rejects() -> None:
+    assert _pick_id("rmpick:5", "rmpick:") == 5
+    assert _pick_id("lnkghost:-3", "lnkghost:") == -3  # negative ghost id
+    assert _pick_id("rmpick:abc", "rmpick:") is None
+
+
+# ----- callback test helper -----
+
+
+def _callback_update(data: str) -> MagicMock:
+    u = MagicMock()
+    u.effective_user = MagicMock(id=42)
+    q = MagicMock()
+    q.data = data
+    q.from_user = MagicMock(id=42)
+    q.answer = AsyncMock()
+    q.edit_message_text = AsyncMock()
+    u.callback_query = q
+    return u
+
+
+def _callbacks(update: MagicMock) -> tuple:
+    return update.callback_query.answer, update.callback_query.edit_message_text
+
+
+# ----- /remove_player buttons -----
+
+from toop.handlers.roster import handle_remove_callback  # noqa: E402
+
+
+async def test_remove_player_no_args_lists_buttons(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "SHH", None)
+    update = _admin_update("/remove_player")
+    await handle_remove_player(update, _context(conn, args=[]))
+    kb = update.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+    callbacks = [b.callback_data for row in kb for b in row]
+    assert "rmpick:1" in callbacks
+    assert "rmpick:2" in callbacks
+
+
+async def test_remove_player_no_args_empty_roster(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update("/remove_player")
+    await handle_remove_player(update, _context(conn, args=[]))
+    assert "empty" in update.effective_message.reply_text.await_args.args[0].lower()
+
+
+async def test_remove_callback_removes_and_edits(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _callback_update("rmpick:111")
+    answer, edit = _callbacks(update)
+    await handle_remove_callback(update, _context(conn, args=[]))
+    assert list_active_players(conn) == []
+    answer.assert_awaited()
+    assert "Removed Bob" in edit.await_args.args[0]
+
+
+async def test_remove_callback_gone_player_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("rmpick:999")
+    answer, edit = _callbacks(update)
+    await handle_remove_callback(update, _context(conn, args=[]))
+    assert "no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_remove_callback_bad_int_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("rmpick:notanint")
+    answer, edit = _callbacks(update)
+    await handle_remove_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+
+
+async def test_remove_callback_no_query_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = MagicMock()
+    update.effective_user = MagicMock(id=42)
+    update.callback_query = None
+    await handle_remove_callback(update, _context(conn, args=[]))  # silent
+
+
+# ----- /disable_voting buttons -----
+
+from toop.handlers.roster import handle_disable_callback  # noqa: E402
+
+
+async def test_disable_voting_no_args_lists_buttons(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/disable_voting")
+    await handle_disable_voting(update, _context(conn, args=[]))
+    kb = update.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+    assert "dispick:111" in [b.callback_data for row in kb for b in row]
+
+
+async def test_disable_callback_disables_and_edits(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _callback_update("dispick:111")
+    answer, edit = _callbacks(update)
+    await handle_disable_callback(update, _context(conn, args=[]))
+    assert _pool(conn, 111)["in_pool"] == 0
+    answer.assert_awaited()
+    assert "Disabled Bob" in edit.await_args.args[0]
+
+
+async def test_disable_callback_gone_player_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("dispick:999")
+    answer, edit = _callbacks(update)
+    await handle_disable_callback(update, _context(conn, args=[]))
+    assert "no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+# ----- /enable_voting buttons (only paused/disabled) -----
+
+from datetime import UTC, datetime  # noqa: E402
+
+from toop.handlers.roster import handle_enable_callback  # noqa: E402
+
+
+async def test_enable_voting_no_args_lists_only_paused_disabled(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 1, "Normal", "normal")  # in pool — must NOT appear
+    add_player(conn, 2, "Disabled", "disabled")
+    add_player(conn, 3, "Paused", "paused")
+    conn.execute("UPDATE players SET in_pool=0 WHERE telegram_id=2")
+    future = (datetime.now(UTC) + timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("UPDATE players SET pool_paused_until=? WHERE telegram_id=3", (future,))
+    conn.commit()
+    update = _admin_update("/enable_voting")
+    await handle_enable_voting(update, _context(conn, args=[]))
+    kb = update.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+    callbacks = [b.callback_data for row in kb for b in row]
+    assert set(callbacks) == {"enpick:2", "enpick:3"}
+
+
+async def test_enable_voting_no_args_nobody_paused(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 1, "Normal", "normal")
+    update = _admin_update("/enable_voting")
+    await handle_enable_voting(update, _context(conn, args=[]))
+    assert "Nobody is paused" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_enable_callback_restores_and_edits(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    conn.execute("UPDATE players SET in_pool=0 WHERE telegram_id=111")
+    conn.commit()
+    update = _callback_update("enpick:111")
+    answer, edit = _callbacks(update)
+    await handle_enable_callback(update, _context(conn, args=[]))
+    assert _pool(conn, 111)["in_pool"] == 1
+    answer.assert_awaited()
+    assert "Restored Bob" in edit.await_args.args[0]
+
+
+# ----- /pause_voting player → duration chain -----
+
+from toop.handlers.roster import (  # noqa: E402
+    handle_pause_dur_callback,
+    handle_pause_pick_callback,
+)
+
+
+async def test_pause_no_args_lists_buttons(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/pause_voting")
+    await handle_pause_voting(update, _context(conn, args=[]))
+    kb = update.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+    assert "pausepick:111" in [b.callback_data for row in kb for b in row]
+
+
+async def test_pause_one_arg_missing_duration(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    # A player but no duration: the typed path still needs both, so show usage.
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/pause_voting @bob")
+    await handle_pause_voting(update, _context(conn, args=["@bob"]))
+    assert update.effective_message.reply_text.await_args.args[0].startswith("Usage:")
+
+
+async def test_pause_pick_callback_shows_durations(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _callback_update("pausepick:111")
+    answer, edit = _callbacks(update)
+    await handle_pause_pick_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    kb = edit.await_args.kwargs["reply_markup"].inline_keyboard
+    callbacks = [b.callback_data for row in kb for b in row]
+    assert "pausedur:111:1w" in callbacks
+    assert "pausedur:111:1m" in callbacks
+
+
+async def test_pause_pick_callback_gone_player_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("pausepick:999")
+    answer, edit = _callbacks(update)
+    await handle_pause_pick_callback(update, _context(conn, args=[]))
+    assert "no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_pause_pick_callback_bad_int_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("pausepick:abc")
+    answer, edit = _callbacks(update)
+    await handle_pause_pick_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+
+
+async def test_pause_pick_callback_no_query_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = MagicMock()
+    update.effective_user = MagicMock(id=42)
+    update.callback_query = None
+    await handle_pause_pick_callback(update, _context(conn, args=[]))  # silent
+
+
+async def test_pause_dur_callback_applies(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _callback_update("pausedur:111:2w")
+    answer, edit = _callbacks(update)
+    await handle_pause_dur_callback(update, _context(conn, args=[]))
+    assert _pool(conn, 111)["pool_paused_until"] is not None
+    answer.assert_awaited()
+    assert "Paused Bob" in edit.await_args.args[0]
+
+
+async def test_pause_dur_callback_negative_ghost_id(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Ghosty")
+    g = ghost.telegram_id  # negative
+    update = _callback_update(f"pausedur:{g}:1m")
+    answer, edit = _callbacks(update)
+    await handle_pause_dur_callback(update, _context(conn, args=[]))
+    assert _pool(conn, g)["pool_paused_until"] is not None
+    assert "Paused Ghosty" in edit.await_args.args[0]
+
+
+async def test_pause_dur_callback_bad_id_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("pausedur:abc:2w")
+    answer, edit = _callbacks(update)
+    await handle_pause_dur_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+
+
+async def test_pause_dur_callback_bad_token_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _callback_update("pausedur:111:bogus")
+    answer, edit = _callbacks(update)
+    await handle_pause_dur_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+    assert _pool(conn, 111)["pool_paused_until"] is None
+
+
+async def test_pause_dur_callback_gone_player_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("pausedur:999:2w")
+    answer, edit = _callbacks(update)
+    await handle_pause_dur_callback(update, _context(conn, args=[]))
+    assert "no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_pause_dur_callback_no_query_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = MagicMock()
+    update.effective_user = MagicMock(id=42)
+    update.callback_query = None
+    await handle_pause_dur_callback(update, _context(conn, args=[]))  # silent
+
+
+# ----- /link_player ghost → contact chain -----
+
+from toop.handlers.roster import (  # noqa: E402
+    handle_link_ghost_callback,
+    handle_link_real_callback,
+)
+
+
+async def test_link_no_args_lists_ghosts(admin_settings: None, conn: sqlite3.Connection) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    add_player(conn, 1, "Normal", "normal")  # real player — must NOT appear
+    update = _admin_update("/link_player")
+    await handle_link_player(update, _context(conn, args=[]))
+    kb = update.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+    callbacks = [b.callback_data for row in kb for b in row]
+    assert callbacks == [f"lnkghost:{ghost.telegram_id}"]
+
+
+async def test_link_no_args_no_ghosts(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/link_player")
+    await handle_link_player(update, _context(conn, args=[]))
+    assert "No ghost players" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_link_ghost_callback_lists_contacts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    upsert_contact(conn, 555, username="latejoiner", display_name="Late Joiner")
+    update = _callback_update(f"lnkghost:{g}")
+    answer, edit = _callbacks(update)
+    await handle_link_ghost_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    kb = edit.await_args.kwargs["reply_markup"].inline_keyboard
+    assert f"lnkreal:{g}:555" in [b.callback_data for row in kb for b in row]
+
+
+async def test_link_ghost_callback_no_contacts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    update = _callback_update(f"lnkghost:{ghost.telegram_id}")
+    answer, edit = _callbacks(update)
+    await handle_link_ghost_callback(update, _context(conn, args=[]))
+    assert "Nobody new" in edit.await_args.args[0]
+
+
+async def test_link_ghost_callback_not_a_ghost_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Real", "real")  # not a ghost
+    update = _callback_update("lnkghost:111")
+    answer, edit = _callbacks(update)
+    await handle_link_ghost_callback(update, _context(conn, args=[]))
+    assert "isn't a ghost" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_link_ghost_callback_bad_int_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("lnkghost:notanint")
+    answer, edit = _callbacks(update)
+    await handle_link_ghost_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+
+
+async def test_link_ghost_callback_no_query_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = MagicMock()
+    update.effective_user = MagicMock(id=42)
+    update.callback_query = None
+    await handle_link_ghost_callback(update, _context(conn, args=[]))  # silent
+
+
+async def test_link_real_callback_links_and_edits(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    g = ghost.telegram_id
+    upsert_contact(conn, 555, username="latejoiner", display_name="Late Joiner")
+    update = _callback_update(f"lnkreal:{g}:555")
+    answer, edit = _callbacks(update)
+    await handle_link_real_callback(update, _context(conn, args=[]))
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=555").fetchone() is not None
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=?", (g,)).fetchone() is None
+    answer.assert_awaited()
+    assert "Linked" in edit.await_args.args[0]
+
+
+async def test_link_real_callback_bad_int_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("lnkreal:abc:555")
+    answer, edit = _callbacks(update)
+    await handle_link_real_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+
+
+async def test_link_real_callback_ghost_gone_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    upsert_contact(conn, 555, username="latejoiner", display_name="Late Joiner")
+    update = _callback_update("lnkreal:-99:555")  # no such ghost
+    answer, edit = _callbacks(update)
+    await handle_link_real_callback(update, _context(conn, args=[]))
+    assert "ghost is no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_link_real_callback_contact_gone_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    update = _callback_update(f"lnkreal:{ghost.telegram_id}:555")  # 555 never DM'd
+    answer, edit = _callbacks(update)
+    await handle_link_real_callback(update, _context(conn, args=[]))
+    assert "contact is no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_link_real_callback_no_query_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = MagicMock()
+    update.effective_user = MagicMock(id=42)
+    update.callback_query = None
+    await handle_link_real_callback(update, _context(conn, args=[]))  # silent
+
+
+# ----- /add_player from contacts + typed-name consumer -----
+
+from telegram.constants import ChatType  # noqa: E402
+
+from toop.handlers.roster import (  # noqa: E402
+    PENDING_ADD_KEY,
+    handle_add_pick_callback,
+    handle_add_player_text,
+)
+
+
+def _private_update(text: str) -> MagicMock:
+    u = _admin_update(text)
+    u.effective_chat = MagicMock(type=ChatType.PRIVATE)
+    return u
+
+
+async def test_add_player_no_args_lists_contacts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    upsert_contact(conn, 222, username="newbie", display_name="New Bie")
+    update = _private_update("/add_player")
+    await handle_add_player(update, _context(conn, args=[]))
+    kb = update.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+    assert "addpick:222" in [b.callback_data for row in kb for b in row]
+
+
+async def test_add_player_no_args_in_group_redirects(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _admin_update("/add_player")
+    update.effective_chat = MagicMock(type=ChatType.GROUP)
+    await handle_add_player(update, _context(conn, args=[]))
+    assert "DM me" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_add_player_no_args_no_contacts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _private_update("/add_player")
+    await handle_add_player(update, _context(conn, args=[]))
+    assert "No new contacts" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_add_pick_callback_stashes_and_prompts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    upsert_contact(conn, 222, username="newbie", display_name="New Bie")
+    update = _callback_update("addpick:222")
+    ctx = _context(conn, args=[])
+    ctx.user_data = {}
+    await handle_add_pick_callback(update, ctx)
+    assert ctx.user_data[PENDING_ADD_KEY] == 222
+    update.callback_query.answer.assert_awaited()
+    assert "Send the display name" in update.callback_query.edit_message_text.await_args.args[0]
+
+
+async def test_add_pick_callback_gone_contact_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("addpick:999")
+    ctx = _context(conn, args=[])
+    ctx.user_data = {}
+    await handle_add_pick_callback(update, ctx)
+    assert "no longer available" in update.callback_query.answer.await_args.args[0].lower()
+    assert PENDING_ADD_KEY not in ctx.user_data
+
+
+async def test_add_pick_callback_bad_int_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("addpick:abc")
+    answer, edit = _callbacks(update)
+    await handle_add_pick_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+
+
+async def test_add_pick_callback_no_query_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = MagicMock()
+    update.effective_user = MagicMock(id=42)
+    update.callback_query = None
+    await handle_add_pick_callback(update, _context(conn, args=[]))  # silent
+
+
+async def test_add_player_text_adds_and_clears(conn: sqlite3.Connection) -> None:
+    upsert_contact(conn, 222, username="newbie", display_name="New Bie")
+    update = _admin_update("Newbie Display")
+    ctx = _context(conn, args=[])
+    ctx.user_data = {PENDING_ADD_KEY: 222}
+    await handle_add_player_text(update, ctx)
+    players = list_active_players(conn)
+    assert any(p.telegram_id == 222 and p.display_name == "Newbie Display" for p in players)
+    assert PENDING_ADD_KEY not in ctx.user_data
+    assert "Added" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_add_player_text_no_pending_ignored(conn: sqlite3.Connection) -> None:
+    update = _admin_update("random chatter")
+    ctx = _context(conn, args=[])
+    ctx.user_data = {}
+    await handle_add_player_text(update, ctx)
+    update.effective_message.reply_text.assert_not_called()
+
+
+async def test_add_player_text_command_cancels(conn: sqlite3.Connection) -> None:
+    update = _admin_update("/list_players")
+    ctx = _context(conn, args=[])
+    ctx.user_data = {PENDING_ADD_KEY: 222}
+    await handle_add_player_text(update, ctx)
+    assert PENDING_ADD_KEY not in ctx.user_data
+    assert "cancelled" in update.effective_message.reply_text.await_args.args[0].lower()
+
+
+async def test_add_player_text_empty_keeps_pending(conn: sqlite3.Connection) -> None:
+    update = _admin_update("   ")
+    ctx = _context(conn, args=[])
+    ctx.user_data = {PENDING_ADD_KEY: 222}
+    await handle_add_player_text(update, ctx)
+    assert ctx.user_data[PENDING_ADD_KEY] == 222
+    assert "empty" in update.effective_message.reply_text.await_args.args[0].lower()
+
+
+async def test_add_player_text_contact_gone(conn: sqlite3.Connection) -> None:
+    update = _admin_update("Some Name")
+    ctx = _context(conn, args=[])
+    ctx.user_data = {PENDING_ADD_KEY: 999}  # never a contact
+    await handle_add_player_text(update, ctx)
+    assert PENDING_ADD_KEY not in ctx.user_data
+    assert "no longer available" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_add_player_text_no_message_returns(conn: sqlite3.Connection) -> None:
+    update = _admin_update("x")
+    update.effective_message = None
+    ctx = _context(conn, args=[])
+    ctx.user_data = {}
+    await handle_add_player_text(update, ctx)  # silent
