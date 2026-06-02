@@ -4,6 +4,7 @@ import logging
 import re
 import shlex
 import sqlite3
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 
 from telegram import (
@@ -116,6 +117,36 @@ async def _safe_edit(
         await query.edit_message_text(text, reply_markup=reply_markup)
     except BadRequest as exc:  # pragma: no cover - only on stale/identical message
         logger.warning("failed to edit message: %s", exc)
+
+
+async def _single_pick_action(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    prefix: str,
+    action: Callable[[sqlite3.Connection, int], object],
+    success: Callable[[str], str],
+) -> None:
+    """Shared body for one-tap player-pick callbacks (remove/disable/enable):
+    resolve the id, look up the active player, run `action`, then edit the
+    message with `success(display_name)`. Alerts when the player has gone."""
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+    telegram_id = _pick_id(query.data, prefix)
+    if telegram_id is None:
+        await query.answer()
+        return
+    conn = _conn(context)
+    row = conn.execute(
+        "SELECT display_name FROM players WHERE telegram_id=? AND active=1",
+        (telegram_id,),
+    ).fetchone()
+    if row is None:
+        await query.answer("That player is no longer on the roster.", show_alert=True)
+        return
+    action(conn, telegram_id)
+    await query.answer()
+    await _safe_edit(query, success(row["display_name"]))
 
 
 def _parse_add_args(text: str) -> tuple[int | str, str] | None:
@@ -233,24 +264,13 @@ async def handle_remove_player(update: Update, context: ContextTypes.DEFAULT_TYP
 @require_admin
 async def handle_remove_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Admin tapped a player button from /remove_player — soft-remove them."""
-    query = update.callback_query
-    if query is None or query.data is None:
-        return
-    telegram_id = _pick_id(query.data, RMPICK_PREFIX)
-    if telegram_id is None:
-        await query.answer()
-        return
-    conn = _conn(context)
-    row = conn.execute(
-        "SELECT display_name FROM players WHERE telegram_id=? AND active=1",
-        (telegram_id,),
-    ).fetchone()
-    if row is None:
-        await query.answer("That player is no longer on the roster.", show_alert=True)
-        return
-    soft_remove_player(conn, telegram_id)
-    await query.answer()
-    await _safe_edit(query, f"Removed {row['display_name']}. ✅")
+    await _single_pick_action(
+        update,
+        context,
+        RMPICK_PREFIX,
+        soft_remove_player,
+        lambda name: f"Removed {name}. ✅",
+    )
 
 
 _DURATION_DAYS = {"d": 1, "w": 7, "m": 30}
@@ -315,14 +335,24 @@ async def handle_pause_voting(update: Update, context: ContextTypes.DEFAULT_TYPE
 
 @require_admin
 async def handle_disable_voting(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Pull a player from the rating pool indefinitely (until /enable_voting)."""
+    """Pull a player from the rating pool indefinitely (until /enable_voting).
+
+    With no args, lists the active roster as buttons; with a target, runs the
+    typed one-shot."""
     message = update.effective_message
     if message is None:
         return
-    if not context.args:
-        await message.reply_text(DISABLE_USAGE)
-        return
     conn = _conn(context)
+    if not context.args:
+        players = list_active_players(conn)
+        if not players:
+            await message.reply_text("Roster is empty — nobody to disable.")
+            return
+        await message.reply_text(
+            "Who do you want to pull from the rating pool?",
+            reply_markup=_player_keyboard(players, DISPICK_PREFIX),
+        )
+        return
     target = _resolve_pool_target(conn, context.args[0])
     if target is not None and disable_player_pool(conn, target):
         await message.reply_text(
@@ -331,6 +361,18 @@ async def handle_disable_voting(update: Update, context: ContextTypes.DEFAULT_TY
         )
     else:
         await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+
+
+@require_admin
+async def handle_disable_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin tapped a player button from /disable_voting — pull them from the pool."""
+    await _single_pick_action(
+        update,
+        context,
+        DISPICK_PREFIX,
+        disable_player_pool,
+        lambda name: f"Disabled {name} from the rating pool 🚫 — /enable_voting to restore.",
+    )
 
 
 @require_admin

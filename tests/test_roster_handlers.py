@@ -741,3 +741,40 @@ async def test_remove_callback_no_query_returns(
     update.effective_user = MagicMock(id=42)
     update.callback_query = None
     await handle_remove_callback(update, _context(conn, args=[]))  # silent
+
+
+# ----- /disable_voting buttons -----
+
+from toop.handlers.roster import handle_disable_callback  # noqa: E402
+
+
+async def test_disable_voting_no_args_lists_buttons(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/disable_voting")
+    await handle_disable_voting(update, _context(conn, args=[]))
+    kb = update.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+    assert "dispick:111" in [b.callback_data for row in kb for b in row]
+
+
+async def test_disable_callback_disables_and_edits(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _callback_update("dispick:111")
+    answer, edit = _callbacks(update)
+    await handle_disable_callback(update, _context(conn, args=[]))
+    assert _pool(conn, 111)["in_pool"] == 0
+    answer.assert_awaited()
+    assert "Disabled Bob" in edit.await_args.args[0]
+
+
+async def test_disable_callback_gone_player_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("dispick:999")
+    answer, edit = _callbacks(update)
+    await handle_disable_callback(update, _context(conn, args=[]))
+    assert "no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
