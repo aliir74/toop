@@ -1421,7 +1421,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="5.5" data-task-status="pending">
+  <article class="task" data-task-id="5.5" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">5.5</span><span class="task-name">Mark ghost/paused state in /list_players and /contacts</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1433,20 +1433,20 @@
             <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: tests/test_roster_handlers.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: /list_players shows 👻 for ghosts and a ⏸/🚫 marker for paused/disabled players; /contacts unaffected for ghosts (ghosts are not contacts) but still lists real contacts correctly</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Update the list rendering to read is_ghost/in_pool/pool_paused_until from Player and append markers</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_roster_handlers.py -v</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(roster): flag ghost and paused players in listings</span>
         </li>
           </ol>

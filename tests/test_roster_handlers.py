@@ -563,3 +563,54 @@ async def test_link_player_no_message_returns(
     update = _admin_update("/link_player")
     update.effective_message = None
     await handle_link_player(update, _context(conn, args=[]))
+
+
+# ----- list/contacts markers for ghost & paused players -----
+
+
+async def test_list_players_marks_ghost_paused_disabled(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    add_player(conn, 1, "Normal", "normal")
+    add_player(conn, 2, "Disabled", "disabled")
+    add_player(conn, 3, "Paused", "paused")
+    add_player(conn, 4, "Anon")  # real player, no username → "(no username)"
+    add_ghost_player(conn, "Ghosty")
+    conn.execute("UPDATE players SET in_pool=0 WHERE telegram_id=2")
+    future = (datetime.now(UTC) + timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("UPDATE players SET pool_paused_until=? WHERE telegram_id=3", (future,))
+    conn.commit()
+    update = _admin_update("/list_players")
+    await handle_list_players(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "👻 ghost" in reply
+    assert "🚫 voting disabled" in reply
+    assert "⏸ voting paused" in reply
+    assert "(no username)" in reply
+
+
+async def test_list_players_expired_pause_not_marked(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    add_player(conn, 1, "Expired", "expired")
+    past = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("UPDATE players SET pool_paused_until=? WHERE telegram_id=1", (past,))
+    conn.commit()
+    update = _admin_update("/list_players")
+    await handle_list_players(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "paused" not in reply
+
+
+async def test_contacts_excludes_ghosts(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_ghost_player(conn, "Ghosty")
+    upsert_contact(conn, 111, username="bob", display_name="Bob")
+    update = _admin_update("/contacts")
+    await handle_contacts(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Ghosty" not in reply
+    assert "@bob" in reply

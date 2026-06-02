@@ -162,6 +162,14 @@ def _parse_duration(token: str) -> timedelta | None:
     return timedelta(days=amount * (7 if match.group(2) == "w" else 1))
 
 
+def _is_paused(pool_paused_until: str | None, now: datetime) -> bool:
+    """True when a timed pause is set and still in the future (UTC)."""
+    if pool_paused_until is None:
+        return False
+    until = datetime.strptime(pool_paused_until, "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
+    return until > now
+
+
 def _resolve_pool_target(conn: sqlite3.Connection, token: str) -> int | None:
     """Resolve a roster player from a digit id (incl. negative ghost ids) or a
     @username already on the roster. No network call — pool targets are on-roster."""
@@ -347,11 +355,22 @@ async def handle_list_players(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not players:
         await message.reply_text("Roster is empty. Use /add_player to start.")
         return
+    now = datetime.now(UTC)
     lines = ["Roster:"]
     for i, p in enumerate(players, start=1):
         marker = "🟡 calibrating" if p.is_calibrating else "✅"
-        handle = f"@{p.username}" if p.username else "(no username)"
-        lines.append(f"{i}. {p.display_name} {handle} — {marker}")
+        if p.is_ghost:
+            handle = "👻 ghost"
+        elif p.username:
+            handle = f"@{p.username}"
+        else:
+            handle = "(no username)"
+        tags = ""
+        if not p.in_pool:
+            tags = " — 🚫 voting disabled"
+        elif _is_paused(p.pool_paused_until, now):
+            tags = " — ⏸ voting paused"
+        lines.append(f"{i}. {p.display_name} {handle} — {marker}{tags}")
     await message.reply_text("\n".join(lines))
 
 
