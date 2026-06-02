@@ -28,6 +28,8 @@ from toop.handlers.roster import (
     handle_enable_voting,
     handle_link_player,
     handle_list_players,
+    handle_pause_dur_callback,
+    handle_pause_pick_callback,
     handle_pause_voting,
     handle_remove_callback,
     handle_remove_player,
@@ -128,6 +130,8 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_disable_callback, pattern=r"^dispick:"))
     app.add_handler(CallbackQueryHandler(handle_lock_in_callback, pattern=r"^lockpick:"))
     app.add_handler(CallbackQueryHandler(handle_enable_callback, pattern=r"^enpick:"))
+    app.add_handler(CallbackQueryHandler(handle_pause_pick_callback, pattern=r"^pausepick:"))
+    app.add_handler(CallbackQueryHandler(handle_pause_dur_callback, pattern=r"^pausedur:"))
     # Lower-priority group so /commands still reach their CommandHandler above;
     # this only consumes a private text message when a rename is pending.
     app.add_handler(

@@ -1145,32 +1145,32 @@
             <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests: no-args lists <code>pausepick:&lt;id&gt;</code> buttons; pick callback edits into a duration keyboard of <code>pausedur:&lt;id&gt;:&lt;tok&gt;</code> from PAUSE_DURATIONS; pick on gone player alerts; dur callback parses id+token, calls pause_player_pool, edits confirmation; dur callback bad token answers; dur callback gone player alerts; bad-int and None returns on both callbacks.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>PAUSEPICK_PREFIX = &quot;pausepick:&quot;</code>, <code>PAUSEDUR_PREFIX = &quot;pausedur:&quot;</code>; no-args branch renders player keyboard; typed two-arg path unchanged.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>handle_pause_pick_callback</code>: <code>_pick_id</code>, verify active player, build duration keyboard <code>f&quot;{PAUSEDUR_PREFIX}{id}:{tok}&quot;</code>, edit message.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>handle_pause_dur_callback</code>: strip prefix, <code>rsplit(&quot;:&quot;, 1)</code> into id + token, <code>_parse_duration(token)</code>, <code>pause_player_pool(conn, id, now+delta)</code>, answer + edit.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Register both CallbackQueryHandlers (<code>^pausepick:</code>, <code>^pausedur:</code>); bump wiring 35 → 37.</span>
         </li>
         <li class="step" data-status="pending">
           <input type="checkbox" />
           <span class="step-text">Run the full gate.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(roster): button-driven /pause_voting with duration buttons</span>
         </li>
           </ol>

@@ -825,3 +825,135 @@ async def test_enable_callback_restores_and_edits(
     assert _pool(conn, 111)["in_pool"] == 1
     answer.assert_awaited()
     assert "Restored Bob" in edit.await_args.args[0]
+
+
+# ----- /pause_voting player → duration chain -----
+
+from toop.handlers.roster import (  # noqa: E402
+    handle_pause_dur_callback,
+    handle_pause_pick_callback,
+)
+
+
+async def test_pause_no_args_lists_buttons(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/pause_voting")
+    await handle_pause_voting(update, _context(conn, args=[]))
+    kb = update.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+    assert "pausepick:111" in [b.callback_data for row in kb for b in row]
+
+
+async def test_pause_one_arg_missing_duration(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    # A player but no duration: the typed path still needs both, so show usage.
+    add_player(conn, 111, "Bob", "bob")
+    update = _admin_update("/pause_voting @bob")
+    await handle_pause_voting(update, _context(conn, args=["@bob"]))
+    assert update.effective_message.reply_text.await_args.args[0].startswith("Usage:")
+
+
+async def test_pause_pick_callback_shows_durations(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _callback_update("pausepick:111")
+    answer, edit = _callbacks(update)
+    await handle_pause_pick_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    kb = edit.await_args.kwargs["reply_markup"].inline_keyboard
+    callbacks = [b.callback_data for row in kb for b in row]
+    assert "pausedur:111:1w" in callbacks
+    assert "pausedur:111:1m" in callbacks
+
+
+async def test_pause_pick_callback_gone_player_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("pausepick:999")
+    answer, edit = _callbacks(update)
+    await handle_pause_pick_callback(update, _context(conn, args=[]))
+    assert "no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_pause_pick_callback_bad_int_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("pausepick:abc")
+    answer, edit = _callbacks(update)
+    await handle_pause_pick_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+
+
+async def test_pause_pick_callback_no_query_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = MagicMock()
+    update.effective_user = MagicMock(id=42)
+    update.callback_query = None
+    await handle_pause_pick_callback(update, _context(conn, args=[]))  # silent
+
+
+async def test_pause_dur_callback_applies(admin_settings: None, conn: sqlite3.Connection) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _callback_update("pausedur:111:2w")
+    answer, edit = _callbacks(update)
+    await handle_pause_dur_callback(update, _context(conn, args=[]))
+    assert _pool(conn, 111)["pool_paused_until"] is not None
+    answer.assert_awaited()
+    assert "Paused Bob" in edit.await_args.args[0]
+
+
+async def test_pause_dur_callback_negative_ghost_id(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    ghost = add_ghost_player(conn, "Ghosty")
+    g = ghost.telegram_id  # negative
+    update = _callback_update(f"pausedur:{g}:1m")
+    answer, edit = _callbacks(update)
+    await handle_pause_dur_callback(update, _context(conn, args=[]))
+    assert _pool(conn, g)["pool_paused_until"] is not None
+    assert "Paused Ghosty" in edit.await_args.args[0]
+
+
+async def test_pause_dur_callback_bad_id_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("pausedur:abc:2w")
+    answer, edit = _callbacks(update)
+    await handle_pause_dur_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+
+
+async def test_pause_dur_callback_bad_token_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    update = _callback_update("pausedur:111:bogus")
+    answer, edit = _callbacks(update)
+    await handle_pause_dur_callback(update, _context(conn, args=[]))
+    answer.assert_awaited()
+    edit.assert_not_called()
+    assert _pool(conn, 111)["pool_paused_until"] is None
+
+
+async def test_pause_dur_callback_gone_player_alerts(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = _callback_update("pausedur:999:2w")
+    answer, edit = _callbacks(update)
+    await handle_pause_dur_callback(update, _context(conn, args=[]))
+    assert "no longer" in answer.await_args.args[0].lower()
+    edit.assert_not_called()
+
+
+async def test_pause_dur_callback_no_query_returns(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    update = MagicMock()
+    update.effective_user = MagicMock(id=42)
+    update.callback_query = None
+    await handle_pause_dur_callback(update, _context(conn, args=[]))  # silent

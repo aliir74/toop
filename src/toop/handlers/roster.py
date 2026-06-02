@@ -314,6 +314,17 @@ async def handle_pause_voting(update: Update, context: ContextTypes.DEFAULT_TYPE
     message = update.effective_message
     if message is None:
         return
+    conn = _conn(context)
+    if not context.args:
+        players = list_active_players(conn)
+        if not players:
+            await message.reply_text("Roster is empty — nobody to pause.")
+            return
+        await message.reply_text(
+            "Who do you want to pause?",
+            reply_markup=_player_keyboard(players, PAUSEPICK_PREFIX),
+        )
+        return
     if len(context.args) < 2:
         await message.reply_text(PAUSE_USAGE)
         return
@@ -321,7 +332,6 @@ async def handle_pause_voting(update: Update, context: ContextTypes.DEFAULT_TYPE
     if delta is None:
         await message.reply_text(PAUSE_USAGE)
         return
-    conn = _conn(context)
     target = _resolve_pool_target(conn, context.args[0])
     until = datetime.now(UTC) + delta
     if target is not None and pause_player_pool(conn, target, until):
@@ -331,6 +341,70 @@ async def handle_pause_voting(update: Update, context: ContextTypes.DEFAULT_TYPE
         )
     else:
         await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+
+
+@require_admin
+async def handle_pause_pick_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin tapped a player button from /pause_voting — offer duration buttons."""
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+    telegram_id = _pick_id(query.data, PAUSEPICK_PREFIX)
+    if telegram_id is None:
+        await query.answer()
+        return
+    conn = _conn(context)
+    row = conn.execute(
+        "SELECT display_name FROM players WHERE telegram_id=? AND active=1",
+        (telegram_id,),
+    ).fetchone()
+    if row is None:
+        await query.answer("That player is no longer on the roster.", show_alert=True)
+        return
+    keyboard = InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton(label, callback_data=f"{PAUSEDUR_PREFIX}{telegram_id}:{token}")]
+            for label, token in PAUSE_DURATIONS
+        ]
+    )
+    await query.answer()
+    await _safe_edit(query, f"How long to pause {row['display_name']}?", reply_markup=keyboard)
+
+
+@require_admin
+async def handle_pause_dur_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin tapped a duration button — apply the pause to the chosen player."""
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+    # callback_data is "<id>:<token>"; rpartition splits only the trailing token
+    # off so a negative ghost id keeps its sign.
+    id_str, _sep, token = query.data.removeprefix(PAUSEDUR_PREFIX).rpartition(":")
+    try:
+        telegram_id = int(id_str)
+    except ValueError:
+        await query.answer()
+        return
+    delta = _parse_duration(token)
+    if delta is None:  # stale/forged callback — token isn't a real duration
+        await query.answer()
+        return
+    conn = _conn(context)
+    row = conn.execute(
+        "SELECT display_name FROM players WHERE telegram_id=? AND active=1",
+        (telegram_id,),
+    ).fetchone()
+    if row is None:
+        await query.answer("That player is no longer on the roster.", show_alert=True)
+        return
+    until = datetime.now(UTC) + delta
+    pause_player_pool(conn, telegram_id, until)  # row verified active above
+    await query.answer()
+    await _safe_edit(
+        query,
+        f"⏸ Paused {row['display_name']} until {until:%Y-%m-%d} — others won't be asked to "
+        "rate them; they can still vote. /enable_voting to undo early.",
+    )
 
 
 @require_admin
