@@ -1,0 +1,1910 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Voting-pool control + accountless ghost players — Plan</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #F5F4EF;
+    --ink: #0A0A0A;
+    --ink-2: #5A5A55;
+    --paper: #FFFFFF;
+    --accent: #5856D6;
+    --accent-2: #00C7BE;
+    --accent-3: #FF6392;
+    --success: #00C781;
+    --warn: #FFB020;
+    --rule: rgba(10,10,10,0.10);
+    --rule-2: rgba(10,10,10,0.18);
+    --shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px -12px rgba(10,10,10,0.10);
+    --display: "Instrument Serif", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0F1014;
+      --ink: #ECECEC;
+      --ink-2: #9B9B9B;
+      --paper: #181920;
+      --rule: rgba(255,255,255,0.10);
+      --rule-2: rgba(255,255,255,0.18);
+      --shadow: 0 1px 0 rgba(0,0,0,0.4), 0 8px 24px -12px rgba(0,0,0,0.6);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .container { max-width: 1280px; margin: 0 auto; padding: 56px 48px 120px; }
+
+  /* HERO */
+  .hero {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 40px;
+    align-items: end;
+    margin-bottom: 48px;
+    padding-bottom: 28px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .hero h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(44px, 7vw, 84px);
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    margin: 0 0 18px;
+  }
+  .hero .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 18px;
+  }
+  .meta { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pill {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    background: var(--paper);
+    padding: 5px 12px;
+    border: 1px solid var(--rule-2);
+    border-radius: 999px;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .pill.status-planning { background: #FFE8A3; color: #5A4500; border-color: #E8C766; }
+  .pill.status-in_progress { background: var(--accent); color: white; border-color: transparent; }
+  .pill.status-done { background: var(--success); color: white; border-color: transparent; }
+
+  .progress-ring {
+    width: 132px; height: 132px; flex-shrink: 0;
+  }
+  .progress-ring circle { fill: none; stroke-width: 10; }
+  .progress-ring .bg { stroke: var(--rule-2); }
+  .progress-ring .fg { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 0.5s ease; }
+  .progress-ring text {
+    font-family: var(--display);
+    font-size: 38px;
+    fill: var(--ink);
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+
+  /* ARCHITECTURE */
+  .architecture {
+    background: var(--paper);
+    border-left: 4px solid var(--accent);
+    padding: 22px 28px;
+    margin-bottom: 56px;
+    box-shadow: var(--shadow);
+    border-radius: 0 8px 8px 0;
+  }
+  .architecture h2 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .architecture p {
+    margin: 0;
+    font-size: 19px;
+    line-height: 1.6;
+    font-family: var(--sans);
+    font-weight: 500;
+    letter-spacing: -0.005em;
+  }
+
+  /* PHASE */
+  .phase { margin-bottom: 56px; }
+  .phase-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 14px;
+  }
+  .phase-header h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 44px;
+    line-height: 1.05;
+    margin: 0;
+    letter-spacing: -0.012em;
+  }
+  .phase-header h2 .num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-2);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    vertical-align: middle;
+    margin-right: 14px;
+    background: var(--paper);
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--rule-2);
+  }
+  .phase-progress {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-2);
+    letter-spacing: 0.06em;
+  }
+  .phase-bar {
+    height: 4px;
+    background: var(--rule);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 22px;
+  }
+  .phase-bar .fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  /* TASK */
+  .task {
+    background: var(--paper);
+    border: 1px solid var(--rule-2);
+    border-radius: 12px;
+    margin-bottom: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    transition: opacity 0.2s ease;
+  }
+  .task[data-task-status="done"] { opacity: 0.55; }
+  .task[data-task-status="done"] .task-header h3 .task-name { text-decoration: line-through; }
+
+  .task-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 24px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .task-header h3 {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 19px;
+    margin: 0;
+    line-height: 1.3;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .task-header h3 .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+  .task-header .right {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+    letter-spacing: 0.04em;
+  }
+  .task-header .chevron {
+    transition: transform 0.2s ease;
+    color: var(--ink-2);
+    font-size: 14px;
+  }
+  .task[data-open="true"] .chevron { transform: rotate(180deg); }
+  .task-body {
+    display: none;
+    padding: 18px 24px 22px;
+    border-top: 1px solid var(--rule);
+  }
+  .task[data-open="true"] .task-body { display: block; }
+
+  .files {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.7;
+  }
+  .files .label {
+    font-weight: 600;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 11px;
+    margin-right: 10px;
+  }
+
+  /* TASK GRID — main column + optional notes rail */
+  .task-grid { display: block; }
+  .task-grid.with-notes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 720px) {
+    .task-grid.with-notes { grid-template-columns: minmax(0, 1fr); }
+  }
+  .task-main { min-width: 0; }
+  .notes {
+    background: linear-gradient(180deg, var(--bg) 0%, transparent 100%);
+    border-left: 2px solid var(--accent-2);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 18px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+  .notes .notes-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .notes .notes-label + p,
+  .notes .notes-label + ul { margin: 0 0 12px; }
+  .notes .notes-label + p:last-child,
+  .notes .notes-label + ul:last-child { margin-bottom: 0; }
+  .notes p { color: var(--ink); }
+  .notes ul {
+    padding-left: 16px;
+    margin: 0;
+  }
+  .notes li { margin-bottom: 4px; color: var(--ink); }
+  .notes a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--accent);
+  }
+  .notes a:hover { border-bottom-style: solid; }
+  .notes code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    background: var(--paper);
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--rule);
+  }
+
+  /* DIFF — unified git-style diff for before/after code */
+  .diff-card {
+    margin-top: 18px;
+    background: var(--paper);
+    border: 1px solid var(--rule-2);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .diff-card-header {
+    padding: 9px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+  .diff-card-header .diff-file {
+    color: var(--ink);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+  .diff {
+    margin: 0;
+    padding: 12px 0;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  .diff code { font-family: inherit; display: block; }
+  .diff .line {
+    display: block;
+    padding: 0 16px 0 36px;
+    position: relative;
+    white-space: pre;
+    min-height: 1.2em;
+  }
+  .diff .line::before {
+    position: absolute;
+    left: 12px;
+    width: 16px;
+    text-align: center;
+    font-weight: 600;
+    content: " ";
+    color: var(--ink-2);
+    opacity: 0.4;
+  }
+  .diff .add { background: rgba(0, 199, 129, 0.10); }
+  .diff .add::before { content: "+"; color: #008859; opacity: 1; }
+  .diff .del { background: rgba(232, 67, 127, 0.10); }
+  .diff .del::before { content: "-"; color: #B0264A; opacity: 1; }
+  @media (prefers-color-scheme: dark) {
+    .diff .add { background: rgba(0, 199, 129, 0.16); }
+    .diff .add::before { color: #6FE2A6; }
+    .diff .del { background: rgba(232, 67, 127, 0.16); }
+    .diff .del::before { color: #FF95B4; }
+  }
+
+  /* COMPARE — before / after side-by-side */
+  .compare {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 720px) {
+    .compare { grid-template-columns: 1fr; }
+  }
+  .compare-col {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 14px 16px;
+    border: 1px solid var(--rule);
+    overflow: hidden;
+  }
+  .compare-col.before { border-left: 3px solid var(--warn); }
+  .compare-col.after { border-left: 3px solid var(--success); }
+  .compare-col .compare-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .compare-col.before .compare-label { color: #B07A00; }
+  .compare-col.after .compare-label { color: #008859; }
+  .compare-col pre {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--ink);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* ARCHITECTURE DIAGRAM — sits under the architecture callout */
+  .architecture-diagram {
+    background: var(--paper);
+    border-radius: 12px;
+    padding: 24px;
+    margin: -32px 0 56px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--rule);
+    overflow-x: auto;
+  }
+  .architecture-diagram svg { display: block; width: 100%; height: auto; }
+
+  /* PLAN NOTES — free-form top-level notes box */
+  .plan-notes {
+    margin: -32px 0 56px;
+    padding: 16px 20px;
+    background: var(--paper);
+    border-radius: 12px;
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow);
+  }
+  .plan-notes label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .plan-notes textarea {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 60px;
+  }
+  .plan-notes textarea:focus { outline: none; }
+  .plan-notes textarea::placeholder { color: var(--ink-2); font-style: italic; }
+
+  /* TASK COMMENT — per-task annotation injected by JS into each task body */
+  .task-comment {
+    width: 100%;
+    margin-top: 16px;
+    padding: 10px 12px;
+    border: 1px dashed var(--rule-2);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    resize: vertical;
+    min-height: 44px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .task-comment::placeholder { color: var(--ink-2); font-style: italic; }
+  .task-comment:focus {
+    outline: none;
+    border-style: solid;
+    border-color: var(--accent);
+    background: var(--paper);
+  }
+  .task-comment.has-content {
+    border-style: solid;
+    border-color: var(--accent-2);
+    background: var(--paper);
+  }
+
+  /* INLINE ANNOTATIONS — click any element to attach a note */
+  .annotatable { position: relative; }
+  .annotate-btn {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid var(--rule-2);
+    background: var(--paper);
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 5;
+  }
+  .annotatable:hover > .annotate-btn,
+  .annotate-btn:focus { display: flex; }
+  .annotatable.has-comment > .annotate-btn {
+    display: flex;
+    background: var(--accent-2);
+    color: var(--paper);
+    border-color: var(--accent-2);
+  }
+  .annotatable.has-comment { box-shadow: inset 3px 0 0 var(--accent-2); }
+  .diff .line.annotatable.has-comment { box-shadow: inset 2px 0 0 var(--accent-2); }
+  .inline-comment {
+    margin: 6px 0 8px;
+    padding: 8px 12px;
+    border-left: 2px solid var(--accent-2);
+    background: linear-gradient(180deg, rgba(0, 199, 190, 0.06) 0%, transparent 100%);
+    border-radius: 0 6px 6px 0;
+    display: none;
+  }
+  .inline-comment.open { display: block; }
+  .inline-comment .key {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 4px;
+  }
+  .inline-comment textarea {
+    width: 100%;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 38px;
+  }
+  .inline-comment textarea:focus { outline: none; border-color: var(--accent); }
+
+  /* COPY RESULT — sticky action bar */
+  .actionbar {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    gap: 10px;
+    z-index: 900;
+  }
+  .actionbar button {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--rule-2);
+    cursor: pointer;
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: var(--shadow);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+  .actionbar button:hover { transform: translateY(-1px); }
+  .actionbar button.primary {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  .actionbar button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .actionbar button .count {
+    background: rgba(255,255,255,0.18);
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-left: 6px;
+    font-size: 11px;
+  }
+  .actionbar button:not(.primary) .count { background: var(--rule); }
+  .toast {
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 1000;
+    box-shadow: var(--shadow);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .steps { list-style: none; padding: 0; margin: 0; }
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 0;
+    border-top: 1px dashed var(--rule);
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  .step:first-child { border-top: none; padding-top: 4px; }
+  .step input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 22px; height: 22px;
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    background: var(--paper);
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 1px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    position: relative;
+  }
+  .step input[type="checkbox"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .step input[type="checkbox"]:checked::after {
+    content: "✓";
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    line-height: 1;
+  }
+  .step[data-status="done"] .step-text {
+    text-decoration: line-through;
+    color: var(--ink-2);
+  }
+  .step-text { flex: 1; }
+  .step-text code {
+    font-family: var(--mono);
+    font-size: 0.93em;
+    background: var(--bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+  }
+
+  /* SECTION (Decisions / Errors) */
+  .section { margin-top: 56px; }
+  .section h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 36px;
+    margin: 0 0 18px;
+    letter-spacing: -0.01em;
+  }
+  .section table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--paper);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .section th, .section td {
+    padding: 13px 18px;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+    font-size: 15px;
+    vertical-align: top;
+  }
+  .section th {
+    background: var(--bg);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  .section tr:last-child td { border-bottom: none; }
+
+  /* DIAGRAMS */
+  .diagrams { margin-top: 56px; }
+  .diagrams .caption {
+    font-style: italic;
+    color: var(--ink-2);
+    margin: 8px 0 12px;
+    font-family: var(--display);
+    font-size: 18px;
+  }
+  .diagrams svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: var(--paper);
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+
+  /* FOOTER */
+  .footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-2);
+    letter-spacing: 0.04em;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .footer code {
+    background: var(--paper);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+    color: var(--ink);
+  }
+
+  /* PRINT */
+  @media print {
+    body { background: white; }
+    .task-body { display: block !important; }
+    .chevron { display: none; }
+    .container { max-width: none; padding: 24px; }
+    .task { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
+    .architecture, .architecture-diagram { box-shadow: none; }
+    .task-grid.with-notes { grid-template-columns: minmax(0, 1fr) 200px; }
+    .notes { break-inside: avoid; }
+    .compare { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="hero" data-status="in_progress" data-slug="2026-06-02-toop-voting-pool-and-ghost-players" data-feature="Voting-pool control + accountless ghost players" data-tdd="true">
+    <div>
+      <div class="eyebrow">Implementation Plan · 2026-06-02</div>
+      <h1>Voting-pool control + accountless ghost players</h1>
+      <div class="meta">
+        <span class="pill status-planning" data-status-pill>Planning</span>
+        <span class="pill" data-task-count>0 / 0 tasks</span>
+        <span class="pill" data-step-count>0 / 0 steps</span>
+        <span class="pill">TDD</span>
+      </div>
+    </div>
+    <svg class="progress-ring" viewBox="0 0 132 132">
+      <circle class="bg" cx="66" cy="66" r="56" />
+      <circle class="fg" cx="66" cy="66" r="56" stroke-dasharray="351.86" stroke-dashoffset="351.86" transform="rotate(-90 66 66)" />
+      <text x="66" y="68" data-progress-label>0%</text>
+    </svg>
+  </header>
+
+  <section class="architecture">
+    <h2>Architecture</h2>
+    <p data-architecture>Two features for the Toop volleyball bot. (A) The 🤷 &quot;Don&#x27;t know&quot; tap, currently discarded, becomes a per-pair aggregate counter; players who accumulate a high don&#x27;t-know rate (nobody knows them well enough to rate) get flagged to the admin via a daily DM and can be pulled from the rating pool either on a timer or a manual toggle. (B) Accountless &quot;ghost&quot; players get a synthetic negative id so others can vote on them before they join Telegram, and a /link_player command later merges every vote, rating, RSVP and attendance row onto their real account. Both features preserve the privacy invariant: vote_aggregates never stores voter identity.</p>
+  </section>
+
+  <section class="architecture-diagram"><svg class="chart" viewBox="0 0 880 300" role="img" aria-label="Two flows: don't-know tracking leading to admin alert and pause; ghost player creation leading to later account link and FK migration." style="max-width:880px"><style>.adg-box{rx:6;stroke-width:1.5}.adg-t{font-family:var(--mono,monospace);font-size:11px;fill:var(--ink,#0A0A0A)}.adg-h{font-family:var(--sans,system-ui);font-size:12px;font-weight:600;fill:var(--ink,#0A0A0A)}.adg-entry{fill:#E7E7FB;stroke:#5856D6}.adg-safe{fill:#DDF6EC;stroke:#00C781}.adg-warn{fill:#FCEFD6;stroke:#FFB020}.adg-drop{fill:#FBDDE9;stroke:#E8437F}.adg-defer{fill:#ECE4F8;stroke:#9B59D0}.adg-ln{stroke:var(--ink-2,#5A5A55)}.adg-lbl{font-family:var(--sans,system-ui);font-size:12px;font-weight:600;fill:var(--ink-2,#5A5A55)}@media (prefers-color-scheme:dark){.adg-t,.adg-h{fill:#ECECEC}.adg-entry{fill:#26264a}.adg-safe{fill:#13392c}.adg-warn{fill:#3d3115}.adg-drop{fill:#3d1827}.adg-defer{fill:#2c2240}.adg-lbl{fill:#9B9B9B}}</style><defs><marker id="adgarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2,#5A5A55)"/></marker></defs><text x="10" y="24" class="adg-lbl">A · Don't-know tracking and pool control</text><rect class="adg-box adg-entry" x="10" y="36" width="118" height="46" rx="6"/><text x="69" y="56" text-anchor="middle" class="adg-h">🤷 Don't know</text><text x="69" y="72" text-anchor="middle" class="adg-t">tap</text><rect class="adg-box adg-safe" x="150" y="36" width="128" height="46" rx="6"/><text x="214" y="56" text-anchor="middle" class="adg-h">vote_aggregates</text><text x="214" y="72" text-anchor="middle" class="adg-t">.dont_know ++</text><rect class="adg-box adg-warn" x="300" y="36" width="128" height="46" rx="6"/><text x="364" y="56" text-anchor="middle" class="adg-h">dk_alert_job</text><text x="364" y="72" text-anchor="middle" class="adg-t">daily scan</text><rect class="adg-box adg-warn" x="450" y="36" width="128" height="46" rx="6"/><text x="514" y="56" text-anchor="middle" class="adg-h">admin DM</text><text x="514" y="72" text-anchor="middle" class="adg-t">suggest pause</text><rect class="adg-box adg-entry" x="600" y="36" width="128" height="46" rx="6"/><text x="664" y="54" text-anchor="middle" class="adg-h">/pause_voting</text><text x="664" y="70" text-anchor="middle" class="adg-t">/disable /enable</text><rect class="adg-box adg-drop" x="750" y="36" width="120" height="46" rx="6"/><text x="810" y="54" text-anchor="middle" class="adg-h">rateable CTE</text><text x="810" y="70" text-anchor="middle" class="adg-t">drop from pairs</text><line class="adg-ln" x1="128" y1="59" x2="150" y2="59" marker-end="url(#adgarrow)"/><line class="adg-ln" x1="278" y1="59" x2="300" y2="59" marker-end="url(#adgarrow)"/><line class="adg-ln" x1="428" y1="59" x2="450" y2="59" marker-end="url(#adgarrow)"/><line class="adg-ln" x1="578" y1="59" x2="600" y2="59" marker-end="url(#adgarrow)"/><line class="adg-ln" x1="728" y1="59" x2="750" y2="59" marker-end="url(#adgarrow)"/><text x="10" y="176" class="adg-lbl">B · Ghost player lifecycle</text><rect class="adg-box adg-defer" x="10" y="188" width="150" height="46" rx="6"/><text x="85" y="208" text-anchor="middle" class="adg-h">/add_ghost</text><text x="85" y="224" text-anchor="middle" class="adg-t">synthetic neg id</text><rect class="adg-box adg-safe" x="190" y="188" width="160" height="46" rx="6"/><text x="270" y="208" text-anchor="middle" class="adg-h">bootstrap prompts</text><text x="270" y="224" text-anchor="middle" class="adg-t">others rate them</text><rect class="adg-box adg-warn" x="380" y="188" width="150" height="46" rx="6"/><text x="455" y="208" text-anchor="middle" class="adg-h">joins Telegram</text><text x="455" y="224" text-anchor="middle" class="adg-t">DMs /start</text><rect class="adg-box adg-entry" x="560" y="188" width="140" height="46" rx="6"/><text x="630" y="208" text-anchor="middle" class="adg-h">/link_player</text><text x="630" y="224" text-anchor="middle" class="adg-t">ghost to real</text><rect class="adg-box adg-safe" x="730" y="188" width="140" height="46" rx="6"/><text x="800" y="208" text-anchor="middle" class="adg-h">migrate FKs</text><text x="800" y="224" text-anchor="middle" class="adg-t">merge on real id</text><line class="adg-ln" x1="160" y1="211" x2="190" y2="211" marker-end="url(#adgarrow)"/><line class="adg-ln" x1="350" y1="211" x2="380" y2="211" marker-end="url(#adgarrow)"/><line class="adg-ln" x1="530" y1="211" x2="560" y2="211" marker-end="url(#adgarrow)"/><line class="adg-ln" x1="700" y1="211" x2="730" y2="211" marker-end="url(#adgarrow)"/></svg></section>
+
+  <section class="plan-notes">
+    <label for="plan-notes-input">Plan-wide notes</label>
+    <textarea id="plan-notes-input" placeholder="General comments, blockers, scope changes, or context for Claude that doesn't belong to a single element..."></textarea>
+  </section>
+
+  <section class="phase" data-phase-id="1">
+  <div class="phase-header">
+    <h2><span class="num">Phase 1</span>Phase 1 — Schema &amp; idempotent migrations</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="1.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.1</span><span class="task-name">Branch + new columns + idempotent ALTER migrations</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/schema.sql · Modify: src/toop/db.py · Modify: tests/test_db.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Create branch: git checkout -b feat/voting-pool-and-ghost-players</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing test in tests/test_db.py: a fresh init_db() DB has columns vote_aggregates.dont_know, players.in_pool, players.pool_paused_until, players.is_ghost (assert via PRAGMA table_info)</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing test: build a legacy DB lacking the new columns (executescript an old CREATE TABLE), run init_db(), assert columns are added and existing rows keep sane defaults (in_pool=1, is_ghost=0, dont_know=0)</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing test: init_db() run twice in a row is a no-op (no exception, columns present once)</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Edit schema.sql: add <code>dont_know INTEGER NOT NULL DEFAULT 0</code> to vote_aggregates; add <code>in_pool INTEGER NOT NULL DEFAULT 1</code>, <code>pool_paused_until TIMESTAMP</code>, <code>is_ghost INTEGER NOT NULL DEFAULT 0</code> to players (so fresh DBs get them from CREATE)</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Edit db.py init_db(): after executescript, run a <code>_migrate(conn)</code> helper that, per (table,column), checks PRAGMA table_info and runs <code>ALTER TABLE ... ADD COLUMN ...</code> only when missing — idempotent for already-migrated DBs</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: uv run pytest tests/test_db.py -v</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(db): add pool + ghost columns with idempotent migration</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>schema.sql uses CREATE TABLE IF NOT EXISTS, which silently no-ops on an existing table — new columns would never land on the deployed prod DB without an explicit ALTER path.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>ALTER TABLE ADD COLUMN with a non-constant default fails in SQLite — keep defaults constant (0/1/NULL)</li>
+            <li>pool_paused_until must be nullable (no NOT NULL) so ADD COLUMN on a populated table succeeds</li>
+          </ul>
+        </aside>
+      </div>
+      <div class="diff-card">
+        <div class="diff-card-header">
+          <span class="diff-file">Diff</span>
+          <span>unified diff</span>
+        </div>
+        <pre class="diff"><code><span class="line">init_db(conn):</span><span class="line">    conn.executescript(schema_path.read_text())</span><span class="line add">    _migrate(conn)   # ADD COLUMN where PRAGMA shows missing</span><span class="line">    conn.commit()</span></code></pre>
+      </div>
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="2">
+  <div class="phase-header">
+    <h2><span class="num">Phase 2</span>Phase 2 — Don&#x27;t-know tracking + rateable pool predicate</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="2.1" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">2.1</span><span class="task-name">mark_dont_know increments the pair counter</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: after mark_dont_know(conn, voter, a, b, axis), vote_aggregates row for (a,b,axis) has dont_know=1 and a_wins=b_wins=0; a second different voter on the same pair bumps it to 2; answered_prompts dedupe row still written; pending_prompts row deleted</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: vote_aggregates still carries NO voter_id column (privacy invariant holds)</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Edit mark_dont_know(): add an <code>INSERT INTO vote_aggregates (...dont_know...) VALUES (...,1,...) ON CONFLICT(player_a,player_b,axis) DO UPDATE SET dont_know = dont_know + 1, updated_at = CURRENT_TIMESTAMP</code> alongside the existing dedupe + pending delete (normalize a&lt;b first)</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_voting_queue.py -v</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(voting): count don&#x27;t-know taps per pair in vote_aggregates</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>The don&#x27;t-know signal is the only input to Feature A&#x27;s per-player flag; until now it was thrown away.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>mark_dont_know currently receives (player_a, player_b) already ordered by the keyboard payload — confirm ordering before the aggregate write to satisfy CHECK(player_a &lt; player_b)</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="2.2" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">2.2</span><span class="task-name">CANDIDATE_SQL: active CTE → rateable CTE</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: a player with in_pool=0 never appears in refill_queue candidate pairs; one with pool_paused_until in the future never appears; one whose pool_paused_until is in the PAST reappears; an active in-pool player still appears</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: a paused/disabled subject can STILL receive prompts as a voter (voter eligibility is independent of pool membership)</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Edit CANDIDATE_SQL: rename the <code>active</code> CTE to <code>rateable</code> filtering <code>active=1 AND in_pool=1 AND (pool_paused_until IS NULL OR pool_paused_until &lt;= CURRENT_TIMESTAMP) AND telegram_id != :voter</code>; keep the voter (:voter) unconstrained by pool flags</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_voting_queue.py -v</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(voting): exclude paused/disabled players from new pairs</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+      <div class="diff-card">
+        <div class="diff-card-header">
+          <span class="diff-file">Diff</span>
+          <span>unified diff</span>
+        </div>
+        <pre class="diff"><code><span class="line del">WITH active AS (</span><span class="line add">WITH rateable AS (</span><span class="line">  SELECT telegram_id FROM players</span><span class="line add">  WHERE active=1 AND in_pool=1</span><span class="line add">    AND (pool_paused_until IS NULL</span><span class="line add">         OR pool_paused_until &lt;= CURRENT_TIMESTAMP)</span><span class="line del">  WHERE active=1 AND telegram_id != :voter</span><span class="line add">    AND telegram_id != :voter</span><span class="line">)</span></code></pre>
+      </div>
+    </div>
+  </article>
+
+  <article class="task" data-task-id="2.3" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">2.3</span><span class="task-name">Exclude ghosts from being chosen as voters</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: bootstrap_calibration_prompts() never inserts a pending_prompts row with voter_id pointing at an is_ghost=1 player (a ghost can&#x27;t answer a DM)</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Edit both veteran-selection queries in bootstrap_calibration_prompts to add <code>AND is_ghost=0</code>; anchors may still be ghosts (they are subjects, fine)</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_voting_queue.py -v</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(voting): never queue prompts to ghost players</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Ghosts have no chat to DM; a prompt addressed to one is a dead row that would never resolve and would inflate completion gaps.</p>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="3">
+  <div class="phase-header">
+    <h2><span class="num">Phase 3</span>Phase 3 — players.py: dataclass + pool functions + DK stats</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="3.1" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">3.1</span><span class="task-name">Extend Player dataclass + SELECT lists</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/players.py · Modify: src/toop/handlers/voting.py · Modify: tests/test_players.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: list_active_players / add_player return Player objects exposing in_pool (bool), pool_paused_until (str|None), is_ghost (bool) with correct defaults</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Add fields to the frozen Player dataclass with defaults: <code>in_pool: bool = True</code>, <code>pool_paused_until: str | None = None</code>, <code>is_ghost: bool = False</code></span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Update every SELECT in players.py (_fetch_one, list_active_players, get_player_by_username) and voting.py _get_player to select the new columns and pass them to _row_to_player / Player(...)</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Run full suite to catch any other Player constructor that now needs the columns; fix</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest -v &amp;&amp; uv run ty check src/</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(players): expose pool + ghost flags on Player</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>voting.py _get_player builds Player inline — if it omits the new fields it falls back to defaults, which would mis-report a paused/ghost player; select the real columns there too</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="3.2" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">3.2</span><span class="task-name">pause / disable / enable pool functions</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/players.py · Modify: tests/test_players.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing tests: pause_player_pool(conn, id, until) sets pool_paused_until and returns True (False when no active player); disable_player_pool sets in_pool=0; enable_player_pool sets in_pool=1 AND pool_paused_until=NULL (clears a timed pause too)</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Implement the three functions (typed: <code>until: datetime</code>, format to &#x27;%Y-%m-%d %H:%M:%S&#x27; like add_snooze); each UPDATE ... WHERE telegram_id=? AND active=1, return cur.rowcount &gt; 0</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_players.py -v &amp;&amp; uv run ty check src/</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(players): pause/disable/enable rating-pool membership</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="3.3" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">3.3</span><span class="task-name">dont_know_stats aggregation</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/players.py · Modify: tests/test_players.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: with crafted vote_aggregates rows, dont_know_stats returns per-active-player dk_count = sum of dont_know over every pair containing them, total = sum of (a_wins+b_wins+dont_know) over those pairs, dk_rate = dk_count/total (0.0 when total=0); excludes inactive players; sorted by dk_rate desc</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Implement dont_know_stats(conn) -&gt; list[DontKnowStat] (a small typed dataclass/NamedTuple) with a UNION/OR query summing across pairs where telegram_id matches player_a OR player_b</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_players.py -v &amp;&amp; uv run ty check src/</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(players): per-player don&#x27;t-know stats</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>A DK is logged against a PAIR; the subject signal is the player&#x27;s DK rate summed across all pairs they appear in — a genuinely unknown player accumulates DK across many partners.</p>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="4">
+  <div class="phase-header">
+    <h2><span class="num">Phase 4</span>Phase 4 — Ghost players: create + link/merge</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="4.1" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">4.1</span><span class="task-name">add_ghost_player with synthetic negative id</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/players.py · Modify: tests/test_players.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: add_ghost_player(conn, &#x27;Late Joiner&#x27;) returns a Player with telegram_id&lt;0, username=None, is_ghost=True, in_pool=True, is_calibrating=True; a second ghost gets a distinct, lower negative id</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Implement: next_id = (SELECT MIN(MIN(telegram_id),0) FROM players) - 1; INSERT player row with that id, username NULL, active=1, is_calibrating=1, in_pool=1, is_ghost=1; return the Player</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_players.py -v &amp;&amp; uv run ty check src/</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(players): add accountless ghost players</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Real Telegram ids are positive, so negative ids are a collision-free namespace for accountless players that still satisfies the INTEGER PK and every FK.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>No code path may try to send a Telegram message to a negative id — verified by 2.3 (no ghost voters) and by ghosts never being a DM target in voting.py</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="4.2" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">4.2</span><span class="task-name">link_ghost_player: migrate all FK rows onto the real account</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/players.py · Modify: tests/test_players.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing tests covering: (a) real id is NEW — ghost rows simply remap; (b) real id EXISTS — counts merge; (c) pair ORDER FLIP — remapping neg→pos reorders (player_a,player_b) and a_wins/b_wins swap accordingly; (d) pair COLLISION — remapped pair already exists, counts add; (e) player_ratings/rsvps/attendance remap and merge/skip on PK collision; (f) ghost player row deleted, result row has is_ghost=0</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Implement link_ghost_player(conn, ghost_id, real_id, username, display_name): in one transaction — ensure target player row exists (add_player if new, else keep); for vote_aggregates/pending_prompts/answered_prompts fetch every row where player_a=ghost OR player_b=ghost, recompute normalized (a,b) with real_id, swap a_wins/b_wins when order flips (vote_aggregates), UPSERT-merge into the target pair (sum counts) and delete the ghost rows; remap player_ratings/rsvps/attendance with INSERT OR IGNORE then DELETE leftover ghost rows; finally DELETE the ghost player row</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Refactor: extract a <code>_remap_pair_rows</code> helper so the three pair tables share one tested code path</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_players.py -v &amp;&amp; uv run ty check src/</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(players): link ghost player to a real account</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Without merge-on-collision and a&lt;b re-normalization, the FK remap would violate CHECK(player_a &lt; player_b) or hit a duplicate PK and lose the votes cast on the ghost.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>snapshots.team_*_json stores historical ids as JSON — out of scope to rewrite; note in the reply that past published teams keep the ghost id (cosmetic only)</li>
+            <li>answered_prompts/pending_prompts also have voter_id, but a ghost is never a voter, so only their player_a/player_b sides need remapping</li>
+          </ul>
+        </aside>
+      </div>
+      <div class="diff-card">
+        <div class="diff-card-header">
+          <span class="diff-file">Diff</span>
+          <span>unified diff</span>
+        </div>
+        <pre class="diff"><code><span class="line del">vote_aggregates: (-1, 42, attack, a_wins=3, b_wins=1)</span><span class="line del">  ghost=-1 is player_a, real target=99</span><span class="line add">remap -1 -&gt; 99: pair becomes (42, 99) so order FLIPS</span><span class="line add">  swap wins: (42, 99, attack, a_wins=1, b_wins=3)</span><span class="line add">  if (42,99,attack) already exists -&gt; add the counts</span></code></pre>
+      </div>
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="5">
+  <div class="phase-header">
+    <h2><span class="num">Phase 5</span>Phase 5 — Admin commands (handlers/roster.py)</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="5.1" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">5.1</span><span class="task-name">/pause_voting /disable_voting /enable_voting</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing integration tests (fake Update/Context per existing roster tests): non-admin rejected; /pause_voting @user 2w resolves the id, parses 2w→14d future timestamp, calls pause_player_pool, replies confirmation; bad duration → usage; /disable_voting and /enable_voting resolve + toggle + reply; unknown user → friendly error</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Add a <code>_parse_duration(text)-&gt;timedelta|None</code> helper (supports Nd/Nw, reuse for default) and the three @require_admin handlers; resolve target via existing _resolve_telegram_id (and digit-id branch like _parse_add_args)</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Register the three CommandHandlers in bot.py; update test_bot_wiring expected command set</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_roster_handlers.py tests/test_bot_wiring.py -v</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(roster): pause/disable/enable a player from voting</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>Command names say &quot;voting&quot; but mechanically they pause the player as a SUBJECT (others stop being asked to rate them) — make the reply text say so explicitly to avoid admin confusion</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="5.2" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">5.2</span><span class="task-name">/dk_report</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: /dk_report (admin-only) lists players by dk_rate desc with dk_count/total and a 🤷 marker; empty roster → friendly message</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Implement handler calling dont_know_stats; format a compact text table; register in bot.py + wiring test</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_roster_handlers.py tests/test_bot_wiring.py -v</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(roster): /dk_report don&#x27;t-know leaderboard</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="5.3" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">5.3</span><span class="task-name">/add_ghost</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: /add_ghost &quot;Display Name&quot; (admin-only, shlex-parsed) creates a ghost, seeds calibration prompts, replies with the ghost id and a hint about /link_player; missing name → usage</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Implement handler: add_ghost_player then bootstrap_calibration_prompts(conn, ghost_id); register + wiring test</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_roster_handlers.py tests/test_bot_wiring.py -v</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(roster): /add_ghost for accountless players</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="5.4" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">5.4</span><span class="task-name">/link_player</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: /link_player &lt;ghost_id&gt; @realuser (admin-only) resolves the real id; requires a contacts row (same DM-ability rule as add-by-id) else friendly error; rejects a non-ghost or unknown ghost id; on success runs link_ghost_player and replies with merged counts (votes/ratings/rsvps moved)</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Implement handler: validate ghost_id&lt;0 + is_ghost, resolve real id (digit or @username via get_contact / _resolve_telegram_id), call link_ghost_player, summarize; register + wiring test</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_roster_handlers.py tests/test_bot_wiring.py -v</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(roster): /link_player merges a ghost into a real account</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="5.5" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">5.5</span><span class="task-name">Mark ghost/paused state in /list_players and /contacts</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: tests/test_roster_handlers.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: /list_players shows 👻 for ghosts and a ⏸/🚫 marker for paused/disabled players; /contacts unaffected for ghosts (ghosts are not contacts) but still lists real contacts correctly</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Update the list rendering to read is_ghost/in_pool/pool_paused_until from Player and append markers</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_roster_handlers.py -v</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(roster): flag ghost and paused players in listings</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="6">
+  <div class="phase-header">
+    <h2><span class="num">Phase 6</span>Phase 6 — Admin alert job + config + wiring</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="6.1" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">6.1</span><span class="task-name">config thresholds + .env.example</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/config.py · Modify: .env.example · Modify: tests/test_config.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test: Settings exposes DK_ALERT_MIN_PROMPTS (default 10, int&gt;=0), DK_ALERT_RATE (default 0.5, 0&lt;=float&lt;=1), DEFAULT_PAUSE_DAYS (default 14); env overrides parse</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Add the fields with pydantic Field bounds; document them in .env.example with comments</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_config.py -v &amp;&amp; uv run ty check src/</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(config): don&#x27;t-know alert thresholds</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="6.2" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">6.2</span><span class="task-name">dk_alert_job daily admin DM</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Create: src/toop/handlers/alerts.py · Modify: src/toop/bot.py · Create: tests/test_alerts.py · Modify: tests/test_bot_wiring.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Write failing test (fake context with conn + a recording bot, mirroring test_auto_snapshot): players over both thresholds AND still in-pool/not-paused produce a single admin DM containing a ready-to-copy /pause_voting command per flagged player; nobody flagged → no DM sent; already-paused players are skipped</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Implement async dk_alert_job(context) reading conn from context.bot_data, filtering dont_know_stats by DK_ALERT_MIN_PROMPTS + DK_ALERT_RATE and excluding paused/disabled, sending one message to settings.ADMIN_TELEGRAM_ID (guard TelegramError like auto_snapshot_job)</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Register app.job_queue.run_daily(dk_alert_job, ...) in bot.py; assert in wiring test that the job is scheduled</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Verify: uv run pytest tests/test_alerts.py tests/test_bot_wiring.py -v</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: feat(alerts): daily don&#x27;t-know pause suggestions to admin</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Mirrors the existing auto_snapshot_job scheduling pattern so the scheduler and error-handling stay consistent.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>Avoid re-alerting the same player every day — acceptable for v1 since acting on the suggestion (pausing) removes them from the next scan; note this in code</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="7">
+  <div class="phase-header">
+    <h2><span class="num">Phase 7</span>Phase 7 — Docs &amp; full green check</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="7.1" data-task-status="pending">
+    <header class="task-header">
+      <h3><span class="badge">7.1</span><span class="task-name">README + final make check</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: README.md · Reference: docs/PRIVACY.md
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Add the new admin commands (/pause_voting, /disable_voting, /enable_voting, /dk_report, /add_ghost, /link_player) to the README command list with one-line descriptions</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Add a short note to README/PRIVACY that don&#x27;t-know counts are stored as pair aggregates only (no voter identity) so the privacy invariant is unchanged</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Run the full gate: make check (ruff lint + ruff format check + ty typecheck + pytest 100% coverage)</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Fix any coverage gaps or lint/format issues until green</span>
+        </li>
+        <li class="step" data-status="pending">
+          <input type="checkbox" />
+          <span class="step-text">Commit: docs: document voting-pool and ghost-player commands</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>fail_under=100 — any new branch/line without a test fails CI; check term-missing output and add targeted tests</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+  <section class="section">
+    <h2>Decisions Made</h2>
+    <table>
+      <thead><tr><th>Decision</th><th>Rationale</th></tr></thead>
+      <tbody data-decisions>
+        <tr data-empty><td colspan="2"><em>(add as you go)</em></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="section">
+    <h2>Errors Encountered</h2>
+    <table>
+      <thead><tr><th>Error</th><th>Attempt</th><th>Resolution</th></tr></thead>
+      <tbody data-errors>
+        <tr data-empty><td colspan="3"><em>(none yet)</em></td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="diagrams section"><h2>Diagrams</h2>
+  <p class="caption">Ghost link: remapping a negative id into a positive one flips pair ordering and may collide with an existing pair, so counts merge.</p>
+  <svg class="chart" viewBox="0 0 560 200" role="img" aria-label="vote_aggregates pair (-1,42) with ghost -1 remaps to real 99, reorders to (42,99) and merges counts into any existing row." style="max-width:560px"><style>.lk-box{stroke-width:1.5}.lk-t{font-family:var(--mono,monospace);font-size:12px;fill:var(--ink,#0A0A0A)}.lk-h{font-family:var(--sans,system-ui);font-size:12px;font-weight:600;fill:var(--ink,#0A0A0A)}.lk-ghost{fill:#ECE4F8;stroke:#9B59D0}.lk-safe{fill:#DDF6EC;stroke:#00C781}.lk-warn{fill:#FCEFD6;stroke:#FFB020}.lk-ln{stroke:var(--ink-2,#5A5A55)}.lk-lbl{font-family:var(--sans,system-ui);font-size:11px;fill:var(--ink-2,#5A5A55)}@media (prefers-color-scheme:dark){.lk-t,.lk-h{fill:#ECECEC}.lk-ghost{fill:#2c2240}.lk-safe{fill:#13392c}.lk-warn{fill:#3d3115}.lk-lbl{fill:#9B9B9B}}</style><defs><marker id="lkarrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--ink-2,#5A5A55)"/></marker></defs><rect class="lk-box lk-ghost" x="10" y="40" width="170" height="60" rx="6"/><text x="95" y="34" text-anchor="middle" class="lk-lbl">ghost row</text><text x="95" y="66" text-anchor="middle" class="lk-h">(-1, 42, attack)</text><text x="95" y="86" text-anchor="middle" class="lk-t">a_wins=3 b_wins=1</text><rect class="lk-box lk-warn" x="210" y="40" width="160" height="60" rx="6"/><text x="290" y="34" text-anchor="middle" class="lk-lbl">-1 → 99, reorder</text><text x="290" y="66" text-anchor="middle" class="lk-h">(42, 99, attack)</text><text x="290" y="86" text-anchor="middle" class="lk-t">a_wins=1 b_wins=3</text><rect class="lk-box lk-safe" x="400" y="40" width="150" height="60" rx="6"/><text x="475" y="34" text-anchor="middle" class="lk-lbl">merge on collision</text><text x="475" y="66" text-anchor="middle" class="lk-h">(42, 99, attack)</text><text x="475" y="86" text-anchor="middle" class="lk-t">counts summed</text><line class="lk-ln" x1="180" y1="70" x2="210" y2="70" marker-end="url(#lkarrow)"/><line class="lk-ln" x1="370" y1="70" x2="400" y2="70" marker-end="url(#lkarrow)"/><text x="95" y="130" text-anchor="middle" class="lk-lbl">swap wins because</text><text x="95" y="146" text-anchor="middle" class="lk-lbl">a/b order flipped</text><text x="475" y="130" text-anchor="middle" class="lk-lbl">then delete the</text><text x="475" y="146" text-anchor="middle" class="lk-lbl">ghost player row</text></svg>
+</section>
+
+  <footer class="footer">
+    <span>2026-06-02-toop-voting-pool-and-ghost-players.html</span>
+    <span>Run <code>/execute-plan &lt;path&gt;</code> to start</span>
+  </footer>
+
+</div>
+
+<div class="actionbar" role="region" aria-label="Comments export">
+  <button type="button" id="reset-btn" title="Clear all comments">Clear comments</button>
+  <button type="button" id="copy-btn" class="primary" disabled aria-label="Copy all comments as JSON to clipboard">Copy comments<span class="count" id="copy-count">0</span></button>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  function recomputeProgress() {
+    const allSteps = document.querySelectorAll('.step');
+    const doneSteps = document.querySelectorAll('.step[data-status="done"]');
+    const pct = allSteps.length ? Math.round(doneSteps.length / allSteps.length * 100) : 0;
+
+    const ring = document.querySelector('.progress-ring .fg');
+    if (ring) {
+      const dash = 2 * Math.PI * 56;
+      ring.setAttribute('stroke-dasharray', dash.toFixed(2));
+      ring.setAttribute('stroke-dashoffset', (dash - (dash * pct / 100)).toFixed(2));
+    }
+    const ringLabel = document.querySelector('[data-progress-label]');
+    if (ringLabel) ringLabel.textContent = pct + '%';
+
+    const taskCount = document.querySelector('[data-task-count]');
+    const allTasks = document.querySelectorAll('.task');
+    const doneTasks = document.querySelectorAll('.task[data-task-status="done"]');
+    if (taskCount) taskCount.textContent = doneTasks.length + ' / ' + allTasks.length + ' tasks';
+
+    const stepCount = document.querySelector('[data-step-count]');
+    if (stepCount) stepCount.textContent = doneSteps.length + ' / ' + allSteps.length + ' steps';
+
+    document.querySelectorAll('.phase').forEach(phase => {
+      const ps = phase.querySelectorAll('.step');
+      const pd = phase.querySelectorAll('.step[data-status="done"]');
+      const ppct = ps.length ? pd.length / ps.length * 100 : 0;
+      const fill = phase.querySelector('.phase-bar .fill');
+      if (fill) fill.style.width = ppct + '%';
+      const label = phase.querySelector('.phase-progress');
+      if (label) label.textContent = pd.length + ' / ' + ps.length;
+    });
+
+    const hero = document.querySelector('.hero');
+    const pill = document.querySelector('[data-status-pill]');
+    if (hero && pill) {
+      const s = hero.dataset.status || 'planning';
+      pill.className = 'pill status-' + s;
+      pill.textContent = ({ planning: 'Planning', in_progress: 'In Progress', done: 'Done' })[s] || s;
+    }
+  }
+
+  document.querySelectorAll('.task-header').forEach(h => {
+    h.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      const task = h.closest('.task');
+      task.dataset.open = task.dataset.open === 'true' ? 'false' : 'true';
+    });
+  });
+
+  document.querySelectorAll('.step input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const step = cb.closest('.step');
+      step.dataset.status = cb.checked ? 'done' : 'pending';
+      const task = step.closest('.task');
+      const stepsInTask = task.querySelectorAll('.step');
+      const doneInTask = task.querySelectorAll('.step[data-status="done"]');
+      task.dataset.taskStatus = (stepsInTask.length > 0 && stepsInTask.length === doneInTask.length) ? 'done' : 'pending';
+      recomputeProgress();
+    });
+  });
+
+  const tasks = document.querySelectorAll('.task');
+  tasks.forEach(t => t.dataset.open = (tasks.length <= 3) ? 'true' : 'false');
+
+  document.querySelectorAll('.step input[type="checkbox"]').forEach(cb => {
+    const step = cb.closest('.step');
+    if (step && step.dataset.status === 'done') cb.checked = true;
+  });
+
+  recomputeProgress();
+
+  // ---- Round-trip comments ----
+  const planNotesInput = document.getElementById('plan-notes-input');
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  // Inject one comment textarea per task
+  document.querySelectorAll('.task').forEach(task => {
+    const body = task.querySelector('.task-body');
+    if (!body || body.querySelector('.task-comment')) return;
+    const id = task.dataset.taskId || '';
+    const ta = document.createElement('textarea');
+    ta.className = 'task-comment';
+    ta.dataset.commentFor = 'task ' + id;
+    ta.placeholder = 'Comment on task ' + id + '... (questions, scope tweaks, references, anything)';
+    ta.rows = 2;
+    ta.addEventListener('input', () => {
+      ta.classList.toggle('has-content', ta.value.trim().length > 0);
+      updateCopyButton();
+    });
+    body.appendChild(ta);
+  });
+  planNotesInput?.addEventListener('input', updateCopyButton);
+
+  // Inline annotations: click any annotatable element to leave a note
+  const ANNOTATABLE_SELECTORS = [
+    '.step',
+    '.diff .line',
+    '.architecture p',
+    '.phase-header h2',
+    '.task-header h3',
+    '.notes p',
+    '.notes ul li',
+    '[data-decisions] tr',
+  ];
+  const inlineComments = new Map();
+
+  function anchorKey(el) {
+    if (el.matches('.step')) {
+      const task = el.closest('.task');
+      const tid = task?.dataset.taskId || '?';
+      const steps = [...task.querySelectorAll('.step')];
+      return 'step ' + tid + '.' + (steps.indexOf(el) + 1);
+    }
+    if (el.matches('.diff .line')) {
+      const card = el.closest('.diff-card');
+      const file = (card?.querySelector('.diff-file')?.textContent || 'diff').trim();
+      const lines = [...card.querySelectorAll('.line')];
+      return file + ' L' + (lines.indexOf(el) + 1);
+    }
+    if (el.matches('.phase-header h2')) {
+      const p = el.closest('.phase');
+      return 'phase ' + (p?.dataset.phaseId || '?');
+    }
+    if (el.matches('.task-header h3')) {
+      const t = el.closest('.task');
+      return 'task ' + (t?.dataset.taskId || '?') + ' (heading)';
+    }
+    if (el.matches('.architecture p')) return 'architecture';
+    const ctx = el.closest('.notes')
+      ? 'notes'
+      : (el.closest('[data-decisions]') ? 'decision' : 'note');
+    const txt = (el.textContent || '').trim().slice(0, 60).replace(/\s+/g, ' ');
+    return ctx + ': ' + txt;
+  }
+
+  function ensureCommentPanel(el) {
+    const next = el.nextElementSibling;
+    if (next && next.classList.contains('inline-comment')) return next;
+    const key = anchorKey(el);
+    const panel = document.createElement('div');
+    panel.className = 'inline-comment';
+    const keySpan = document.createElement('span');
+    keySpan.className = 'key';
+    keySpan.textContent = key;
+    const ta = document.createElement('textarea');
+    ta.rows = 2;
+    ta.placeholder = 'Comment on this...';
+    panel.appendChild(keySpan);
+    panel.appendChild(ta);
+    el.parentNode.insertBefore(panel, el.nextSibling);
+    ta.addEventListener('input', () => {
+      const v = ta.value.trim();
+      if (v) {
+        inlineComments.set(key, v);
+        el.classList.add('has-comment');
+      } else {
+        inlineComments.delete(key);
+        el.classList.remove('has-comment');
+      }
+      updateCopyButton();
+    });
+    return panel;
+  }
+
+  document.querySelectorAll(ANNOTATABLE_SELECTORS.join(', ')).forEach(el => {
+    if (el.classList.contains('annotatable')) return;
+    el.classList.add('annotatable');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'annotate-btn';
+    btn.title = 'Add a comment';
+    btn.setAttribute('aria-label', 'Add a comment');
+    btn.textContent = '+';
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const panel = ensureCommentPanel(el);
+      panel.classList.toggle('open');
+      if (panel.classList.contains('open')) {
+        panel.querySelector('textarea').focus();
+      }
+    });
+    el.appendChild(btn);
+  });
+
+  function buildResult() {
+    const hero = document.querySelector('.hero');
+    const slug = hero?.dataset.slug || '';
+    const feature = hero?.dataset.feature || '';
+    const planNotes = (planNotesInput?.value || '').trim();
+    const comments = {};
+    document.querySelectorAll('.task-comment').forEach(ta => {
+      const v = ta.value.trim();
+      if (v) comments[ta.dataset.commentFor] = v;
+    });
+    inlineComments.forEach((v, k) => {
+      if (v && v.trim()) comments[k] = v.trim();
+    });
+    return {
+      slug,
+      feature,
+      generated_at: new Date().toISOString(),
+      plan_notes: planNotes || null,
+      comments,
+    };
+  }
+
+  function countNonEmpty() {
+    let n = 0;
+    document.querySelectorAll('.task-comment').forEach(ta => { if (ta.value.trim()) n += 1; });
+    inlineComments.forEach(v => { if (v && v.trim()) n += 1; });
+    if (planNotesInput?.value.trim()) n += 1;
+    return n;
+  }
+
+  function updateCopyButton() {
+    const btn = document.getElementById('copy-btn');
+    const count = document.getElementById('copy-count');
+    if (!btn || !count) return;
+    const n = countNonEmpty();
+    count.textContent = String(n);
+    btn.disabled = n === 0;
+  }
+
+  document.getElementById('copy-btn')?.addEventListener('click', async () => {
+    const result = buildResult();
+    const text = JSON.stringify(result, null, 2);
+    const n = countNonEmpty();
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast('Copied ' + n + ' comment' + (n === 1 ? '' : 's') + '. Paste into Claude.');
+    } catch (err) {
+      window.prompt('Copy this JSON manually:', text);
+    }
+  });
+
+  document.getElementById('reset-btn')?.addEventListener('click', () => {
+    document.querySelectorAll('.task-comment').forEach(ta => {
+      ta.value = '';
+      ta.classList.remove('has-content');
+    });
+    if (planNotesInput) planNotesInput.value = '';
+    inlineComments.clear();
+    document.querySelectorAll('.inline-comment textarea').forEach(ta => { ta.value = ''; });
+    document.querySelectorAll('.inline-comment.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.annotatable.has-comment').forEach(el => el.classList.remove('has-comment'));
+    updateCopyButton();
+    showToast('Cleared all comments');
+  });
+
+  updateCopyButton();
+</script>
+
+</body>
+</html>

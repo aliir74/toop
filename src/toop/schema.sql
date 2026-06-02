@@ -18,7 +18,15 @@ CREATE TABLE IF NOT EXISTS players (
     display_name    TEXT NOT NULL,
     joined_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     active          INTEGER NOT NULL DEFAULT 1,
-    is_calibrating  INTEGER NOT NULL DEFAULT 1
+    is_calibrating  INTEGER NOT NULL DEFAULT 1,
+    -- Rating-pool membership. in_pool=0 is a manual "stop asking others to rate
+    -- this player" toggle; pool_paused_until is the same thing on a timer.
+    -- A player is rateable iff active=1 AND in_pool=1 AND not currently paused.
+    in_pool         INTEGER NOT NULL DEFAULT 1,
+    pool_paused_until TIMESTAMP,
+    -- Accountless "ghost" player: synthetic negative telegram_id, never DM'd,
+    -- only voted ON. Linked to a real account later via link_ghost_player.
+    is_ghost        INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -46,13 +54,15 @@ CREATE TABLE IF NOT EXISTS attendance (
 );
 
 -- Pairwise outcome counts. Invariant: player_a < player_b (enforced via CHECK).
--- This table NEVER stores voter identity.
+-- This table NEVER stores voter identity. dont_know counts "🤷 Don't know" taps
+-- on this pair (no winner) — an aggregate signal that nobody can rate the pair.
 CREATE TABLE IF NOT EXISTS vote_aggregates (
     player_a        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
     player_b        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
     axis            TEXT NOT NULL CHECK (axis IN ('attack', 'defense', 'setting')),
     a_wins          INTEGER NOT NULL DEFAULT 0,
     b_wins          INTEGER NOT NULL DEFAULT 0,
+    dont_know       INTEGER NOT NULL DEFAULT 0,
     updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (player_a, player_b, axis),
     CHECK (player_a < player_b)
