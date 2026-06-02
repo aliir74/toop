@@ -1466,7 +1466,7 @@
     <span class="phase-progress">0 / 0</span>
   </div>
   <div class="phase-bar"><div class="fill"></div></div>
-  <article class="task" data-task-id="6.1" data-task-status="pending">
+  <article class="task" data-task-id="6.1" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">6.1</span><span class="task-name">config thresholds + .env.example</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1478,20 +1478,20 @@
             <span class="label">Files</span> Modify: src/toop/config.py · Modify: .env.example · Modify: tests/test_config.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: Settings exposes DK_ALERT_MIN_PROMPTS (default 10, int&gt;=0), DK_ALERT_RATE (default 0.5, 0&lt;=float&lt;=1), DEFAULT_PAUSE_DAYS (default 14); env overrides parse</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add the fields with pydantic Field bounds; document them in .env.example with comments</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_config.py -v &amp;&amp; uv run ty check src/</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(config): don&#x27;t-know alert thresholds</span>
         </li>
           </ol>

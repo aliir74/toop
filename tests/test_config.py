@@ -15,6 +15,32 @@ def test_defaults_load() -> None:
     assert pytest.approx(1.0) == s.WEIGHT_ATTACK + s.WEIGHT_DEFENSE + s.WEIGHT_SETTING
 
 
+def test_dk_alert_defaults() -> None:
+    s = Settings(_env_file=None)
+    assert s.DK_ALERT_MIN_PROMPTS == 10
+    assert s.DK_ALERT_RATE == 0.5
+    assert s.DEFAULT_PAUSE_DAYS == 14
+
+
+def test_dk_alert_env_overrides() -> None:
+    s = Settings(_env_file=None, DK_ALERT_MIN_PROMPTS=20, DK_ALERT_RATE=0.7, DEFAULT_PAUSE_DAYS=30)
+    assert s.DK_ALERT_MIN_PROMPTS == 20
+    assert s.DK_ALERT_RATE == 0.7
+    assert s.DEFAULT_PAUSE_DAYS == 30
+
+
+def test_dk_alert_rate_out_of_range() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, DK_ALERT_RATE=1.5)
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, DK_ALERT_RATE=-0.1)
+
+
+def test_dk_alert_min_prompts_negative() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, DK_ALERT_MIN_PROMPTS=-1)
+
+
 def test_snapshot_hour_out_of_range() -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, SNAPSHOT_HOUR=24)

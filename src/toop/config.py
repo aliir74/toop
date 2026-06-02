@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     CALIBRATION_THRESHOLD: int = Field(default=15, ge=0)
     QUEUE_DEPTH: int = Field(default=5, gt=0)
     DATABASE_PATH: str = "data/toop.db"
+    # Don't-know alert: flag a player to the admin when their don't-know count is
+    # at least DK_ALERT_MIN_PROMPTS AND their don't-know rate is at least DK_ALERT_RATE.
+    DK_ALERT_MIN_PROMPTS: int = Field(default=10, ge=0)
+    DK_ALERT_RATE: float = Field(default=0.5, ge=0.0, le=1.0)
+    DEFAULT_PAUSE_DAYS: int = Field(default=14, gt=0)
 
     @field_validator("SESSION_WEEKDAY")
     @classmethod
