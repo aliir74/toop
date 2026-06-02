@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime, time
 
+from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -11,10 +12,12 @@ from telegram.ext import (
     filters,
 )
 
+from toop.commands import menu_commands
 from toop.config import settings
 from toop.db import get_connection, init_db
 from toop.handlers.alerts import dk_alert_job
 from toop.handlers.health import handle_coverage, handle_health
+from toop.handlers.help import handle_help
 from toop.handlers.ops import handle_backup_db, handle_version
 from toop.handlers.ratings import handle_refresh_ratings
 from toop.handlers.roster import (
@@ -65,6 +68,26 @@ from toop.sessions import WEEKDAY_INDEX
 logger = logging.getLogger(__name__)
 
 
+async def _register_commands(app: Application) -> None:
+    """Push the command list to Telegram so the `/` menu stays in sync.
+
+    Public commands go to the default scope (every user); the full list goes to
+    the admin's private chat — a chat-scope set_my_commands replaces the default
+    for that chat, so the admin needs the public commands included too. Admin id
+    of 0 (unset) skips the admin scope entirely.
+    """
+
+    def _to_bot_commands(admin: bool) -> list[BotCommand]:
+        return [BotCommand(c.name, c.short) for c in menu_commands(admin=admin)]
+
+    await app.bot.set_my_commands(_to_bot_commands(admin=False), scope=BotCommandScopeDefault())
+    admin_id = settings.ADMIN_TELEGRAM_ID
+    if admin_id != 0:
+        await app.bot.set_my_commands(
+            _to_bot_commands(admin=True), scope=BotCommandScopeChat(chat_id=admin_id)
+        )
+
+
 def main() -> None:
     """Entry point for the توپ bot."""
     logging.basicConfig(
@@ -76,7 +99,7 @@ def main() -> None:
     conn = get_connection(settings.DATABASE_PATH)
     init_db(conn)
 
-    app = Application.builder().token(settings.BOT_TOKEN).build()
+    app = Application.builder().token(settings.BOT_TOKEN).post_init(_register_commands).build()
     app.bot_data["conn"] = conn
     app.bot_data["started_at"] = datetime.now(UTC)
 
@@ -97,6 +120,7 @@ def main() -> None:
     app.add_handler(CommandHandler("lock_in", handle_lock_in))
     app.add_handler(CommandHandler("start", handle_start))
     app.add_handler(CommandHandler("vote", handle_vote_command))
+    app.add_handler(CommandHandler("help", handle_help))
     app.add_handler(CommandHandler("nudge", handle_nudge))
     app.add_handler(CommandHandler("refresh_ratings", handle_refresh_ratings))
     app.add_handler(CommandHandler("snapshot", handle_snapshot))
