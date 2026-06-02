@@ -1085,28 +1085,28 @@
             <span class="label">Files</span> Modify: src/toop/handlers/roster.py · Modify: src/toop/bot.py · Modify: tests/test_roster_handlers.py · Modify: tests/test_bot_wiring.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests: no-args lists ONLY players that are disabled (<code>in_pool=0</code>) or actively paused (<code>_is_paused</code>), as <code>enpick:&lt;id&gt;</code>; a fully-enabled-only roster replies &#x27;nobody is paused/disabled&#x27;; callback restores and edits; gone-player alert; bad-int; None return.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>ENPICK_PREFIX = &quot;enpick:&quot;</code>; in the no-args branch filter <code>list_active_players</code> to <code>not in_pool or _is_paused(pool_paused_until, now)</code>; render keyboard or the empty-state reply.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>handle_enable_callback</code> calling <code>enable_player_pool</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Register <code>CallbackQueryHandler(..., pattern=r&quot;^enpick:&quot;)</code>; bump wiring 34 → 35.</span>
         </li>
         <li class="step" data-status="pending">
           <input type="checkbox" />
           <span class="step-text">Run the full gate.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(roster): button-driven /enable_voting showing only paused/disabled</span>
         </li>
           </ol>

@@ -778,3 +778,50 @@ async def test_disable_callback_gone_player_alerts(
     await handle_disable_callback(update, _context(conn, args=[]))
     assert "no longer" in answer.await_args.args[0].lower()
     edit.assert_not_called()
+
+
+# ----- /enable_voting buttons (only paused/disabled) -----
+
+from datetime import UTC, datetime  # noqa: E402
+
+from toop.handlers.roster import handle_enable_callback  # noqa: E402
+
+
+async def test_enable_voting_no_args_lists_only_paused_disabled(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 1, "Normal", "normal")  # in pool — must NOT appear
+    add_player(conn, 2, "Disabled", "disabled")
+    add_player(conn, 3, "Paused", "paused")
+    conn.execute("UPDATE players SET in_pool=0 WHERE telegram_id=2")
+    future = (datetime.now(UTC) + timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("UPDATE players SET pool_paused_until=? WHERE telegram_id=3", (future,))
+    conn.commit()
+    update = _admin_update("/enable_voting")
+    await handle_enable_voting(update, _context(conn, args=[]))
+    kb = update.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
+    callbacks = [b.callback_data for row in kb for b in row]
+    assert set(callbacks) == {"enpick:2", "enpick:3"}
+
+
+async def test_enable_voting_no_args_nobody_paused(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 1, "Normal", "normal")
+    update = _admin_update("/enable_voting")
+    await handle_enable_voting(update, _context(conn, args=[]))
+    assert "Nobody is paused" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_enable_callback_restores_and_edits(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 111, "Bob", "bob")
+    conn.execute("UPDATE players SET in_pool=0 WHERE telegram_id=111")
+    conn.commit()
+    update = _callback_update("enpick:111")
+    answer, edit = _callbacks(update)
+    await handle_enable_callback(update, _context(conn, args=[]))
+    assert _pool(conn, 111)["in_pool"] == 1
+    answer.assert_awaited()
+    assert "Restored Bob" in edit.await_args.args[0]

@@ -377,19 +377,47 @@ async def handle_disable_callback(update: Update, context: ContextTypes.DEFAULT_
 
 @require_admin
 async def handle_enable_voting(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Restore a player to the rating pool, clearing any disable AND any pause."""
+    """Restore a player to the rating pool, clearing any disable AND any pause.
+
+    With no args, lists ONLY players currently disabled or actively paused as
+    buttons — the whole roster would bury the few that are actually restorable.
+    With a target, runs the typed one-shot."""
     message = update.effective_message
     if message is None:
         return
-    if not context.args:
-        await message.reply_text(ENABLE_USAGE)
-        return
     conn = _conn(context)
+    if not context.args:
+        now = datetime.now(UTC)
+        players = [
+            p
+            for p in list_active_players(conn)
+            if not p.in_pool or _is_paused(p.pool_paused_until, now)
+        ]
+        if not players:
+            await message.reply_text("Nobody is paused or disabled right now. ✅")
+            return
+        await message.reply_text(
+            "Who do you want to restore to the rating pool?",
+            reply_markup=_player_keyboard(players, ENPICK_PREFIX),
+        )
+        return
     target = _resolve_pool_target(conn, context.args[0])
     if target is not None and enable_player_pool(conn, target):
         await message.reply_text(f"Restored {context.args[0]} to the rating pool. ✅")
     else:
         await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+
+
+@require_admin
+async def handle_enable_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin tapped a player button from /enable_voting — restore them to the pool."""
+    await _single_pick_action(
+        update,
+        context,
+        ENPICK_PREFIX,
+        enable_player_pool,
+        lambda name: f"Restored {name} to the rating pool. ✅",
+    )
 
 
 @require_admin
