@@ -11,6 +11,16 @@ class Player:
     display_name: str
     is_calibrating: bool
     active: bool
+    in_pool: bool = True
+    pool_paused_until: str | None = None
+    is_ghost: bool = False
+
+
+# Shared column list so every Player query stays in sync with the dataclass.
+_PLAYER_COLS = (
+    "telegram_id, username, display_name, is_calibrating, active, "
+    "in_pool, pool_paused_until, is_ghost"
+)
 
 
 def add_player(
@@ -69,7 +79,7 @@ def rename_player(conn: sqlite3.Connection, telegram_id: int, new_display_name: 
 
 def list_active_players(conn: sqlite3.Connection) -> list[Player]:
     rows = conn.execute(
-        "SELECT telegram_id, username, display_name, is_calibrating, active "
+        f"SELECT {_PLAYER_COLS} "
         "FROM players WHERE active=1 ORDER BY display_name COLLATE NOCASE"
     ).fetchall()
     return [_row_to_player(r) for r in rows]
@@ -77,8 +87,7 @@ def list_active_players(conn: sqlite3.Connection) -> list[Player]:
 
 def get_player_by_username(conn: sqlite3.Connection, username: str) -> Player | None:
     row = conn.execute(
-        "SELECT telegram_id, username, display_name, is_calibrating, active "
-        "FROM players WHERE username=? AND active=1",
+        f"SELECT {_PLAYER_COLS} FROM players WHERE username=? AND active=1",
         (username.lstrip("@").lower(),),
     ).fetchone()
     return _row_to_player(row) if row else None
@@ -86,8 +95,7 @@ def get_player_by_username(conn: sqlite3.Connection, username: str) -> Player | 
 
 def _fetch_one(conn: sqlite3.Connection, telegram_id: int) -> sqlite3.Row:
     row = conn.execute(
-        "SELECT telegram_id, username, display_name, is_calibrating, active "
-        "FROM players WHERE telegram_id=?",
+        f"SELECT {_PLAYER_COLS} FROM players WHERE telegram_id=?",
         (telegram_id,),
     ).fetchone()
     if row is None:
@@ -102,4 +110,7 @@ def _row_to_player(row: sqlite3.Row) -> Player:
         display_name=row["display_name"],
         is_calibrating=bool(row["is_calibrating"]),
         active=bool(row["active"]),
+        in_pool=bool(row["in_pool"]),
+        pool_paused_until=row["pool_paused_until"],
+        is_ghost=bool(row["is_ghost"]),
     )

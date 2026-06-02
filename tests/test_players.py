@@ -20,6 +20,18 @@ def test_add_player_creates_active_calibrating(conn: sqlite3.Connection) -> None
     assert p.is_calibrating is True
 
 
+def test_player_exposes_pool_and_ghost_defaults(conn: sqlite3.Connection) -> None:
+    add_player(conn, telegram_id=1, display_name="Alice", username="alice")
+    p = list_active_players(conn)[0]
+    assert p.in_pool is True
+    assert p.pool_paused_until is None
+    assert p.is_ghost is False
+    by_username = get_player_by_username(conn, "alice")
+    assert by_username is not None
+    assert by_username.in_pool is True
+    assert by_username.is_ghost is False
+
+
 def test_add_player_is_idempotent_and_revives(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Alice", "alice")
     soft_remove_player(conn, 1)

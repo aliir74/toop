@@ -1029,7 +1029,7 @@
     <span class="phase-progress">0 / 0</span>
   </div>
   <div class="phase-bar"><div class="fill"></div></div>
-  <article class="task" data-task-id="3.1" data-task-status="pending">
+  <article class="task" data-task-id="3.1" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">3.1</span><span class="task-name">Extend Player dataclass + SELECT lists</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1041,28 +1041,28 @@
             <span class="label">Files</span> Modify: src/toop/players.py · Modify: src/toop/handlers/voting.py · Modify: tests/test_players.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: list_active_players / add_player return Player objects exposing in_pool (bool), pool_paused_until (str|None), is_ghost (bool) with correct defaults</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add fields to the frozen Player dataclass with defaults: <code>in_pool: bool = True</code>, <code>pool_paused_until: str | None = None</code>, <code>is_ghost: bool = False</code></span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Update every SELECT in players.py (_fetch_one, list_active_players, get_player_by_username) and voting.py _get_player to select the new columns and pass them to _row_to_player / Player(...)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run full suite to catch any other Player constructor that now needs the columns; fix</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest -v &amp;&amp; uv run ty check src/</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(players): expose pool + ghost flags on Player</span>
         </li>
           </ol>

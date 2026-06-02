@@ -58,7 +58,8 @@ def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
 
 def _get_player(conn: sqlite3.Connection, telegram_id: int) -> Player | None:
     row = conn.execute(
-        "SELECT telegram_id, username, display_name, is_calibrating, active "
+        "SELECT telegram_id, username, display_name, is_calibrating, active, "
+        "in_pool, pool_paused_until, is_ghost "
         "FROM players WHERE telegram_id=?",
         (telegram_id,),
     ).fetchone()
@@ -70,6 +71,9 @@ def _get_player(conn: sqlite3.Connection, telegram_id: int) -> Player | None:
         display_name=row["display_name"],
         is_calibrating=bool(row["is_calibrating"]),
         active=bool(row["active"]),
+        in_pool=bool(row["in_pool"]),
+        pool_paused_until=row["pool_paused_until"],
+        is_ghost=bool(row["is_ghost"]),
     )
 
 

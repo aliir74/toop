@@ -249,14 +249,15 @@ async def test_callback_a_increments_a_wins(conn: sqlite3.Connection) -> None:
     assert answered == 1
 
 
-async def test_callback_dk_records_dedupe_only(conn: sqlite3.Connection) -> None:
+async def test_callback_dk_counts_dont_know_no_winner(conn: sqlite3.Connection) -> None:
     _seed(conn)
     update = _callback_update(user_id=1, data="v:dk:2:3:attack")
     await handle_vote_callback(update, _ctx(conn))
     row = conn.execute(
-        "SELECT 1 FROM vote_aggregates WHERE player_a=2 AND player_b=3 AND axis='attack'"
+        "SELECT a_wins, b_wins, dont_know FROM vote_aggregates "
+        "WHERE player_a=2 AND player_b=3 AND axis='attack'"
     ).fetchone()
-    assert row is None
+    assert (row["a_wins"], row["b_wins"], row["dont_know"]) == (0, 0, 1)
     answered = conn.execute(
         "SELECT 1 FROM answered_prompts "
         "WHERE voter_id=1 AND player_a=2 AND player_b=3 AND axis='attack'"
