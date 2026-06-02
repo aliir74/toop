@@ -207,7 +207,23 @@ def mark_dont_know(
     player_b: int,
     axis: str,
 ) -> None:
-    """Voter declined to compare. Dedupe only — no aggregate increment."""
+    """Voter declined to compare. Bumps the pair's aggregate dont_know counter
+    (no winner, no voter identity) plus the voter-side dedupe row.
+
+    Privacy invariant holds: vote_aggregates still carries no voter_id, so the
+    don't-know count can never be traced back to who tapped it.
+    """
+    a, b = (player_a, player_b) if player_a < player_b else (player_b, player_a)
+    conn.execute(
+        """
+        INSERT INTO vote_aggregates (player_a, player_b, axis, dont_know, updated_at)
+        VALUES (?, ?, ?, 1, CURRENT_TIMESTAMP)
+        ON CONFLICT(player_a, player_b, axis) DO UPDATE SET
+            dont_know = dont_know + 1,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (a, b, axis),
+    )
     conn.execute(
         """
         INSERT OR IGNORE INTO answered_prompts (voter_id, player_a, player_b, axis)

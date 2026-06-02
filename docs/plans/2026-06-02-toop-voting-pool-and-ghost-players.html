@@ -900,24 +900,24 @@
             <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: after mark_dont_know(conn, voter, a, b, axis), vote_aggregates row for (a,b,axis) has dont_know=1 and a_wins=b_wins=0; a second different voter on the same pair bumps it to 2; answered_prompts dedupe row still written; pending_prompts row deleted</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: vote_aggregates still carries NO voter_id column (privacy invariant holds)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Edit mark_dont_know(): add an <code>INSERT INTO vote_aggregates (...dont_know...) VALUES (...,1,...) ON CONFLICT(player_a,player_b,axis) DO UPDATE SET dont_know = dont_know + 1, updated_at = CURRENT_TIMESTAMP</code> alongside the existing dedupe + pending delete (normalize a&lt;b first)</span>
         </li>
         <li class="step" data-status="pending">
           <input type="checkbox" />
           <span class="step-text">Verify: uv run pytest tests/test_voting_queue.py -v</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(voting): count don&#x27;t-know taps per pair in vote_aggregates</span>
         </li>
           </ol>

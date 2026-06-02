@@ -6,7 +6,9 @@ from datetime import UTC, datetime, timedelta
 from toop.players import add_player
 from toop.voting_queue import (
     add_snooze,
+    bootstrap_calibration_prompts,
     insert_priority_prompt,
+    mark_dont_know,
     peek_next_prompt,
     record_vote,
     refill_queue,
@@ -236,3 +238,45 @@ def test_peek_without_exclude_unchanged(conn: sqlite3.Connection) -> None:
     top = peek_next_prompt(conn, voter_id=1)
     assert top is not None
     assert top.axis == "defense"
+
+
+def _dont_know_count(conn: sqlite3.Connection, a: int, b: int, axis: str) -> int:
+    row = conn.execute(
+        "SELECT dont_know FROM vote_aggregates WHERE player_a=? AND player_b=? AND axis=?",
+        (a, b, axis),
+    ).fetchone()
+    return row["dont_know"] if row else 0
+
+
+def test_mark_dont_know_increments_pair_counter(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 4)
+    mark_dont_know(conn, voter_id=1, player_a=2, player_b=3, axis="attack")
+    row = conn.execute(
+        "SELECT a_wins, b_wins, dont_know FROM vote_aggregates "
+        "WHERE player_a=2 AND player_b=3 AND axis='attack'"
+    ).fetchone()
+    assert (row["a_wins"], row["b_wins"], row["dont_know"]) == (0, 0, 1)
+    # A second, different voter on the same pair bumps it to 2.
+    mark_dont_know(conn, voter_id=4, player_a=2, player_b=3, axis="attack")
+    assert _dont_know_count(conn, 2, 3, "attack") == 2
+
+
+def test_mark_dont_know_still_dedupes_and_clears_pending(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 3)
+    insert_priority_prompt(conn, voter_id=1, player_a=2, player_b=3, axis="attack")
+    mark_dont_know(conn, voter_id=1, player_a=2, player_b=3, axis="attack")
+    answered = conn.execute(
+        "SELECT 1 FROM answered_prompts WHERE voter_id=1 AND player_a=2 AND player_b=3 "
+        "AND axis='attack'"
+    ).fetchone()
+    assert answered is not None
+    pending = conn.execute(
+        "SELECT 1 FROM pending_prompts WHERE voter_id=1 AND player_a=2 AND player_b=3 "
+        "AND axis='attack'"
+    ).fetchone()
+    assert pending is None
+
+
+def test_vote_aggregates_has_no_voter_id_column(conn: sqlite3.Connection) -> None:
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(vote_aggregates)").fetchall()}
+    assert "voter_id" not in cols
