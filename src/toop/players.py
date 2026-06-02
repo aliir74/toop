@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -50,6 +51,40 @@ def soft_remove_player(conn: sqlite3.Connection, telegram_id: int) -> bool:
     """Set active=0. Returns True if a player row was changed."""
     cur = conn.execute(
         "UPDATE players SET active=0 WHERE telegram_id=? AND active=1",
+        (telegram_id,),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def pause_player_pool(conn: sqlite3.Connection, telegram_id: int, until: datetime) -> bool:
+    """Temporarily pull a player from the rating pool until `until`. Others stop
+    being asked to rate them; the player can still vote. Returns True if changed.
+    """
+    until_text = until.strftime("%Y-%m-%d %H:%M:%S")
+    cur = conn.execute(
+        "UPDATE players SET pool_paused_until=? WHERE telegram_id=? AND active=1",
+        (until_text, telegram_id),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def disable_player_pool(conn: sqlite3.Connection, telegram_id: int) -> bool:
+    """Manually pull a player from the rating pool indefinitely (in_pool=0)."""
+    cur = conn.execute(
+        "UPDATE players SET in_pool=0 WHERE telegram_id=? AND active=1",
+        (telegram_id,),
+    )
+    conn.commit()
+    return cur.rowcount > 0
+
+
+def enable_player_pool(conn: sqlite3.Connection, telegram_id: int) -> bool:
+    """Restore a player to the rating pool, clearing any manual disable AND any
+    timed pause."""
+    cur = conn.execute(
+        "UPDATE players SET in_pool=1, pool_paused_until=NULL WHERE telegram_id=? AND active=1",
         (telegram_id,),
     )
     conn.commit()

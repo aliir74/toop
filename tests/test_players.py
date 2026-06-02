@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import sqlite3
+from datetime import UTC, datetime, timedelta
 
 from toop.players import (
     add_player,
+    disable_player_pool,
+    enable_player_pool,
     get_player_by_username,
     list_active_players,
+    pause_player_pool,
     rename_player,
     soft_remove_player,
 )
@@ -81,3 +85,38 @@ def test_rename_player_inactive_returns_none(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Alice", "alice")
     soft_remove_player(conn, 1)
     assert rename_player(conn, 1, "Alice Renamed") is None
+
+
+def _pool_row(conn: sqlite3.Connection, telegram_id: int) -> sqlite3.Row:
+    return conn.execute(
+        "SELECT in_pool, pool_paused_until FROM players WHERE telegram_id=?",
+        (telegram_id,),
+    ).fetchone()
+
+
+def test_pause_player_pool_sets_timestamp(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    until = datetime.now(UTC) + timedelta(days=14)
+    assert pause_player_pool(conn, 1, until) is True
+    row = _pool_row(conn, 1)
+    assert row["in_pool"] == 1  # pause is independent of the manual toggle
+    assert row["pool_paused_until"] is not None
+    assert pause_player_pool(conn, 999, until) is False
+
+
+def test_disable_player_pool_clears_in_pool(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    assert disable_player_pool(conn, 1) is True
+    assert _pool_row(conn, 1)["in_pool"] == 0
+    assert disable_player_pool(conn, 999) is False
+
+
+def test_enable_player_pool_clears_both(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    pause_player_pool(conn, 1, datetime.now(UTC) + timedelta(days=7))
+    disable_player_pool(conn, 1)
+    assert enable_player_pool(conn, 1) is True
+    row = _pool_row(conn, 1)
+    assert row["in_pool"] == 1
+    assert row["pool_paused_until"] is None
+    assert enable_player_pool(conn, 999) is False

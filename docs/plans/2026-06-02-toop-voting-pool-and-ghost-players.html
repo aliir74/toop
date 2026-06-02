@@ -1078,7 +1078,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="3.2" data-task-status="pending">
+  <article class="task" data-task-id="3.2" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">3.2</span><span class="task-name">pause / disable / enable pool functions</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1090,20 +1090,20 @@
             <span class="label">Files</span> Modify: src/toop/players.py · Modify: tests/test_players.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests: pause_player_pool(conn, id, until) sets pool_paused_until and returns True (False when no active player); disable_player_pool sets in_pool=0; enable_player_pool sets in_pool=1 AND pool_paused_until=NULL (clears a timed pause too)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Implement the three functions (typed: <code>until: datetime</code>, format to &#x27;%Y-%m-%d %H:%M:%S&#x27; like add_snooze); each UPDATE ... WHERE telegram_id=? AND active=1, return cur.rowcount &gt; 0</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: uv run pytest tests/test_players.py -v &amp;&amp; uv run ty check src/</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(players): pause/disable/enable rating-pool membership</span>
         </li>
           </ol>
