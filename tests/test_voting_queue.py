@@ -280,3 +280,52 @@ def test_mark_dont_know_still_dedupes_and_clears_pending(conn: sqlite3.Connectio
 def test_vote_aggregates_has_no_voter_id_column(conn: sqlite3.Connection) -> None:
     cols = {r[1] for r in conn.execute("PRAGMA table_info(vote_aggregates)").fetchall()}
     assert "voter_id" not in cols
+
+
+def _pair_partners(conn: sqlite3.Connection, voter_id: int) -> set[int]:
+    rows = conn.execute(
+        "SELECT player_a, player_b FROM pending_prompts WHERE voter_id=?", (voter_id,)
+    ).fetchall()
+    partners: set[int] = set()
+    for r in rows:
+        partners.add(r["player_a"])
+        partners.add(r["player_b"])
+    return partners
+
+
+def test_refill_excludes_disabled_pool_player(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 4)
+    conn.execute("UPDATE players SET in_pool=0 WHERE telegram_id=2")
+    conn.commit()
+    refill_queue(conn, voter_id=1, queue_depth=20)
+    assert 2 not in _pair_partners(conn, 1)
+
+
+def test_refill_excludes_future_paused_player(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 4)
+    future = (datetime.now(UTC) + timedelta(days=3)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("UPDATE players SET pool_paused_until=? WHERE telegram_id=2", (future,))
+    conn.commit()
+    refill_queue(conn, voter_id=1, queue_depth=20)
+    assert 2 not in _pair_partners(conn, 1)
+
+
+def test_refill_includes_expired_pause(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 4)
+    past = (datetime.now(UTC) - timedelta(days=1)).strftime("%Y-%m-%d %H:%M:%S")
+    conn.execute("UPDATE players SET pool_paused_until=? WHERE telegram_id=2", (past,))
+    conn.commit()
+    refill_queue(conn, voter_id=1, queue_depth=20)
+    assert 2 in _pair_partners(conn, 1)
+
+
+def test_paused_subject_can_still_vote(conn: sqlite3.Connection) -> None:
+    """Pulling a player from the rating pool only stops others rating THEM; the
+    paused player can still vote on everyone else."""
+    _seed_players(conn, 4)
+    conn.execute("UPDATE players SET in_pool=0 WHERE telegram_id=1")
+    conn.commit()
+    inserted = refill_queue(conn, voter_id=1, queue_depth=20)
+    assert inserted > 0
+    # Voter 1 is paused as a subject but never appears in their own pairs anyway.
+    assert 1 not in _pair_partners(conn, 1)

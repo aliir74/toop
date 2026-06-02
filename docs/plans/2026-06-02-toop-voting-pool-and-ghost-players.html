@@ -947,24 +947,24 @@
             <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: a player with in_pool=0 never appears in refill_queue candidate pairs; one with pool_paused_until in the future never appears; one whose pool_paused_until is in the PAST reappears; an active in-pool player still appears</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing test: a paused/disabled subject can STILL receive prompts as a voter (voter eligibility is independent of pool membership)</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Edit CANDIDATE_SQL: rename the <code>active</code> CTE to <code>rateable</code> filtering <code>active=1 AND in_pool=1 AND (pool_paused_until IS NULL OR pool_paused_until &lt;= CURRENT_TIMESTAMP) AND telegram_id != :voter</code>; keep the voter (:voter) unconstrained by pool flags</span>
         </li>
         <li class="step" data-status="pending">
           <input type="checkbox" />
           <span class="step-text">Verify: uv run pytest tests/test_voting_queue.py -v</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(voting): exclude paused/disabled players from new pairs</span>
         </li>
           </ol>

@@ -25,12 +25,15 @@ def _compute_info_gain(total_votes: int) -> float:
 
 
 CANDIDATE_SQL = """
-WITH active AS (
-    SELECT telegram_id FROM players WHERE active=1 AND telegram_id != :voter
+WITH rateable AS (
+    SELECT telegram_id FROM players
+    WHERE active=1 AND in_pool=1
+      AND (pool_paused_until IS NULL OR pool_paused_until <= CURRENT_TIMESTAMP)
+      AND telegram_id != :voter
 ),
 pairs AS (
     SELECT a.telegram_id AS pa, b.telegram_id AS pb
-    FROM active a JOIN active b ON a.telegram_id < b.telegram_id
+    FROM rateable a JOIN rateable b ON a.telegram_id < b.telegram_id
 ),
 axes(axis) AS (VALUES ('attack'), ('defense'), ('setting')),
 snoozed AS (
