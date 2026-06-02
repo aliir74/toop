@@ -19,7 +19,7 @@ from toop.sessions import get_active_session
 
 logger = logging.getLogger(__name__)
 
-LOCK_IN_USAGE = "Usage: /lock_in @username"
+LOCK_IN_USAGE = "Usage: /lock_in @username  (or /lock_in <telegram_id>)"
 CALLBACK_PREFIX = "rsvp:"
 
 
@@ -81,10 +81,17 @@ async def handle_lock_in(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         if message is not None:
             await message.reply_text(LOCK_IN_USAGE)
         return
-    username = context.args[0].lstrip("@").lower()
-    if not username:
-        await message.reply_text(LOCK_IN_USAGE)
-        return
+    # Accept either a numeric telegram_id (for no-username players, mirroring
+    # /add_player) or an @username handle.
+    raw = context.args[0]
+    if raw.isdigit():
+        target: int | str = int(raw)
+    else:
+        username = raw.lstrip("@").lower()
+        if not username:
+            await message.reply_text(LOCK_IN_USAGE)
+            return
+        target = username
 
     conn = _conn(context)
     active = get_active_session(conn)
@@ -92,15 +99,29 @@ async def handle_lock_in(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await message.reply_text("No active session to lock into.")
         return
 
-    row = conn.execute(
-        "SELECT telegram_id FROM players WHERE username=? AND active=1",
-        (username,),
-    ).fetchone()
-    if row is None:
-        await message.reply_text(f"@{username} isn't on the roster.")
-        return
-
-    if lock_in_player(conn, active.id, row["telegram_id"]):
-        await message.reply_text(f"🔒 @{username} locked into session #{active.id}.")
+    if isinstance(target, int):
+        row = conn.execute(
+            "SELECT telegram_id, display_name, username FROM players "
+            "WHERE telegram_id=? AND active=1",
+            (target,),
+        ).fetchone()
+        if row is None:
+            await message.reply_text(
+                f"id {target} isn't on the roster — add them with /add_player first."
+            )
+            return
     else:
-        await message.reply_text(f"Couldn't lock @{username}.")
+        row = conn.execute(
+            "SELECT telegram_id, display_name, username FROM players WHERE username=? AND active=1",
+            (target,),
+        ).fetchone()
+        if row is None:
+            await message.reply_text(f"@{target} isn't on the roster.")
+            return
+
+    telegram_id = row["telegram_id"]
+    who = row["display_name"] or (f"@{row['username']}" if row["username"] else f"id {telegram_id}")
+    if lock_in_player(conn, active.id, telegram_id):
+        await message.reply_text(f"🔒 {who} locked into session #{active.id}.")
+    else:
+        await message.reply_text(f"Couldn't lock {who}.")

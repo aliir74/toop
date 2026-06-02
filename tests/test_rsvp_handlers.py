@@ -108,6 +108,30 @@ async def test_lock_in_admin(admin_settings: None, conn: sqlite3.Connection) -> 
     assert row is not None and row["locked_in"] == 1
 
 
+async def test_lock_in_by_id_success(admin_settings: None, conn: sqlite3.Connection) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    # No-username player — only reachable by numeric id.
+    add_player(conn, 5299711301, "Hamzeh Hosseini", None)
+    update = _admin_update()
+    await handle_lock_in(update, _ctx(conn, args=["5299711301"]))
+    row = conn.execute(
+        "SELECT locked_in FROM rsvps WHERE session_id=? AND telegram_id=?",
+        (sess.id, 5299711301),
+    ).fetchone()
+    assert row is not None and row["locked_in"] == 1
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Hamzeh Hosseini" in reply
+
+
+async def test_lock_in_by_id_not_on_roster(admin_settings: None, conn: sqlite3.Connection) -> None:
+    open_session(conn, date(2026, 5, 18))
+    update = _admin_update()
+    await handle_lock_in(update, _ctx(conn, args=["7290468940"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "isn't on the roster" in reply
+    assert "/add_player" in reply
+
+
 async def test_lock_in_unknown_username(admin_settings: None, conn: sqlite3.Connection) -> None:
     open_session(conn, date(2026, 5, 18))
     update = _admin_update()

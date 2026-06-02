@@ -75,6 +75,7 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 | `/close_session` | Marks the active session done |
 | `/sessions` | Recent sessions + status |
 | `/lock_in @username` | Force-include a player in the next snapshot |
+| `/lock_in <telegram_id>` | Force-include by numeric id — the only way to lock in a player who has **no** Telegram username. The id must already be an active roster member (add via `/add_player <id>` first). |
 | `/snapshot` | Pick attendees, fit ratings, generate teams. Status → snapshotted. |
 | `/teams` | Preview the snapshot in DM |
 | `/swap @a @b` | Swap two players across teams, live metrics |
