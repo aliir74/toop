@@ -1,14 +1,13 @@
 [project]
 name = "toop"
 version = "0.1.0"
-description = "Telegram bot that balances weekly 6v6 volleyball teams via peer pairwise voting"
+description = "Telegram bot that balances weekly 6v6 volleyball teams via absolute 1-5 peer scoring"
 requires-python = ">=3.12"
 dependencies = [
     "python-telegram-bot[ext]>=22.0",
     "pydantic-settings>=2.6",
     "python-dotenv>=1.0",
     "aiosqlite>=0.20",
-    "numpy>=2.0",
 ]
 
 [project.optional-dependencies]

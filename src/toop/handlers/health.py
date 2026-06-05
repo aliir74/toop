@@ -9,7 +9,6 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
-from toop.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -46,19 +45,33 @@ def _calibration_marker(is_calibrating: bool, lifetime: int) -> str:
     return "⚠" if lifetime > 0 else "✗"
 
 
+# `pending` is the exact count of (rateable player, indicator) targets this voter
+# hasn't scored or skipped — mirrors voting_queue.select_next_score_target.
 HEALTH_SQL = """
+WITH indicators(indicator) AS (
+    VALUES ('attack'), ('receive'), ('block'), ('setting'), ('serve'), ('positioning')
+)
 SELECT
     p.telegram_id,
     p.display_name,
     p.is_calibrating,
-    (SELECT MAX(answered_at) FROM answered_prompts ap WHERE ap.voter_id = p.telegram_id)
+    (SELECT MAX(updated_at) FROM scores s WHERE s.voter_id = p.telegram_id)
         AS last_voted,
-    (SELECT COUNT(*) FROM answered_prompts ap WHERE ap.voter_id = p.telegram_id)
+    (SELECT COUNT(*) FROM scores s WHERE s.voter_id = p.telegram_id)
         AS lifetime,
-    (SELECT COUNT(*) FROM answered_prompts ap
-     WHERE ap.voter_id = p.telegram_id AND ap.answered_at >= DATE('now', '-30 days'))
+    (SELECT COUNT(*) FROM scores s
+     WHERE s.voter_id = p.telegram_id AND s.updated_at >= DATE('now', '-30 days'))
         AS last_30d,
-    (SELECT COUNT(*) FROM pending_prompts pp WHERE pp.voter_id = p.telegram_id)
+    (SELECT COUNT(*) FROM players rp CROSS JOIN indicators i
+     WHERE rp.active = 1 AND rp.in_pool = 1
+       AND (rp.pool_paused_until IS NULL OR rp.pool_paused_until <= CURRENT_TIMESTAMP)
+       AND rp.telegram_id != p.telegram_id
+       AND NOT EXISTS (SELECT 1 FROM scores s
+            WHERE s.voter_id = p.telegram_id AND s.player_id = rp.telegram_id
+              AND s.indicator = i.indicator)
+       AND NOT EXISTS (SELECT 1 FROM score_skips sk
+            WHERE sk.voter_id = p.telegram_id AND sk.player_id = rp.telegram_id
+              AND sk.indicator = i.indicator))
         AS pending
 FROM players p
 WHERE p.active = 1
@@ -123,30 +136,27 @@ async def handle_health(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     await message.reply_text(format_health(rows), parse_mode=ParseMode.MARKDOWN)
 
 
-# /coverage — most under-sampled pairs across the group, per axis.
+# /coverage — the active players with the fewest ratings, per indicator.
 
 COVERAGE_SQL = """
-WITH active AS (
-    SELECT telegram_id FROM players WHERE active=1
-),
-pairs AS (
-    SELECT a.telegram_id AS pa, b.telegram_id AS pb
-    FROM active a JOIN active b ON a.telegram_id < b.telegram_id
-)
 SELECT
-    p.pa,
-    p.pb,
-    COALESCE((SELECT a_wins + b_wins FROM vote_aggregates va
-              WHERE va.player_a=p.pa AND va.player_b=p.pb AND va.axis='attack'), 0)
-        AS attack_total,
-    COALESCE((SELECT a_wins + b_wins FROM vote_aggregates va
-              WHERE va.player_a=p.pa AND va.player_b=p.pb AND va.axis='defense'), 0)
-        AS defense_total,
-    COALESCE((SELECT a_wins + b_wins FROM vote_aggregates va
-              WHERE va.player_a=p.pa AND va.player_b=p.pb AND va.axis='setting'), 0)
-        AS setting_total
-FROM pairs p
-ORDER BY attack_total + defense_total + setting_total ASC, p.pa, p.pb
+    p.telegram_id,
+    (SELECT COUNT(*) FROM scores s WHERE s.player_id=p.telegram_id AND s.indicator='attack')
+        AS attack,
+    (SELECT COUNT(*) FROM scores s WHERE s.player_id=p.telegram_id AND s.indicator='receive')
+        AS receive,
+    (SELECT COUNT(*) FROM scores s WHERE s.player_id=p.telegram_id AND s.indicator='block')
+        AS block,
+    (SELECT COUNT(*) FROM scores s WHERE s.player_id=p.telegram_id AND s.indicator='setting')
+        AS setting,
+    (SELECT COUNT(*) FROM scores s WHERE s.player_id=p.telegram_id AND s.indicator='serve')
+        AS serve,
+    (SELECT COUNT(*) FROM scores s WHERE s.player_id=p.telegram_id AND s.indicator='positioning')
+        AS positioning,
+    (SELECT COUNT(*) FROM scores s WHERE s.player_id=p.telegram_id) AS total
+FROM players p
+WHERE p.active = 1
+ORDER BY total ASC, p.telegram_id
 LIMIT ?
 """
 
@@ -161,15 +171,17 @@ def build_coverage(conn: sqlite3.Connection, limit: int = 10) -> str:
     if not rows:
         return "Not enough players to compute coverage."
     names = _name_lookup(conn)
-    lines = ["Coverage gaps (least-sampled pairs):"]
+    lines = ["Coverage gaps (least-rated players):"]
     for r in rows:
-        name_a = names.get(r["pa"], f"#{r['pa']}")
-        name_b = names.get(r["pb"], f"#{r['pb']}")
+        name = names.get(r["telegram_id"], f"#{r['telegram_id']}")
         lines.append(
-            f"• {name_a} vs {name_b} — "
-            f"attack: {r['attack_total']} · "
-            f"defense: {r['defense_total']} · "
-            f"setting: {r['setting_total']}"
+            f"• {name} — "
+            f"attack: {r['attack']} · "
+            f"receive: {r['receive']} · "
+            f"block: {r['block']} · "
+            f"setting: {r['setting']} · "
+            f"serve: {r['serve']} · "
+            f"positioning: {r['positioning']}"
         )
     return "\n".join(lines)
 
@@ -188,5 +200,4 @@ __all__ = [
     "build_health_rows",
     "format_health",
     "build_coverage",
-    "settings",  # re-exported for monkeypatch convenience in tests
 ]
