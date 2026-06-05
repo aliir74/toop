@@ -14,16 +14,13 @@ from telegram.error import BadRequest, Forbidden
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
-from toop.config import settings
 from toop.contacts import upsert_contact
 from toop.players import Player
 from toop.voting_queue import (
-    Prompt,
-    add_snooze,
-    mark_dont_know,
-    peek_next_prompt,
-    record_vote,
-    refill_queue,
+    ScoreTarget,
+    record_score,
+    record_skip,
+    select_next_score_target,
 )
 
 logger = logging.getLogger(__name__)
@@ -36,17 +33,40 @@ GROUP_VOTE_DM_NUDGE = "👋 Tap /vote right here in our DM to rate teammates. �
 GROUP_VOTE_BLOCKED_NUDGE = "start a DM with me (@{bot}) and tap /vote there 🤫"
 GROUP_VOTE_NUDGE_TTL = 10  # seconds before the transient group nudge is deleted
 NO_PROMPTS_REPLY = (
-    "🎉 No prompts right now. Check back later — new pairs surface as the roster grows."
+    "🎉 All done for now — you've rated everyone. Check back later as the roster grows."
 )
 
 START_DM = (
     "Hi 👋 I'm توپ — I help balance our weekly volleyball teams.\n\n"
-    "Tap /vote any time to rate your teammates on attack, defense, and setting. "
-    "Your individual votes stay private — only the running tally is used. "
-    "The more you vote, the more accurate the teams. 🏐"
+    "Tap /vote any time to rate your teammates 1–5 on six skills "
+    "(حمله، دریافت، دفاع روی تور، پاسور، سرویس، جاگیری-تحرک). "
+    "You can re-tap any time to change a score. "
+    "The more you rate, the more accurate the teams. 🏐"
 )
 
 START_GROUP = "👋 I'm توپ. Tap RSVP buttons here in the group, and DM me to /vote on player skills."
+
+# Persian display label per indicator (shown in the prompt header).
+INDICATOR_FA: dict[str, str] = {
+    "attack": "حمله",
+    "receive": "دریافت",
+    "block": "دفاع روی تور",
+    "setting": "پاسور",
+    "serve": "سرویس",
+    "positioning": "جاگیری-تحرک",
+}
+# Persian scale words shown on the score buttons (NOT digits).
+SCORE_FA: dict[int, str] = {1: "خیلی ضعیف", 2: "ضعیف", 3: "متوسط", 4: "خوب", 5: "عالی"}
+# Short ASCII codes for callback_data (Telegram's 64-byte limit + long Persian).
+INDICATOR_CODE: dict[str, str] = {
+    "attack": "atk",
+    "receive": "rcv",
+    "block": "blk",
+    "setting": "set",
+    "serve": "srv",
+    "positioning": "pos",
+}
+CODE_INDICATOR: dict[str, str] = {code: ind for ind, code in INDICATOR_CODE.items()}
 
 
 def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
@@ -77,26 +97,35 @@ def _get_player(conn: sqlite3.Connection, telegram_id: int) -> Player | None:
     )
 
 
-def _format_prompt(prompt: Prompt, a: Player, b: Player) -> str:
-    return f"Who's stronger at *{prompt.axis}*?\n\n*{a.display_name}*  vs  *{b.display_name}*"
+def _format_prompt(target: ScoreTarget, player: Player) -> str:
+    label = INDICATOR_FA.get(target.indicator, target.indicator)
+    return f"Rate *{player.display_name}* — *{label}*"
 
 
-def _prompt_keyboard(prompt: Prompt, a: Player, b: Player) -> InlineKeyboardMarkup:
-    pair = f"{prompt.player_a}:{prompt.player_b}:{prompt.axis}"
-    return InlineKeyboardMarkup(
+def _prompt_keyboard(target: ScoreTarget, player: Player) -> InlineKeyboardMarkup:
+    code = INDICATOR_CODE[target.indicator]
+    # Five score buttons stacked best→worst (Persian labels carry the meaning;
+    # the numeric score only travels in callback_data).
+    rows = [
         [
-            [
-                InlineKeyboardButton(a.display_name, callback_data=f"{CALLBACK_PREFIX}a:{pair}"),
-                InlineKeyboardButton(b.display_name, callback_data=f"{CALLBACK_PREFIX}b:{pair}"),
-            ],
-            [
-                InlineKeyboardButton("🤷 Don't know", callback_data=f"{CALLBACK_PREFIX}dk:{pair}"),
-                InlineKeyboardButton(
-                    "😴 Snooze axis 1w", callback_data=f"{CALLBACK_PREFIX}sn:{prompt.axis}"
-                ),
-            ],
+            InlineKeyboardButton(
+                SCORE_FA[score],
+                callback_data=f"{CALLBACK_PREFIX}s:{player.telegram_id}:{code}:{score}",
+            )
+        ]
+        for score in (5, 4, 3, 2, 1)
+    ]
+    rows.append(
+        [
+            InlineKeyboardButton(
+                "🤷 ندیدمش", callback_data=f"{CALLBACK_PREFIX}dk:{player.telegram_id}:{code}"
+            ),
+            InlineKeyboardButton(
+                "⏭ Skip", callback_data=f"{CALLBACK_PREFIX}sk:{player.telegram_id}"
+            ),
         ]
     )
+    return InlineKeyboardMarkup(rows)
 
 
 async def _send_next_prompt(
@@ -105,11 +134,10 @@ async def _send_next_prompt(
     chat_id: int,
     voter_id: int,
     edit_message_id: int | None = None,
-    exclude_pair: tuple[int, int] | None = None,
+    exclude_player: int | None = None,
 ) -> None:
-    refill_queue(conn, voter_id, settings.QUEUE_DEPTH)
-    prompt = peek_next_prompt(conn, voter_id, exclude_pair=exclude_pair)
-    if prompt is None:
+    target = select_next_score_target(conn, voter_id, exclude_player=exclude_player)
+    if target is None:
         if edit_message_id is not None:
             try:
                 await context.bot.edit_message_text(
@@ -120,16 +148,13 @@ async def _send_next_prompt(
                 logger.warning("failed to edit prompt message: %s", exc)
         await context.bot.send_message(chat_id=chat_id, text=NO_PROMPTS_REPLY)
         return
-    a = _get_player(conn, prompt.player_a)
-    b = _get_player(conn, prompt.player_b)
-    if a is None or b is None:
-        logger.warning(
-            "prompt references missing player(s) %s %s", prompt.player_a, prompt.player_b
-        )
+    player = _get_player(conn, target.player_id)
+    if player is None:
+        logger.warning("score target references missing player %s", target.player_id)
         await context.bot.send_message(chat_id=chat_id, text=NO_PROMPTS_REPLY)
         return
-    text = _format_prompt(prompt, a, b)
-    keyboard = _prompt_keyboard(prompt, a, b)
+    text = _format_prompt(target, player)
+    keyboard = _prompt_keyboard(target, player)
     if edit_message_id is not None:
         try:
             await context.bot.edit_message_text(
@@ -243,50 +268,62 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     parts = payload.split(":")
     action = parts[0]
 
-    if action == "sn":
+    if action == "sk":
         if len(parts) < 2:
             await query.answer()
             return
-        axis = parts[1]
-        if axis not in ("attack", "defense", "setting"):
-            await query.answer()
-            return
-        add_snooze(conn, voter_id, axis)
-        await query.answer(f"Snoozed {axis} for 1 week 😴", show_alert=False)
-        await _send_next_prompt(
-            conn, context, chat_id=chat_id, voter_id=voter_id, edit_message_id=message_id
-        )
-        return
-
-    if action in ("a", "b", "dk"):
-        if len(parts) < 4:
-            await query.answer()
-            return
         try:
-            player_a = int(parts[1])
-            player_b = int(parts[2])
+            player_id = int(parts[1])
         except ValueError:
             await query.answer()
             return
-        axis = parts[3]
-        if axis not in ("attack", "defense", "setting"):
-            await query.answer()
-            return
-        if action == "dk":
-            mark_dont_know(conn, voter_id, player_a, player_b, axis)
-            await query.answer("Skipped 🤷")
-        else:
-            record_vote(conn, voter_id, player_a, player_b, axis, action)
-            await query.answer("Recorded ✅")
-        # Prefer a different pair next so the prompt visibly advances instead of
-        # cycling the same two names across attack/defense/setting.
+        await query.answer("Skipped ⏭")
         await _send_next_prompt(
             conn,
             context,
             chat_id=chat_id,
             voter_id=voter_id,
             edit_message_id=message_id,
-            exclude_pair=(player_a, player_b),
+            exclude_player=player_id,
+        )
+        return
+
+    if action in ("s", "dk"):
+        if (action == "s" and len(parts) < 4) or (action == "dk" and len(parts) < 3):
+            await query.answer()
+            return
+        try:
+            player_id = int(parts[1])
+        except ValueError:
+            await query.answer()
+            return
+        indicator = CODE_INDICATOR.get(parts[2])
+        if indicator is None:
+            await query.answer()
+            return
+        if action == "dk":
+            record_skip(conn, voter_id, player_id, indicator)
+            await query.answer("Skipped 🤷")
+        else:
+            try:
+                score = int(parts[3])
+            except ValueError:
+                await query.answer()
+                return
+            if not 1 <= score <= 5:
+                await query.answer()
+                return
+            record_score(conn, voter_id, player_id, indicator, score)
+            await query.answer("Recorded ✅")
+        # Prefer a different player next so the prompt visibly advances instead
+        # of cycling one name across all six indicators.
+        await _send_next_prompt(
+            conn,
+            context,
+            chat_id=chat_id,
+            voter_id=voter_id,
+            edit_message_id=message_id,
+            exclude_player=player_id,
         )
         return
 
@@ -315,13 +352,13 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 def _build_nudge_templates(conn: sqlite3.Connection, limit: int = 5) -> list[str]:
     """Return raw DM-able templates per low-completion voter.
 
-    Sorted ascending by lifetime answered_prompts count. Privacy-safe — counts
-    completion only, never reveals what they voted.
+    Sorted ascending by lifetime scores given. Counts completion only, never
+    reveals what they scored.
     """
     rows = conn.execute(
         """
         SELECT p.telegram_id, p.username, p.display_name,
-               (SELECT COUNT(*) FROM answered_prompts ap WHERE ap.voter_id = p.telegram_id)
+               (SELECT COUNT(*) FROM scores s WHERE s.voter_id = p.telegram_id)
                    AS lifetime
         FROM players p
         WHERE p.active = 1
@@ -335,7 +372,7 @@ def _build_nudge_templates(conn: sqlite3.Connection, limit: int = 5) -> list[str
         handle = f"@{r['username']}" if r["username"] else r["display_name"]
         first_name = r["display_name"].split()[0]
         templates.append(
-            f"--- {r['display_name']} ({handle}) — {r['lifetime']} lifetime votes ---\n"
+            f"--- {r['display_name']} ({handle}) — {r['lifetime']} lifetime ratings ---\n"
             f"Hey {first_name}! Whenever you get a sec, "
             f"could you ping توپ on Telegram and run /vote? "
             f"It helps me balance teams better. 🙏 Takes ~30s."
