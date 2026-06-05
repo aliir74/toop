@@ -1,8 +1,13 @@
 -- توپ — SQLite schema. Applied idempotently on startup.
--- Privacy invariant: vote_aggregates and answered_prompts are NEVER joined.
+-- Rating model: independent absolute 1–5 scoring across 6 indicators
+--   (attack, receive, block, setting, serve, positioning).
+-- Privacy posture (B2, decided 2026-06-05): scores are voter-linked — the
+-- `scores` table carries voter_id AND the raw 1–5 score — so per-rater bias can
+-- be normalized at refit time. Privacy is deliberately relaxed vs the retired
+-- pairwise model; only the admin has DB access.
 
 -- Presence log of everyone who has DM'd the bot. Standalone — NEVER joined to
--- players or any vote table. Exists only so the admin can see who is reachable
+-- players or any score table. Exists only so the admin can see who is reachable
 -- (i.e. resolvable by /add_player) before adding them to the roster.
 CREATE TABLE IF NOT EXISTS contacts (
     telegram_id     INTEGER PRIMARY KEY,
@@ -25,7 +30,7 @@ CREATE TABLE IF NOT EXISTS players (
     in_pool         INTEGER NOT NULL DEFAULT 1,
     pool_paused_until TIMESTAMP,
     -- Accountless "ghost" player: synthetic negative telegram_id, never DM'd,
-    -- only voted ON. Linked to a real account later via link_ghost_player.
+    -- only scored ON. Linked to a real account later via link_ghost_player.
     is_ghost        INTEGER NOT NULL DEFAULT 0
 );
 
@@ -53,49 +58,32 @@ CREATE TABLE IF NOT EXISTS attendance (
     PRIMARY KEY (session_id, telegram_id)
 );
 
--- Pairwise outcome counts. Invariant: player_a < player_b (enforced via CHECK).
--- This table NEVER stores voter identity. dont_know counts "🤷 Don't know" taps
--- on this pair (no winner) — an aggregate signal that nobody can rate the pair.
-CREATE TABLE IF NOT EXISTS vote_aggregates (
-    player_a        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
-    player_b        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
-    axis            TEXT NOT NULL CHECK (axis IN ('attack', 'defense', 'setting')),
-    a_wins          INTEGER NOT NULL DEFAULT 0,
-    b_wins          INTEGER NOT NULL DEFAULT 0,
-    dont_know       INTEGER NOT NULL DEFAULT 0,
+-- Per-voter, per-player, per-indicator absolute score on a 1–5 scale.
+-- The PRIMARY KEY dedupes (one score per voter/player/indicator); writing via
+-- UPSERT makes a score editable (a voter can re-tap to change it). The row
+-- carries voter_id AND the raw score (B2) — this is what enables per-rater
+-- normalization in rating.refresh_ratings.
+CREATE TABLE IF NOT EXISTS scores (
+    voter_id        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
+    player_id       INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
+    indicator       TEXT NOT NULL CHECK (indicator IN
+                        ('attack', 'receive', 'block', 'setting', 'serve', 'positioning')),
+    score           INTEGER NOT NULL CHECK (score BETWEEN 1 AND 5),
     updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (player_a, player_b, axis),
-    CHECK (player_a < player_b)
+    PRIMARY KEY (voter_id, player_id, indicator),
+    CHECK (voter_id != player_id)
 );
 
-CREATE TABLE IF NOT EXISTS pending_prompts (
+-- Voter-side "skip / 🤷 don't know" dedupe. Carries no score; only prevents the
+-- (voter, player, indicator) target from being re-asked.
+CREATE TABLE IF NOT EXISTS score_skips (
     voter_id        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
-    player_a        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
-    player_b        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
-    axis            TEXT NOT NULL CHECK (axis IN ('attack', 'defense', 'setting')),
-    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    info_gain       REAL NOT NULL DEFAULT 0,
-    PRIMARY KEY (voter_id, player_a, player_b, axis),
-    CHECK (player_a < player_b),
-    CHECK (voter_id != player_a AND voter_id != player_b)
-);
-
--- Voter-side dedupe. NO outcome stored here — outcome flows to vote_aggregates only.
-CREATE TABLE IF NOT EXISTS answered_prompts (
-    voter_id        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
-    player_a        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
-    player_b        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
-    axis            TEXT NOT NULL CHECK (axis IN ('attack', 'defense', 'setting')),
-    answered_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (voter_id, player_a, player_b, axis),
-    CHECK (player_a < player_b)
-);
-
-CREATE TABLE IF NOT EXISTS snoozes (
-    voter_id        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
-    axis            TEXT NOT NULL CHECK (axis IN ('attack', 'defense', 'setting')),
-    snoozed_until   TIMESTAMP NOT NULL,
-    PRIMARY KEY (voter_id, axis)
+    player_id       INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
+    indicator       TEXT NOT NULL CHECK (indicator IN
+                        ('attack', 'receive', 'block', 'setting', 'serve', 'positioning')),
+    skipped_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (voter_id, player_id, indicator),
+    CHECK (voter_id != player_id)
 );
 
 CREATE TABLE IF NOT EXISTS snapshots (
@@ -107,21 +95,25 @@ CREATE TABLE IF NOT EXISTS snapshots (
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Cached per-indicator rating. `score` holds the rater-normalized, shrunk
+-- estimate computed by rating.refresh_ratings (NOT a raw mean and NOT the old
+-- Bradley-Terry log-skill).
 CREATE TABLE IF NOT EXISTS player_ratings (
     telegram_id     INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
-    axis            TEXT NOT NULL CHECK (axis IN ('attack', 'defense', 'setting')),
+    indicator       TEXT NOT NULL CHECK (indicator IN
+                        ('attack', 'receive', 'block', 'setting', 'serve', 'positioning')),
     score           REAL NOT NULL,
     vote_count      INTEGER NOT NULL DEFAULT 0,
     calibrated      INTEGER NOT NULL DEFAULT 0,
     computed_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (telegram_id, axis)
+    PRIMARY KEY (telegram_id, indicator)
 );
 
-CREATE INDEX IF NOT EXISTS idx_pending_prompts_voter_gain
-    ON pending_prompts(voter_id, info_gain DESC);
+CREATE INDEX IF NOT EXISTS idx_scores_voter
+    ON scores(voter_id);
 
-CREATE INDEX IF NOT EXISTS idx_vote_aggregates_pair_axis
-    ON vote_aggregates(player_a, player_b, axis);
+CREATE INDEX IF NOT EXISTS idx_scores_player_indicator
+    ON scores(player_id, indicator);
 
 CREATE INDEX IF NOT EXISTS idx_rsvps_session_status
     ON rsvps(session_id, status);
