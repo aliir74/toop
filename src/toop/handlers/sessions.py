@@ -5,19 +5,15 @@ import sqlite3
 from datetime import date
 
 from telegram import Update
-from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
 from toop.config import settings
-from toop.handlers.rsvp import rsvp_keyboard
-from toop.rsvp import RsvpCounts, format_rsvp_message
+from toop.handlers.poll import post_attendance_poll
 from toop.sessions import (
-    SessionStateError,
-    close_session,
     list_recent_sessions,
     next_weekday,
-    open_session,
+    reopen_session,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,38 +41,9 @@ async def handle_open_session(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
     else:
         session_date = next_weekday(settings.SESSION_WEEKDAY)
-    try:
-        sess = open_session(_conn(context), session_date)
-    except SessionStateError as exc:
-        await message.reply_text(str(exc))
-        return
+    sess = reopen_session(_conn(context), session_date)
     await message.reply_text(f"Session #{sess.id} opened for {sess.session_date.isoformat()}.")
-    if settings.GROUP_CHAT_ID == 0:
-        logger.warning("GROUP_CHAT_ID unset — skipping RSVP post")
-        return
-    rsvp_text = format_rsvp_message(sess.session_date.isoformat(), RsvpCounts(0, 0, 0))
-    try:
-        await context.bot.send_message(
-            chat_id=settings.GROUP_CHAT_ID,
-            text=rsvp_text,
-            reply_markup=rsvp_keyboard(),
-        )
-    except TelegramError as exc:
-        logger.warning("failed to post RSVP message: %s", exc)
-        await message.reply_text(f"Couldn't post to the group chat: {exc}")
-
-
-@require_admin
-async def handle_close_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.effective_message
-    if message is None:
-        return
-    try:
-        sess = close_session(_conn(context))
-    except SessionStateError as exc:
-        await message.reply_text(str(exc))
-        return
-    await message.reply_text(f"Session #{sess.id} ({sess.session_date.isoformat()}) closed.")
+    await post_attendance_poll(context, _conn(context), sess)
 
 
 @require_admin

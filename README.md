@@ -14,9 +14,9 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 
 1. Continuous scoring via 1:1 DM with bot: rate one teammate on one indicator at a time, 1–5 (re-tap to change a score)
 2. Admin dashboard shows voting health (last-voted, lifetime ratings, pending, coverage gaps)
-3. RSVPs for upcoming Monday session
-4. Bot snapshots ratings + attendees, suggests balanced teams via constraint-aware snake-draft
-5. Admin reviews, optionally swaps, publishes teams to group chat
+3. Every Thursday 8pm PST the bot posts a بلی/خیر **attendance poll** to the group (and opens the session). As yes-votes land it announces the session is on + posts payment at quorum, then closes the poll and opens a **reservation/waitlist poll** at capacity.
+4. Bot snapshots ratings + the poll's attendees, suggests balanced teams via constraint-aware snake-draft
+5. Admin reviews, optionally swaps; if attendance later drifts the bot DMs the admin to fix it with `/change_player`; admin publishes teams to group chat
 
 ## Stack
 
@@ -77,16 +77,14 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 | `/list_players` | Numbered roster, calibration markers, plus 👻 ghost / ⏸ paused / 🚫 disabled flags |
 | `/rename` | Tap a player from inline buttons, then type the new display name (DM-only). Updates `display_name` only. |
 | `/rename <@username\|telegram_id> "New Name"` | One-shot rename, skips the buttons |
-| `/open_session [YYYY-MM-DD]` | Opens session; auto-posts RSVP buttons to group |
-| `/close_session` | Marks the active session done |
+| `/open_session [YYYY-MM-DD]` | Manual override: auto-closes any prior session, opens a new one, and posts the attendance poll. Normally the Thursday job does this automatically. |
 | `/sessions` | Recent sessions + status |
-| `/lock_in @username` | Force-include a player in the next snapshot |
-| `/lock_in <telegram_id>` | Force-include by numeric id — the only way to lock in a player who has **no** Telegram username. The id must already be an active roster member (add via `/add_player <id>` first). |
-| `/snapshot` | Pick attendees, fit ratings, generate teams. Status → snapshotted. |
-| `/teams` | Preview the snapshot in DM |
+| `/snapshot` | Pick attendees from the poll, refit ratings, generate teams, and show them inline. Status → snapshotted. |
 | `/swap @a @b` | Swap two players across teams, live metrics |
-| `/publish` | Post teams to group, write attendance rows, status → published |
-| `/refresh_ratings` | Force a BT refit |
+| `/change_player +@username` | Add an attendee (locked-in) and rebalance. DM-only. |
+| `/change_player -@username` | Remove an attendee and rebalance. DM-only. |
+| `/change_player` | No args: buttons to remove a current attendee or promote a waitlister, then rebalance. DM-only. |
+| `/publish` | Post teams + attendance to group, write attendance rows, status → published |
 | `/health` | Per-player voting health (completion-only — no vote contents) |
 | `/coverage` | 10 least-sampled pairs (where more votes would help most) |
 | `/nudge` | Returns DM-able templates per low-completion voter — admin sends manually |
@@ -121,7 +119,8 @@ The more you rate, the more accurate our teams get. Takes 30 seconds.
 ## Troubleshooting
 
 - **"Couldn't find @username" when adding a player** — they need to DM the bot `/start` first so Telegram lets us resolve their numeric ID. Run `/contacts` to see who has already DM'd and is therefore addable. If they have **no** Telegram username at all (so there's no `@handle` to resolve), add them by id instead: `/contacts` prints a ready-to-copy `/add_player <id> "Name"` line for every non-roster contact.
-- **RSVP buttons don't show** — make sure the bot is a member of `GROUP_CHAT_ID` and has permission to send messages.
+- **Attendance poll doesn't show** — make sure the bot is a member of `GROUP_CHAT_ID` and has permission to send polls. The poll only fires when the bot process is alive at `SESSION_POLL_WEEKDAY` `SESSION_POLL_HOUR` (`SESSION_POLL_TZ`); trigger manually with `/open_session`.
+- **Attendance votes aren't counted** — the bot only receives `poll_answer` updates for the poll it sent itself, and only while it's running. Votes cast while the bot is down are not replayed; reconcile by re-opening with `/open_session` or adjusting via `/change_player`.
 - **Vote callbacks silently fail** — most often `BOT_TOKEN` is wrong or the bot isn't running. Check `logs/toop.log`.
 - **Scheduled snapshot didn't fire Monday noon** — JobQueue requires the bot process to be alive at the scheduled time. Verify with `make logs` (look for `auto_snapshot scheduled`) or trigger manually with `/snapshot`. Note `SNAPSHOT_HOUR` is interpreted as UTC inside the container.
 - **"weights sum to 0.95"** warning at startup — composite weights in `.env` don't add to 1.0. Bot still runs; ratings just scale slightly differently. Adjust to taste.

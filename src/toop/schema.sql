@@ -58,6 +58,22 @@ CREATE TABLE IF NOT EXISTS attendance (
     PRIMARY KEY (session_id, telegram_id)
 );
 
+-- Bot-owned polls posted to the group, keyed by Telegram's poll_id so an
+-- incoming poll_answer maps back to its session + kind. 'attendance' is the
+-- weekly بلی/خیر poll (its yes-votes feed the rsvps table); 'reservation' is
+-- the waitlist poll opened once attendance caps. quorum_announced / cap_closed
+-- are one-shot latches on the attendance poll so each threshold fires once.
+CREATE TABLE IF NOT EXISTS session_polls (
+    poll_id          TEXT PRIMARY KEY,
+    session_id       INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    kind             TEXT NOT NULL CHECK (kind IN ('attendance', 'reservation')),
+    message_id       INTEGER,
+    closed           INTEGER NOT NULL DEFAULT 0,
+    quorum_announced INTEGER NOT NULL DEFAULT 0,
+    cap_closed       INTEGER NOT NULL DEFAULT 0,
+    created_at       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Per-voter, per-player, per-indicator absolute score on a 1–5 scale.
 -- The PRIMARY KEY dedupes (one score per voter/player/indicator); writing via
 -- UPSERT makes a score editable (a voter can re-tap to change it). The row
@@ -84,6 +100,24 @@ CREATE TABLE IF NOT EXISTS score_skips (
     skipped_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (voter_id, player_id, indicator),
     CHECK (voter_id != player_id)
+);
+
+-- Reserve queue, filled by the reservation poll opened once attendance caps.
+-- Ordered FIFO (created_at, then telegram_id) so promotion suggestions are
+-- stable. A row here means "willing to take a freed seat".
+CREATE TABLE IF NOT EXISTS waitlist (
+    session_id      INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    telegram_id     INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (session_id, telegram_id)
+);
+
+-- Dedupe for post-snapshot attendance-drift DMs: stores the last drift
+-- signature the admin was notified about, so an unchanged drift state (or a
+-- vote that doesn't move the attendee set) never re-pings.
+CREATE TABLE IF NOT EXISTS drift_notices (
+    session_id      INTEGER PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    last_signature  TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS snapshots (

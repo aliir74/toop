@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -47,7 +48,7 @@ def open_session(
     ).fetchone()
     if existing is not None:
         raise SessionStateError(
-            f"Session #{existing['id']} is still active. Close it first with /close_session."
+            f"Session #{existing['id']} is still active. Open a new one to auto-close it."
         )
     cur = conn.execute(
         "INSERT INTO sessions (session_date, status) VALUES (?, 'open')",
@@ -57,6 +58,17 @@ def open_session(
     new_id = cur.lastrowid
     assert new_id is not None  # SQLite always populates lastrowid after INSERT
     return _fetch_session(conn, new_id)
+
+
+def reopen_session(conn: sqlite3.Connection, session_date: date) -> Session:
+    """Auto-close any active session, then open a fresh one for session_date.
+
+    Replaces the manual /close_session step: the weekly poll job and the
+    /open_session override both close the prior week before opening the next.
+    """
+    with contextlib.suppress(SessionStateError):
+        close_session(conn)
+    return open_session(conn, session_date)
 
 
 def close_session(conn: sqlite3.Connection) -> Session:
