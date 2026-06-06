@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     NORM_MIN_RATINGS: int = Field(default=8, ge=1)
     SHRINKAGE_K: float = Field(default=3.0, ge=0.0)
     DATABASE_PATH: str = "data/toop.db"
+    # Where /set_photo backs up the original uploaded image bytes (one JPEG per
+    # player, named <telegram_id>.jpg). file_ids are bound to the bot, so these
+    # bytes are the recovery copy if the bot is ever recreated from scratch.
+    PHOTOS_DIR: str = "data/photos"
     # Don't-know alert: flag a player to the admin when their skip count is at
     # least DK_ALERT_MIN_PROMPTS AND their skip rate is at least DK_ALERT_RATE.
     DK_ALERT_MIN_PROMPTS: int = Field(default=10, ge=0)

@@ -45,6 +45,7 @@ _MIGRATIONS: tuple[tuple[str, str, str], ...] = (
     ("players", "in_pool", "INTEGER NOT NULL DEFAULT 1"),
     ("players", "pool_paused_until", "TIMESTAMP"),
     ("players", "is_ghost", "INTEGER NOT NULL DEFAULT 0"),
+    ("players", "photo_file_id", "TEXT"),
 )
 
 

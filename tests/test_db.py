@@ -40,6 +40,26 @@ def test_fresh_db_has_pool_ghost_and_indicator_columns(conn: sqlite3.Connection)
     assert {"voter_id", "player_id", "score"}.issubset(_columns(conn, "scores"))
 
 
+def test_fresh_db_has_photo_file_id_column(conn: sqlite3.Connection) -> None:
+    assert "photo_file_id" in _columns(conn, "players")
+
+
+def test_photo_file_id_added_to_preexisting_players_table(db_path: Path) -> None:
+    # A players table created before the photo column existed gets it via ALTER.
+    pre = get_connection(db_path)
+    pre.execute(
+        "CREATE TABLE players ("
+        "telegram_id INTEGER PRIMARY KEY, username TEXT, display_name TEXT NOT NULL, "
+        "active INTEGER NOT NULL DEFAULT 1, is_calibrating INTEGER NOT NULL DEFAULT 1)"
+    )
+    pre.commit()
+    pre.close()
+    migrated = get_connection(db_path)
+    init_db(migrated)
+    assert "photo_file_id" in _columns(migrated, "players")
+    migrated.close()
+
+
 def _build_legacy_db(db_path: Path) -> None:
     """A DB on the old pairwise schema: axis-based player_ratings + pairwise tables."""
     legacy = get_connection(db_path)

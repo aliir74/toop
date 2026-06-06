@@ -52,7 +52,7 @@ def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
 def _get_player(conn: sqlite3.Connection, telegram_id: int) -> Player | None:
     row = conn.execute(
         "SELECT telegram_id, username, display_name, is_calibrating, active, "
-        "in_pool, pool_paused_until, is_ghost "
+        "in_pool, pool_paused_until, is_ghost, photo_file_id "
         "FROM players WHERE telegram_id=?",
         (telegram_id,),
     ).fetchone()
@@ -67,6 +67,7 @@ def _get_player(conn: sqlite3.Connection, telegram_id: int) -> Player | None:
         in_pool=bool(row["in_pool"]),
         pool_paused_until=row["pool_paused_until"],
         is_ghost=bool(row["is_ghost"]),
+        photo_file_id=row["photo_file_id"],
     )
 
 
@@ -101,17 +102,49 @@ def _prompt_keyboard(target: ScoreTarget, player: Player) -> InlineKeyboardMarku
     return InlineKeyboardMarkup(rows)
 
 
-async def _send_next_prompt(
-    conn: sqlite3.Connection,
+async def _send_card(
     context: ContextTypes.DEFAULT_TYPE,
     chat_id: int,
-    voter_id: int,
-    edit_message_id: int | None = None,
-    exclude_player: int | None = None,
+    text: str,
+    keyboard: InlineKeyboardMarkup,
+    photo_file_id: str | None,
 ) -> None:
-    target = select_next_score_target(conn, voter_id, exclude_player=exclude_player)
-    if target is None:
-        if edit_message_id is not None:
+    """Send a fresh rating card: a photo message (photo + caption + buttons) when
+    the player has a photo, else the text prompt. A stale file_id (only possible
+    if the bot was recreated from scratch) falls back to the text card so voting
+    never blocks on a bad photo — the admin can re-upload from data/photos/."""
+    if photo_file_id is not None:
+        try:
+            await context.bot.send_photo(
+                chat_id=chat_id,
+                photo=photo_file_id,
+                caption=text,
+                parse_mode=ParseMode.MARKDOWN,
+                reply_markup=keyboard,
+            )
+            return
+        except BadRequest as exc:
+            logger.warning("stale photo file_id in chat %s, falling back to text: %s", chat_id, exc)
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=text,
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=keyboard,
+    )
+
+
+async def _show_no_prompts(
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    edit_message_id: int | None,
+    current_is_photo: bool,
+) -> None:
+    """Render the terminal 'nothing left to rate' state. Editing a photo card's
+    text is impossible, so a photo card is deleted then replaced with text."""
+    if edit_message_id is not None:
+        if current_is_photo:
+            await _safe_delete(context, chat_id, edit_message_id)
+        else:
             try:
                 await context.bot.edit_message_text(
                     chat_id=chat_id, message_id=edit_message_id, text=t("vote.no_prompts")
@@ -119,7 +152,21 @@ async def _send_next_prompt(
                 return
             except BadRequest as exc:
                 logger.warning("failed to edit prompt message: %s", exc)
-        await context.bot.send_message(chat_id=chat_id, text=t("vote.no_prompts"))
+    await context.bot.send_message(chat_id=chat_id, text=t("vote.no_prompts"))
+
+
+async def _send_next_prompt(
+    conn: sqlite3.Connection,
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    voter_id: int,
+    edit_message_id: int | None = None,
+    exclude_player: int | None = None,
+    current_is_photo: bool = False,
+) -> None:
+    target = select_next_score_target(conn, voter_id, exclude_player=exclude_player)
+    if target is None:
+        await _show_no_prompts(context, chat_id, edit_message_id, current_is_photo)
         return
     player = _get_player(conn, target.player_id)
     if player is None:
@@ -128,24 +175,27 @@ async def _send_next_prompt(
         return
     text = _format_prompt(target, player)
     keyboard = _prompt_keyboard(target, player)
+    incoming_is_photo = player.photo_file_id is not None
     if edit_message_id is not None:
-        try:
-            await context.bot.edit_message_text(
-                chat_id=chat_id,
-                message_id=edit_message_id,
-                text=text,
-                parse_mode=ParseMode.MARKDOWN,
-                reply_markup=keyboard,
-            )
-            return
-        except BadRequest as exc:
-            logger.warning("failed to edit prompt message: %s", exc)
-    await context.bot.send_message(
-        chat_id=chat_id,
-        text=text,
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=keyboard,
-    )
+        # Telegram can't convert a message between text and photo types, and
+        # edit_message_text errors on a photo message. When a photo is on either
+        # side of the transition, delete the old card and send a fresh one;
+        # text→text still edits in place (the cheap path, no new message).
+        if current_is_photo or incoming_is_photo:
+            await _safe_delete(context, chat_id, edit_message_id)
+        else:
+            try:
+                await context.bot.edit_message_text(
+                    chat_id=chat_id,
+                    message_id=edit_message_id,
+                    text=text,
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=keyboard,
+                )
+                return
+            except BadRequest as exc:
+                logger.warning("failed to edit prompt message: %s", exc)
+    await _send_card(context, chat_id, text, keyboard, player.photo_file_id)
 
 
 async def _delete_message_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -235,6 +285,10 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     chat_id = query.message.chat.id
     message_id = query.message.message_id
     voter_id = query.from_user.id
+    # A photo card can't be edited into a text card (or vice versa); the advance
+    # path needs to know which kind of message it's replacing. PHOTO messages
+    # carry a non-empty .photo; text prompts don't.
+    current_is_photo = bool(getattr(query.message, "photo", None))
     conn = _conn(context)
 
     payload = query.data.removeprefix(CALLBACK_PREFIX)
@@ -258,6 +312,7 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             voter_id=voter_id,
             edit_message_id=message_id,
             exclude_player=player_id,
+            current_is_photo=current_is_photo,
         )
         return
 
@@ -297,6 +352,7 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             voter_id=voter_id,
             edit_message_id=message_id,
             exclude_player=player_id,
+            current_is_photo=current_is_photo,
         )
         return
 

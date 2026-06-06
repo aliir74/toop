@@ -14,6 +14,7 @@ from toop.players import (
     list_active_players,
     pause_player_pool,
     rename_player,
+    set_player_photo,
     soft_remove_player,
 )
 
@@ -88,6 +89,30 @@ def test_rename_player_inactive_returns_none(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Alice", "alice")
     soft_remove_player(conn, 1)
     assert rename_player(conn, 1, "Alice Renamed") is None
+
+
+def test_set_player_photo_round_trips_and_clears(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    assert list_active_players(conn)[0].photo_file_id is None
+    assert set_player_photo(conn, 1, "FILEID123") == "Alice"
+    assert list_active_players(conn)[0].photo_file_id == "FILEID123"
+    # None clears it back to the text-prompt fallback.
+    assert set_player_photo(conn, 1, None) == "Alice"
+    assert list_active_players(conn)[0].photo_file_id is None
+
+
+def test_set_player_photo_works_for_ghost(conn: sqlite3.Connection) -> None:
+    ghost = add_ghost_player(conn, "Late Joiner")
+    assert set_player_photo(conn, ghost.telegram_id, "GHOSTFILE") == "Late Joiner"
+    stored = next(p for p in list_active_players(conn) if p.telegram_id == ghost.telegram_id)
+    assert stored.photo_file_id == "GHOSTFILE"
+
+
+def test_set_player_photo_unknown_or_inactive_returns_none(conn: sqlite3.Connection) -> None:
+    assert set_player_photo(conn, 999, "X") is None
+    add_player(conn, 1, "Alice", "alice")
+    soft_remove_player(conn, 1)
+    assert set_player_photo(conn, 1, "X") is None
 
 
 def _pool_row(conn: sqlite3.Connection, telegram_id: int) -> sqlite3.Row:

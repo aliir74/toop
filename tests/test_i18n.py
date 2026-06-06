@@ -57,3 +57,24 @@ def test_indicator_label() -> None:
 def test_score_word() -> None:
     assert score_word(5, "fa") == "عالی"
     assert score_word(1, "en") == "Very weak"
+
+
+def test_set_photo_keys_resolve_in_both_languages() -> None:
+    for lang in ("fa", "en"):
+        for key in (
+            "cmd.set_photo.short",
+            "cmd.set_photo.usage",
+            "cmd.unset_photo.short",
+            "cmd.unset_photo.usage",
+            "setphoto.dm_only",
+            "setphoto.empty_roster",
+            "setphoto.pick",
+            "setphoto.not_photo",
+            "setphoto.cancelled",
+            "setphoto.gone",
+            "unsetphoto.pick",
+        ):
+            assert t(key, lang)
+        assert "Alice" in t("setphoto.send_now", lang, name="Alice")
+        assert "Alice" in t("setphoto.done", lang, name="Alice")
+        assert "Alice" in t("unsetphoto.done", lang, name="Alice")

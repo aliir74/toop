@@ -338,6 +338,27 @@ def _fa() -> dict[str, str]:
         "roster.send_new_name": "نام نمایشی جدید برای {name} را بفرست:",
         "roster.rename_cancelled": "تغییر نام لغو شد — به‌جای نام یک دستور فرستادی.",
         "roster.new_name_empty": "نام نمی‌تواند خالی باشد — نام نمایشی جدید را بفرست.",
+        # --- set_photo / unset_photo ---
+        "cmd.set_photo.short": "تنظیم عکس یک بازیکن",
+        "cmd.set_photo.usage": (
+            "/set_photo (بدون آرگومان) برای دکمه‌ها — سپس یک عکس بفرست تا تنظیم یا جایگزین شود"
+        ),
+        "cmd.unset_photo.short": "حذف عکس یک بازیکن",
+        "cmd.unset_photo.usage": (
+            "/unset_photo (بدون آرگومان) برای دکمه‌ها — عکس را حذف و به امتیازدهی متنی برمی‌گردد"
+        ),
+        "setphoto.dm_only": "برای تنظیم عکس بازیکن‌ها به من پیوی بده. 🤫",
+        "setphoto.empty_roster": "هنوز بازیکنی در فهرست نیست — اول از /add_player استفاده کن.",
+        "setphoto.pick": "برای کدام بازیکن عکس می‌خواهی تنظیم کنی؟",
+        "setphoto.send_now": "حالا عکس {name} را بفرست (یا /cancel).",
+        "setphoto.not_photo": "یک عکس بفرست (نه فایل)، یا /cancel.",
+        "setphoto.cancelled": "تنظیم عکس لغو شد — به‌جای عکس یک دستور فرستادی.",
+        "setphoto.done": (
+            "عکس {name} تنظیم شد ✅ — برای جایگزینی دوباره /set_photo، برای حذف /unset_photo."
+        ),
+        "setphoto.gone": "این بازیکن دیگر در فهرست نیست.",
+        "unsetphoto.pick": "عکس کدام بازیکن را حذف کنم؟",
+        "unsetphoto.done": "عکس {name} حذف شد — به امتیازدهی متنی برمی‌گردد.",
         # --- health / coverage ---
         "health.roster_empty": "فهرست خالی است.",
         "coverage.not_enough": "بازیکن کافی برای محاسبه پوشش نیست.",
@@ -632,6 +653,26 @@ def _en() -> dict[str, str]:
         "roster.send_new_name": "Send the new display name for {name}:",
         "roster.rename_cancelled": "Rename cancelled — you sent a command instead of a name.",
         "roster.new_name_empty": "Name can't be empty — send the new display name.",
+        "cmd.set_photo.short": "Set a player's photo",
+        "cmd.set_photo.usage": (
+            "/set_photo (no args) for buttons — then send a photo to set/replace it"
+        ),
+        "cmd.unset_photo.short": "Clear a player's photo",
+        "cmd.unset_photo.usage": (
+            "/unset_photo (no args) for buttons — removes the photo, back to text prompts"
+        ),
+        "setphoto.dm_only": "DM me to set player photos. 🤫",
+        "setphoto.empty_roster": "No players on the roster yet — use /add_player first.",
+        "setphoto.pick": "Who do you want to set a photo for?",
+        "setphoto.send_now": "Send the photo for {name} now (or /cancel).",
+        "setphoto.not_photo": "Send a photo (not a file), or /cancel.",
+        "setphoto.cancelled": "Photo set cancelled — you sent a command instead of a photo.",
+        "setphoto.done": (
+            "Photo set for {name} ✅ — re-run /set_photo to replace, /unset_photo to remove."
+        ),
+        "setphoto.gone": "That player is no longer on the roster.",
+        "unsetphoto.pick": "Whose photo do you want to clear?",
+        "unsetphoto.done": "Photo cleared for {name} — back to text prompts.",
         "health.roster_empty": "Roster is empty.",
         "coverage.not_enough": "Not enough players to compute coverage.",
         "coverage.header": "Coverage gaps (least-rated players):",

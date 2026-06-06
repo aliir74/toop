@@ -50,6 +50,12 @@ from toop.handlers.roster import (
     handle_rename,
     handle_rename_callback,
     handle_rename_text,
+    handle_set_photo,
+    handle_set_photo_callback,
+    handle_set_photo_photo,
+    handle_set_photo_text,
+    handle_unset_photo,
+    handle_unset_photo_callback,
 )
 from toop.handlers.sessions import (
     handle_list_sessions,
@@ -117,6 +123,8 @@ def main() -> None:
     app.add_handler(CommandHandler("link_player", handle_link_player))
     app.add_handler(CommandHandler("list_players", handle_list_players))
     app.add_handler(CommandHandler("rename", handle_rename))
+    app.add_handler(CommandHandler("set_photo", handle_set_photo))
+    app.add_handler(CommandHandler("unset_photo", handle_unset_photo))
     app.add_handler(CommandHandler("contacts", handle_contacts))
     app.add_handler(CommandHandler("open_session", handle_open_session))
     app.add_handler(CommandHandler("sessions", handle_list_sessions))
@@ -170,6 +178,8 @@ def main() -> None:
     app.add_handler(PollAnswerHandler(handle_poll_answer))
     app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
     app.add_handler(CallbackQueryHandler(handle_rename_callback, pattern=r"^rename:"))
+    app.add_handler(CallbackQueryHandler(handle_set_photo_callback, pattern=r"^setphoto:"))
+    app.add_handler(CallbackQueryHandler(handle_unset_photo_callback, pattern=r"^unsetphoto:"))
     app.add_handler(CallbackQueryHandler(handle_remove_callback, pattern=r"^rmpick:"))
     app.add_handler(CallbackQueryHandler(handle_disable_callback, pattern=r"^dispick:"))
     app.add_handler(CallbackQueryHandler(handle_change_remove_callback, pattern=r"^cprm:"))
@@ -190,6 +200,16 @@ def main() -> None:
     app.add_handler(
         MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_add_player_text),
         group=2,
+    )
+    # /set_photo: a private photo fulfils a pending capture; a private text while
+    # pending nudges or cancels. Separate groups so each sees every DM message.
+    app.add_handler(
+        MessageHandler(filters.PHOTO & filters.ChatType.PRIVATE, handle_set_photo_photo),
+        group=3,
+    )
+    app.add_handler(
+        MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, handle_set_photo_text),
+        group=4,
     )
 
     logger.info(
