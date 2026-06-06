@@ -78,6 +78,7 @@ def _callback_update(user_id: int, data: str, message_id: int = 999) -> MagicMoc
     q.edit_message_text = AsyncMock()
     msg = MagicMock(chat_id=user_id, message_id=message_id)
     msg.chat = MagicMock(id=user_id)
+    msg.photo = []  # text prompt: no photo (real Message.photo is an empty tuple)
     q.message = msg
     u.callback_query = q
     return u
