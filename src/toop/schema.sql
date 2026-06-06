@@ -31,7 +31,12 @@ CREATE TABLE IF NOT EXISTS players (
     pool_paused_until TIMESTAMP,
     -- Accountless "ghost" player: synthetic negative telegram_id, never DM'd,
     -- only scored ON. Linked to a real account later via link_ghost_player.
-    is_ghost        INTEGER NOT NULL DEFAULT 0
+    is_ghost        INTEGER NOT NULL DEFAULT 0,
+    -- Optional custom profile photo set by the admin via /set_photo. Stores the
+    -- Telegram file_id (reusable to re-send the same image); NULL = no photo, so
+    -- the rating card falls back to text. Original bytes are also backed up under
+    -- data/photos/ because file_ids die if the bot is ever recreated from scratch.
+    photo_file_id   TEXT
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
