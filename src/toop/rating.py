@@ -84,9 +84,7 @@ def refresh_ratings(
     if not active_ids:
         return 0
 
-    score_rows = conn.execute(
-        "SELECT voter_id, player_id, indicator, score FROM scores"
-    ).fetchall()
+    score_rows = conn.execute("SELECT voter_id, player_id, indicator, score FROM scores").fetchall()
     rater_stats, global_mean = _rater_stats(score_rows)
 
     # Accumulate normalized contributions per (player, indicator).
@@ -146,9 +144,7 @@ def get_player_ratings(
         "SELECT indicator, score, vote_count, calibrated FROM player_ratings WHERE telegram_id=?",
         (telegram_id,),
     ).fetchall()
-    return {
-        r["indicator"]: (r["score"], r["vote_count"], bool(r["calibrated"])) for r in rows
-    }
+    return {r["indicator"]: (r["score"], r["vote_count"], bool(r["calibrated"])) for r in rows}
 
 
 def composite_score(

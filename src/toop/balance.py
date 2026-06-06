@@ -24,9 +24,7 @@ def _composite_for_team(scores: dict[int, float], team: list[int]) -> float:
 def _per_indicator_totals(
     indicator_scores: dict[str, dict[int, float]], team: list[int]
 ) -> dict[str, float]:
-    return {
-        ind: sum(indicator_scores[ind].get(pid, 0.0) for pid in team) for ind in INDICATORS
-    }
+    return {ind: sum(indicator_scores[ind].get(pid, 0.0) for pid in team) for ind in INDICATORS}
 
 
 def _snake_assign(sorted_attendees: list[int]) -> tuple[list[int], list[int]]:
