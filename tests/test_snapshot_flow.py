@@ -9,6 +9,7 @@ import pytest
 from toop.balance import TeamMetrics
 from toop.config import Settings
 from toop.handlers.snapshot import (
+    _format_attendance,
     _format_teams,
     handle_publish,
     handle_snapshot,
@@ -131,6 +132,15 @@ def test_format_teams_escapes_markdown_in_names(conn: sqlite3.Connection) -> Non
     # The raw, unescaped forms must not appear.
     assert "Ali_I" not in text
     assert "Meysam*Bz" not in text
+
+
+def test_format_attendance_escapes_markdown_in_names(conn: sqlite3.Connection) -> None:
+    # The roster line is also sent with parse_mode="Markdown".
+    add_player(conn, 1, "Ali_I", "ali")
+    add_player(conn, 2, "Sina*K", "sina")
+    text = _format_attendance(conn, _snap([1], [2]))
+    assert "Ali\\_I" in text and "Sina\\*K" in text
+    assert "Ali_I" not in text
 
 
 def test_format_teams_handles_odd_team_sizes(conn: sqlite3.Connection) -> None:

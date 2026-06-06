@@ -119,11 +119,13 @@ def _names(conn: sqlite3.Connection, ids: list[int]) -> list[str]:
 
 
 def _format_attendance(conn: sqlite3.Connection, snap: Snapshot) -> str:
-    """Roster line(s) posted alongside the teams: who's playing, plus any cut."""
-    attendees = _names(conn, snap.team_a + snap.team_b)
+    """Roster line(s) posted alongside the teams: who's playing, plus any cut.
+    Names are markdown-escaped since this is sent with parse_mode="Markdown"."""
+    attendees = [escape_markdown(n, version=1) for n in _names(conn, snap.team_a + snap.team_b)]
     line = f"✅ Attending ({len(attendees)}): " + ", ".join(attendees)
     if snap.cut:
-        line += "\n⏳ Cut: " + ", ".join(_names(conn, snap.cut))
+        cut = [escape_markdown(n, version=1) for n in _names(conn, snap.cut)]
+        line += "\n⏳ Cut: " + ", ".join(cut)
     return line
 
 
