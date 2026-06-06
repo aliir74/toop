@@ -67,6 +67,37 @@ def get_poll(conn: sqlite3.Connection, poll_id: str) -> PollRow | None:
     )
 
 
+CAPACITY_MESSAGE = "ظرفیت تکمیل شد."
+
+
+def quorum_message(amount: str, email: str, sheet_url: str) -> str:
+    """The 'it's happening + pay' announcement posted once quorum is reached."""
+    lines = ["🎉 والیبال برگزار می‌شود 🏐"]
+    if email:
+        lines.append(
+            f"\nلطفا در صورتی که در رای‌گیری حضور اعلام کرده‌اید مبلغ {amount} دلار "
+            f"به ایمیل زیر ای-ترنسفر کنید:\n{email}"
+        )
+        lines.append("\nدوستان لطفا بعد از ارسال هزینه این پیام را لایک کنید.")
+    if sheet_url:
+        lines.append(f"\nجدول حسابداری:\n{sheet_url}")
+    return "\n".join(lines)
+
+
+def set_quorum_announced(conn: sqlite3.Connection, poll_id: str) -> None:
+    conn.execute("UPDATE session_polls SET quorum_announced=1 WHERE poll_id=?", (poll_id,))
+    conn.commit()
+
+
+def set_cap_closed(conn: sqlite3.Connection, poll_id: str) -> None:
+    """Latch the attendance poll closed (cap reached). Sets both flags."""
+    conn.execute(
+        "UPDATE session_polls SET cap_closed=1, closed=1 WHERE poll_id=?",
+        (poll_id,),
+    )
+    conn.commit()
+
+
 def record_attendance_answer(
     conn: sqlite3.Connection,
     session_id: int,

@@ -8,8 +8,11 @@ import pytest
 from toop.players import add_player
 from toop.poll import (
     get_poll,
+    quorum_message,
     record_attendance_answer,
     record_poll,
+    set_cap_closed,
+    set_quorum_announced,
 )
 from toop.rsvp import count_rsvps
 from toop.sessions import open_session
@@ -72,3 +75,32 @@ def test_attendance_answer_retract_removes_row(conn: sqlite3.Connection, session
 def test_attendance_answer_off_roster_is_noop(conn: sqlite3.Connection, session_id: int) -> None:
     assert record_attendance_answer(conn, session_id, 999, [0]) is False
     assert count_rsvps(conn, session_id).total == 0
+
+
+def test_quorum_message_with_payment() -> None:
+    msg = quorum_message("7.5", "pay@example.com", "https://sheet")
+    assert "والیبال برگزار می‌شود" in msg
+    assert "7.5" in msg
+    assert "pay@example.com" in msg
+    assert "https://sheet" in msg
+
+
+def test_quorum_message_without_payment() -> None:
+    msg = quorum_message("7.5", "", "")
+    assert "والیبال برگزار می‌شود" in msg
+    assert "7.5" not in msg
+    assert "حسابداری" not in msg
+
+
+def test_set_quorum_announced(conn: sqlite3.Connection, session_id: int) -> None:
+    record_poll(conn, session_id=session_id, poll_id="p1", kind="attendance", message_id=1)
+    set_quorum_announced(conn, "p1")
+    poll = get_poll(conn, "p1")
+    assert poll is not None and poll.quorum_announced is True and poll.cap_closed is False
+
+
+def test_set_cap_closed(conn: sqlite3.Connection, session_id: int) -> None:
+    record_poll(conn, session_id=session_id, poll_id="p1", kind="attendance", message_id=1)
+    set_cap_closed(conn, "p1")
+    poll = get_poll(conn, "p1")
+    assert poll is not None and poll.cap_closed is True and poll.closed is True

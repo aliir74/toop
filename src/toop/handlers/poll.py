@@ -10,10 +10,16 @@ from telegram.ext import ContextTypes
 from toop.config import settings
 from toop.poll import (
     ATTENDANCE_OPTIONS,
+    CAPACITY_MESSAGE,
+    PollRow,
     get_poll,
+    quorum_message,
     record_attendance_answer,
     record_poll,
+    set_cap_closed,
+    set_quorum_announced,
 )
+from toop.rsvp import count_rsvps
 from toop.sessions import (
     Session,
     SessionStateError,
@@ -81,8 +87,51 @@ async def weekly_attendance_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     await post_attendance_poll(context, conn, sess)
 
 
+async def _safe_send(context: ContextTypes.DEFAULT_TYPE, text: str) -> None:
+    try:
+        await context.bot.send_message(chat_id=settings.GROUP_CHAT_ID, text=text)
+    except TelegramError as exc:
+        logger.warning("failed to post to group: %s", exc)
+
+
+async def _close_attendance_poll(
+    context: ContextTypes.DEFAULT_TYPE, conn: sqlite3.Connection, poll: PollRow
+) -> None:
+    """Capacity reached: stop the poll, announce it's full, latch it closed."""
+    if poll.message_id is not None:
+        try:
+            await context.bot.stop_poll(settings.GROUP_CHAT_ID, poll.message_id)
+        except TelegramError as exc:
+            logger.warning("failed to stop attendance poll: %s", exc)
+    await _safe_send(context, CAPACITY_MESSAGE)
+    set_cap_closed(conn, poll.poll_id)
+
+
+async def _maybe_fire_thresholds(
+    context: ContextTypes.DEFAULT_TYPE, conn: sqlite3.Connection, poll: PollRow
+) -> None:
+    """Fire the quorum announcement and the capacity close, each at most once.
+
+    Checked in order so a single batch that lands straight on the cap still posts
+    the quorum + payment announcement before closing.
+    """
+    if settings.GROUP_CHAT_ID == 0:
+        return
+    yes = count_rsvps(conn, poll.session_id).yes
+    if not poll.quorum_announced and yes > settings.QUORUM_THRESHOLD:
+        await _safe_send(
+            context,
+            quorum_message(
+                settings.PAYMENT_AMOUNT, settings.PAYMENT_EMAIL, settings.ACCOUNTING_SHEET_URL
+            ),
+        )
+        set_quorum_announced(conn, poll.poll_id)
+    if not poll.cap_closed and yes >= settings.MAX_ATTENDEES:
+        await _close_attendance_poll(context, conn, poll)
+
+
 async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Ingest a vote on a bot-owned attendance poll into the rsvps table."""
+    """Ingest a vote on a bot-owned attendance poll, then fire any thresholds."""
     answer = update.poll_answer
     if answer is None:
         return
@@ -93,3 +142,4 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if answer.user is None:
         return
     record_attendance_answer(conn, poll.session_id, answer.user.id, list(answer.option_ids))
+    await _maybe_fire_thresholds(context, conn, poll)

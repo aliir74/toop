@@ -15,8 +15,8 @@ from toop.handlers.poll import (
     weekly_attendance_job,
 )
 from toop.players import add_player
-from toop.poll import get_poll, record_poll
-from toop.rsvp import count_rsvps
+from toop.poll import get_poll, record_poll, set_quorum_announced
+from toop.rsvp import count_rsvps, upsert_rsvp
 from toop.sessions import get_active_session, open_session
 
 
@@ -153,3 +153,104 @@ async def test_poll_answer_no_user_returns(conn: sqlite3.Connection) -> None:
     record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=1)
     await handle_poll_answer(_answer_update("p1", (0,), None), _ctx(conn))
     assert count_rsvps(conn, sess.id).total == 0
+
+
+# ----- threshold engine -----
+
+
+def _bot_ctx(conn: sqlite3.Connection) -> MagicMock:
+    ctx = _ctx(conn)
+    ctx.bot.send_message = AsyncMock()
+    ctx.bot.stop_poll = AsyncMock()
+    return ctx
+
+
+def _seed_yes(conn: sqlite3.Connection, session_id: int, n: int, start: int = 100) -> None:
+    for i in range(start, start + n):
+        add_player(conn, i, f"P{i}", f"p{i}")
+        upsert_rsvp(conn, session_id, i, "yes")
+
+
+async def test_quorum_fires_once(group_settings: None, conn: sqlite3.Connection) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
+    _seed_yes(conn, sess.id, 12)  # exactly at threshold; not yet over
+    add_player(conn, 200, "Quorum", "q")
+    ctx = _bot_ctx(conn)
+    await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # yes -> 13 > 12
+    ctx.bot.send_message.assert_awaited_once()
+    assert "والیبال برگزار می‌شود" in ctx.bot.send_message.await_args.kwargs["text"]
+    ctx.bot.stop_poll.assert_not_called()
+    poll = get_poll(conn, "p1")
+    assert poll is not None and poll.quorum_announced is True
+    # Re-voting the same player keeps yes at 13: quorum must not re-announce.
+    await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)
+    ctx.bot.send_message.assert_awaited_once()
+
+
+async def test_cap_closes_poll(group_settings: None, conn: sqlite3.Connection) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
+    set_quorum_announced(conn, "p1")  # isolate the cap branch
+    _seed_yes(conn, sess.id, 13)
+    add_player(conn, 200, "Cap", "c")
+    ctx = _bot_ctx(conn)
+    await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # yes -> 14 == cap
+    ctx.bot.stop_poll.assert_awaited_once_with(-100123, 5)
+    assert ctx.bot.send_message.await_args.kwargs["text"] == "ظرفیت تکمیل شد."
+    poll = get_poll(conn, "p1")
+    assert poll is not None and poll.cap_closed is True and poll.closed is True
+
+
+async def test_quorum_and_cap_same_call(group_settings: None, conn: sqlite3.Connection) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
+    _seed_yes(conn, sess.id, 13)  # neither latch set
+    add_player(conn, 200, "Both", "b")
+    ctx = _bot_ctx(conn)
+    await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # yes -> 14
+    assert ctx.bot.send_message.await_count == 2  # quorum + capacity
+    ctx.bot.stop_poll.assert_awaited_once()
+    poll = get_poll(conn, "p1")
+    assert poll is not None and poll.quorum_announced and poll.cap_closed
+
+
+async def test_cap_without_message_id_skips_stop(
+    group_settings: None, conn: sqlite3.Connection
+) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=None)
+    set_quorum_announced(conn, "p1")
+    _seed_yes(conn, sess.id, 13)
+    add_player(conn, 200, "Cap", "c")
+    ctx = _bot_ctx(conn)
+    await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)
+    ctx.bot.stop_poll.assert_not_called()
+    assert get_poll(conn, "p1").cap_closed is True  # type: ignore[union-attr]
+
+
+async def test_quorum_send_error_is_swallowed(
+    group_settings: None, conn: sqlite3.Connection
+) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
+    _seed_yes(conn, sess.id, 12)
+    add_player(conn, 200, "Q", "q")
+    ctx = _bot_ctx(conn)
+    ctx.bot.send_message = AsyncMock(side_effect=TelegramError("down"))
+    await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # must not raise
+    assert get_poll(conn, "p1").quorum_announced is True  # type: ignore[union-attr]
+
+
+async def test_cap_stop_poll_error_is_swallowed(
+    group_settings: None, conn: sqlite3.Connection
+) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
+    set_quorum_announced(conn, "p1")
+    _seed_yes(conn, sess.id, 13)
+    add_player(conn, 200, "Cap", "c")
+    ctx = _bot_ctx(conn)
+    ctx.bot.stop_poll = AsyncMock(side_effect=TelegramError("boom"))
+    await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # must not raise
+    assert get_poll(conn, "p1").cap_closed is True  # type: ignore[union-attr]
