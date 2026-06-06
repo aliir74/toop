@@ -112,6 +112,14 @@ CREATE TABLE IF NOT EXISTS waitlist (
     PRIMARY KEY (session_id, telegram_id)
 );
 
+-- Dedupe for post-snapshot attendance-drift DMs: stores the last drift
+-- signature the admin was notified about, so an unchanged drift state (or a
+-- vote that doesn't move the attendee set) never re-pings.
+CREATE TABLE IF NOT EXISTS drift_notices (
+    session_id      INTEGER PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
+    last_signature  TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS snapshots (
     session_id      INTEGER PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
     team_a_json     TEXT NOT NULL,

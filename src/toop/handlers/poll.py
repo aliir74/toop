@@ -8,6 +8,14 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 from toop.config import settings
+from toop.drift import (
+    compute_drift,
+    current_yes_set,
+    display_names,
+    drift_signature,
+    get_last_drift_signature,
+    set_drift_signature,
+)
 from toop.poll import (
     ATTENDANCE_OPTIONS,
     CAPACITY_MESSAGE,
@@ -15,6 +23,7 @@ from toop.poll import (
     RESERVATION_QUESTION,
     PollRow,
     get_poll,
+    list_waitlist,
     quorum_message,
     record_attendance_answer,
     record_poll,
@@ -29,6 +38,7 @@ from toop.sessions import (
     next_weekday,
     open_session,
 )
+from toop.snapshots import get_snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +167,44 @@ async def _maybe_fire_thresholds(
         await _close_attendance_poll(context, conn, poll)
 
 
+async def _maybe_notify_drift(
+    context: ContextTypes.DEFAULT_TYPE, conn: sqlite3.Connection, session_id: int
+) -> None:
+    """DM the admin when attendance drifts from the snapshot it was built on.
+
+    Only fires once a snapshot exists, and dedupes on the drift signature so a
+    vote that doesn't move the attendee set (or an unchanged drift state) never
+    re-pings. The DM lists who joined/dropped plus the current waitlist so the
+    admin can promote with /change_player.
+    """
+    if settings.ADMIN_TELEGRAM_ID == 0:
+        return
+    snap = get_snapshot(conn, session_id)
+    if snap is None:
+        return
+    snapshot_ids = set(snap.team_a) | set(snap.team_b) | set(snap.cut)
+    added, removed = compute_drift(snapshot_ids, current_yes_set(conn, session_id))
+    if not added and not removed:
+        return
+    signature = drift_signature(added, removed)
+    if signature == get_last_drift_signature(conn, session_id):
+        return
+    parts = [f"⚠️ Attendance changed for session #{session_id}."]
+    if added:
+        parts.append("Added: " + ", ".join(display_names(conn, added)))
+    if removed:
+        parts.append("Dropped: " + ", ".join(display_names(conn, removed)))
+    waitlist = list_waitlist(conn, session_id)
+    if waitlist:
+        parts.append("Waitlist: " + ", ".join(display_names(conn, waitlist)))
+    parts.append("Run /change_player to fix.")
+    try:
+        await context.bot.send_message(chat_id=settings.ADMIN_TELEGRAM_ID, text="\n".join(parts))
+    except TelegramError as exc:
+        logger.warning("failed to DM admin about drift: %s", exc)
+    set_drift_signature(conn, session_id, signature)
+
+
 async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Ingest a vote on a bot-owned attendance poll, then fire any thresholds."""
     answer = update.poll_answer
@@ -170,5 +218,6 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if poll.kind == "attendance":
         record_attendance_answer(conn, poll.session_id, answer.user.id, option_ids)
         await _maybe_fire_thresholds(context, conn, poll)
+        await _maybe_notify_drift(context, conn, poll.session_id)
     else:
         record_reservation_answer(conn, poll.session_id, answer.user.id, option_ids)

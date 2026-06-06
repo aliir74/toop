@@ -8,14 +8,16 @@ import pytest
 from telegram.error import TelegramError
 
 from toop.config import Settings
+from toop.drift import get_last_drift_signature
 from toop.handlers.poll import (
     _conn,
+    _maybe_notify_drift,
     handle_poll_answer,
     post_attendance_poll,
     weekly_attendance_job,
 )
 from toop.players import add_player
-from toop.poll import get_poll, list_waitlist, record_poll, set_quorum_announced
+from toop.poll import add_to_waitlist, get_poll, list_waitlist, record_poll, set_quorum_announced
 from toop.rsvp import count_rsvps, upsert_rsvp
 from toop.sessions import get_active_session, open_session
 
@@ -269,3 +271,93 @@ async def test_cap_stop_poll_error_is_swallowed(
     ctx.bot.stop_poll = AsyncMock(side_effect=TelegramError("boom"))
     await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # must not raise
     assert get_poll(conn, "p1").cap_closed is True  # type: ignore[union-attr]
+
+
+# ----- attendance-drift DM -----
+
+
+def _admin_group(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "toop.handlers.poll.settings",
+        _settings(GROUP_CHAT_ID=-100123, ADMIN_TELEGRAM_ID=42),
+    )
+
+
+def _patch_snapshot(
+    monkeypatch: pytest.MonkeyPatch, team_a: list[int], team_b: list[int], cut: list[int]
+) -> None:
+    snap = MagicMock(team_a=team_a, team_b=team_b, cut=cut)
+    monkeypatch.setattr("toop.handlers.poll.get_snapshot", lambda _conn, _sid: snap)
+
+
+async def test_drift_no_admin_returns(conn: sqlite3.Connection) -> None:
+    # Real settings → ADMIN_TELEGRAM_ID is 0; no DM regardless of state.
+    ctx = _bot_ctx(conn)
+    await _maybe_notify_drift(ctx, conn, 1)
+    ctx.bot.send_message.assert_not_called()
+
+
+async def test_drift_no_snapshot_returns(
+    monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    _admin_group(monkeypatch)
+    monkeypatch.setattr("toop.handlers.poll.get_snapshot", lambda _conn, _sid: None)
+    ctx = _bot_ctx(conn)
+    await _maybe_notify_drift(ctx, conn, 1)
+    ctx.bot.send_message.assert_not_called()
+
+
+async def test_drift_unchanged_returns(
+    monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    _admin_group(monkeypatch)
+    sess = open_session(conn, date(2026, 5, 18))
+    for i in (1, 2):
+        add_player(conn, i, f"P{i}", f"p{i}")
+        upsert_rsvp(conn, sess.id, i, "yes")
+    _patch_snapshot(monkeypatch, [1], [2], [])
+    ctx = _bot_ctx(conn)
+    await _maybe_notify_drift(ctx, conn, sess.id)
+    ctx.bot.send_message.assert_not_called()
+
+
+async def test_drift_dms_admin_and_dedupes(
+    monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    _admin_group(monkeypatch)
+    sess = open_session(conn, date(2026, 5, 18))
+    for i in (1, 2, 3, 4, 5, 6):
+        add_player(conn, i, f"P{i}", f"p{i}")
+    # Snapshot was built on {1,2,3,4}; now 4 dropped, 5 joined.
+    for i in (1, 2, 3, 5):
+        upsert_rsvp(conn, sess.id, i, "yes")
+    add_to_waitlist(conn, sess.id, 6)
+    _patch_snapshot(monkeypatch, [1, 2], [3, 4], [])
+    ctx = _bot_ctx(conn)
+    await _maybe_notify_drift(ctx, conn, sess.id)
+    ctx.bot.send_message.assert_awaited_once()
+    text = ctx.bot.send_message.await_args.kwargs["text"]
+    assert "Added: P5" in text
+    assert "Dropped: P4" in text
+    assert "Waitlist: P6" in text
+    assert "/change_player" in text
+    assert get_last_drift_signature(conn, sess.id) is not None
+    # Same drift state must not re-ping.
+    await _maybe_notify_drift(ctx, conn, sess.id)
+    ctx.bot.send_message.assert_awaited_once()
+
+
+async def test_drift_send_error_is_swallowed(
+    monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    _admin_group(monkeypatch)
+    sess = open_session(conn, date(2026, 5, 18))
+    for i in (1, 2, 3):
+        add_player(conn, i, f"P{i}", f"p{i}")
+    for i in (1, 2):
+        upsert_rsvp(conn, sess.id, i, "yes")  # 3 dropped vs snapshot
+    _patch_snapshot(monkeypatch, [1, 2], [3], [])
+    ctx = _bot_ctx(conn)
+    ctx.bot.send_message = AsyncMock(side_effect=TelegramError("down"))
+    await _maybe_notify_drift(ctx, conn, sess.id)  # must not raise
+    assert get_last_drift_signature(conn, sess.id) is not None
