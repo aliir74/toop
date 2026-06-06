@@ -7,11 +7,10 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from toop.handlers.sessions import (
-    handle_close_session,
     handle_list_sessions,
     handle_open_session,
 )
-from toop.sessions import get_active_session, open_session
+from toop.sessions import get_active_session, list_recent_sessions, open_session
 
 
 @pytest.fixture
@@ -58,23 +57,17 @@ async def test_open_session_uses_default_weekday(
     assert get_active_session(conn) is not None
 
 
-async def test_open_session_when_one_exists_errors(
+async def test_open_session_reopens_when_one_active(
     admin_settings: None, conn: sqlite3.Connection
 ) -> None:
-    open_session(conn, date(2026, 5, 18))
+    # With /close_session gone, opening auto-closes the prior active session.
+    first = open_session(conn, date(2026, 5, 18))
     update = _admin_update()
-    ctx = _ctx(conn, ["2026-05-25"])
-    await handle_open_session(update, ctx)
-    reply = update.effective_message.reply_text.await_args.args[0]
-    assert "active" in reply.lower() or "still" in reply.lower()
-
-
-async def test_close_session_marks_done(admin_settings: None, conn: sqlite3.Connection) -> None:
-    open_session(conn, date(2026, 5, 18))
-    update = _admin_update()
-    ctx = _ctx(conn, [])
-    await handle_close_session(update, ctx)
-    assert get_active_session(conn) is None
+    await handle_open_session(update, _ctx(conn, ["2026-05-25"]))
+    active = get_active_session(conn)
+    assert active is not None and active.session_date == date(2026, 5, 25)
+    statuses = {s.id: s.status for s in list_recent_sessions(conn)}
+    assert statuses[first.id] == "done"
 
 
 async def test_list_sessions_empty(admin_settings: None, conn: sqlite3.Connection) -> None:
@@ -114,20 +107,6 @@ async def test_open_session_invalid_date(admin_settings: None, conn: sqlite3.Con
     update = _admin_update()
     await handle_open_session(update, _ctx(conn, ["not-a-date"]))
     assert "Usage" in update.effective_message.reply_text.await_args.args[0]
-
-
-async def test_close_session_returns_without_message(
-    admin_settings: None, conn: sqlite3.Connection
-) -> None:
-    await handle_close_session(_admin_update_no_msg(), _ctx(conn, []))
-
-
-async def test_close_session_no_active_errors(
-    admin_settings: None, conn: sqlite3.Connection
-) -> None:
-    update = _admin_update()
-    await handle_close_session(update, _ctx(conn, []))
-    update.effective_message.reply_text.assert_awaited_once()
 
 
 async def test_list_sessions_returns_without_message(

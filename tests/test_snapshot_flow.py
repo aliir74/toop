@@ -11,7 +11,6 @@ from toop.handlers.snapshot import (
     handle_publish,
     handle_snapshot,
     handle_swap,
-    handle_teams,
 )
 from toop.players import add_player
 from toop.rsvp import upsert_rsvp
@@ -80,13 +79,14 @@ async def test_snapshot_with_no_session_errors(conn: sqlite3.Connection) -> None
     assert "No active session" in reply
 
 
-async def test_teams_renders_after_snapshot(conn: sqlite3.Connection) -> None:
+async def test_snapshot_renders_teams_inline(conn: sqlite3.Connection) -> None:
+    # /teams was folded into /snapshot: the snapshot reply shows the teams.
     _seed_session_with_16_rsvps(conn)
-    await handle_snapshot(_admin_update(), _ctx(conn))
-    teams_update = _admin_update()
-    await handle_teams(teams_update, _ctx(conn))
-    text = teams_update.effective_message.reply_text.await_args.args[0]
+    update = _admin_update()
+    await handle_snapshot(update, _ctx(conn))
+    text = update.effective_message.reply_text.await_args.args[0]
     assert "Team A" in text and "Team B" in text
+    assert "Snapshot saved" in text
 
 
 async def test_swap_persists_new_assignment(conn: sqlite3.Connection) -> None:
@@ -213,23 +213,6 @@ async def test_auto_snapshot_handles_telegram_error(conn: sqlite3.Connection) ->
     ctx.bot.send_message = AsyncMock(side_effect=TelegramError("boom"))
     # Must not raise — the error is logged and swallowed.
     await auto_snapshot_job(ctx)
-
-
-async def test_teams_returns_without_message(conn: sqlite3.Connection) -> None:
-    await handle_teams(_admin_update_no_msg(), _ctx(conn))
-
-
-async def test_teams_no_session(conn: sqlite3.Connection) -> None:
-    update = _admin_update()
-    await handle_teams(update, _ctx(conn))
-    assert "No active session" in update.effective_message.reply_text.await_args.args[0]
-
-
-async def test_teams_no_snapshot(conn: sqlite3.Connection) -> None:
-    open_session(conn, date(2026, 5, 18))
-    update = _admin_update()
-    await handle_teams(update, _ctx(conn))
-    assert "No snapshot" in update.effective_message.reply_text.await_args.args[0]
 
 
 async def test_swap_returns_without_message(conn: sqlite3.Connection) -> None:

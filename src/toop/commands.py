@@ -118,21 +118,9 @@ COMMANDS: tuple[BotCmd, ...] = (
         admin=True,
     ),
     BotCmd(
-        "close_session",
-        "Close the open session",
-        "/close_session — close the currently open session",
-        admin=True,
-    ),
-    BotCmd(
         "sessions",
         "List recent sessions",
         "/sessions — list recent sessions and their status",
-        admin=True,
-    ),
-    BotCmd(
-        "lock_in",
-        "Force a player's RSVP to yes",
-        "/lock_in (no args) for buttons, or /lock_in @username  (or /lock_in <telegram_id>)",
         admin=True,
     ),
     BotCmd(
@@ -142,21 +130,9 @@ COMMANDS: tuple[BotCmd, ...] = (
         admin=True,
     ),
     BotCmd(
-        "refresh_ratings",
-        "Recompute composite ratings",
-        "/refresh_ratings — refit composite ratings from the current votes",
-        admin=True,
-    ),
-    BotCmd(
         "snapshot",
         "Generate balanced teams",
         "/snapshot — build balanced teams from the current yes-RSVPs",
-        admin=True,
-    ),
-    BotCmd(
-        "teams",
-        "Show the latest teams",
-        "/teams — show the most recent team snapshot",
         admin=True,
     ),
     BotCmd(

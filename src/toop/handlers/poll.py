@@ -34,9 +34,8 @@ from toop.poll import (
 from toop.rsvp import count_rsvps
 from toop.sessions import (
     Session,
-    SessionStateError,
     next_weekday,
-    open_session,
+    reopen_session,
 )
 from toop.snapshots import get_snapshot
 
@@ -109,17 +108,12 @@ async def post_reservation_poll(
 
 
 async def weekly_attendance_job(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Scheduled job: open the coming session and post the attendance poll.
-
-    Skips when a session is still active (the prior one wasn't closed yet), so a
-    missed /publish never double-posts the poll.
+    """Scheduled job: auto-close the prior session, open the coming one, and
+    post the attendance poll. Closing here is what retires last week's session
+    now that there is no manual /close_session.
     """
     conn = _conn(context)
-    try:
-        sess = open_session(conn, next_weekday(settings.SESSION_WEEKDAY))
-    except SessionStateError:
-        logger.info("weekly poll: a session is already active; skipping")
-        return
+    sess = reopen_session(conn, next_weekday(settings.SESSION_WEEKDAY))
     await post_attendance_poll(context, conn, sess)
 
 

@@ -104,14 +104,20 @@ async def test_weekly_job_opens_and_posts(group_settings: None, conn: sqlite3.Co
     ctx.bot.send_poll.assert_awaited_once()
 
 
-async def test_weekly_job_skips_when_session_active(
+async def test_weekly_job_closes_prior_then_opens(
     group_settings: None, conn: sqlite3.Connection
 ) -> None:
-    open_session(conn, date(2026, 5, 18))
+    prior = open_session(conn, date(2026, 5, 18))
     ctx = _ctx(conn)
-    ctx.bot.send_poll = AsyncMock()
+    ctx.bot.send_poll = AsyncMock(return_value=_poll_message())
     await weekly_attendance_job(ctx)
-    ctx.bot.send_poll.assert_not_called()
+    active = get_active_session(conn)
+    assert active is not None and active.id != prior.id
+    prior_status = conn.execute("SELECT status FROM sessions WHERE id=?", (prior.id,)).fetchone()[
+        "status"
+    ]
+    assert prior_status == "done"
+    ctx.bot.send_poll.assert_awaited_once()
 
 
 def _answer_update(poll_id: str, option_ids: tuple[int, ...], user_id: int | None) -> MagicMock:

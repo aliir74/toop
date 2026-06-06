@@ -163,7 +163,7 @@ def _format_snapshot_summary(conn: sqlite3.Connection, snap: Snapshot, cut: list
     swap_note = " (setter swap applied)" if snap.metrics.setter_swap_applied else ""
     return (
         f"Snapshot saved for session #{snap.session_id}.{swap_note}\n"
-        f"Preview with /teams, swap with /swap, ship with /publish.{cut_note}"
+        f"Swap with /swap or adjust with /change_player, ship with /publish.{cut_note}"
     )
 
 
@@ -182,7 +182,11 @@ async def handle_snapshot(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await message.reply_text("No yes-RSVPs yet — nothing to snapshot.")
         return
     snap, cut = result
-    await message.reply_text(_format_snapshot_summary(conn, snap, cut))
+    await message.reply_text(
+        f"{_format_snapshot_summary(conn, snap, cut)}\n\n"
+        f"{_format_teams(conn, snap, sess.session_date.isoformat())}",
+        parse_mode="Markdown",
+    )
 
 
 async def auto_snapshot_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -206,24 +210,6 @@ async def auto_snapshot_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         )
     except TelegramError as exc:
         logger.warning("auto_snapshot: failed to DM admin: %s", exc)
-
-
-@require_admin
-async def handle_teams(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.effective_message
-    if message is None:
-        return
-    conn = _conn(context)
-    sess = get_active_session(conn)
-    if sess is None:
-        await message.reply_text("No active session.")
-        return
-    snap = get_snapshot(conn, sess.id)
-    if snap is None:
-        await message.reply_text("No snapshot yet. Run /snapshot first.")
-        return
-    text = _format_teams(conn, snap, sess.session_date.isoformat())
-    await message.reply_text(text, parse_mode="Markdown")
 
 
 @require_admin

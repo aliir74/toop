@@ -11,11 +11,9 @@ from toop.admin import require_admin
 from toop.config import settings
 from toop.handlers.poll import post_attendance_poll
 from toop.sessions import (
-    SessionStateError,
-    close_session,
     list_recent_sessions,
     next_weekday,
-    open_session,
+    reopen_session,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,26 +41,9 @@ async def handle_open_session(update: Update, context: ContextTypes.DEFAULT_TYPE
             return
     else:
         session_date = next_weekday(settings.SESSION_WEEKDAY)
-    try:
-        sess = open_session(_conn(context), session_date)
-    except SessionStateError as exc:
-        await message.reply_text(str(exc))
-        return
+    sess = reopen_session(_conn(context), session_date)
     await message.reply_text(f"Session #{sess.id} opened for {sess.session_date.isoformat()}.")
     await post_attendance_poll(context, _conn(context), sess)
-
-
-@require_admin
-async def handle_close_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    message = update.effective_message
-    if message is None:
-        return
-    try:
-        sess = close_session(_conn(context))
-    except SessionStateError as exc:
-        await message.reply_text(str(exc))
-        return
-    await message.reply_text(f"Session #{sess.id} ({sess.session_date.isoformat()}) closed.")
 
 
 @require_admin

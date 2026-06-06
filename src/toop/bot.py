@@ -27,7 +27,6 @@ from toop.handlers.health import handle_coverage, handle_health
 from toop.handlers.help import handle_help
 from toop.handlers.ops import handle_backup_db, handle_version
 from toop.handlers.poll import handle_poll_answer, weekly_attendance_job
-from toop.handlers.ratings import handle_refresh_ratings
 from toop.handlers.roster import (
     handle_add_ghost,
     handle_add_pick_callback,
@@ -52,9 +51,7 @@ from toop.handlers.roster import (
     handle_rename_callback,
     handle_rename_text,
 )
-from toop.handlers.rsvp import handle_lock_in, handle_lock_in_callback
 from toop.handlers.sessions import (
-    handle_close_session,
     handle_list_sessions,
     handle_open_session,
 )
@@ -63,7 +60,6 @@ from toop.handlers.snapshot import (
     handle_publish,
     handle_snapshot,
     handle_swap,
-    handle_teams,
 )
 from toop.handlers.voting import (
     handle_nudge,
@@ -123,16 +119,12 @@ def main() -> None:
     app.add_handler(CommandHandler("rename", handle_rename))
     app.add_handler(CommandHandler("contacts", handle_contacts))
     app.add_handler(CommandHandler("open_session", handle_open_session))
-    app.add_handler(CommandHandler("close_session", handle_close_session))
     app.add_handler(CommandHandler("sessions", handle_list_sessions))
-    app.add_handler(CommandHandler("lock_in", handle_lock_in))
     app.add_handler(CommandHandler("start", handle_start))
     app.add_handler(CommandHandler("vote", handle_vote_command))
     app.add_handler(CommandHandler("help", handle_help))
     app.add_handler(CommandHandler("nudge", handle_nudge))
-    app.add_handler(CommandHandler("refresh_ratings", handle_refresh_ratings))
     app.add_handler(CommandHandler("snapshot", handle_snapshot))
-    app.add_handler(CommandHandler("teams", handle_teams))
     app.add_handler(CommandHandler("swap", handle_swap))
     app.add_handler(CommandHandler("change_player", handle_change_player))
     app.add_handler(CommandHandler("publish", handle_publish))
@@ -180,7 +172,6 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_rename_callback, pattern=r"^rename:"))
     app.add_handler(CallbackQueryHandler(handle_remove_callback, pattern=r"^rmpick:"))
     app.add_handler(CallbackQueryHandler(handle_disable_callback, pattern=r"^dispick:"))
-    app.add_handler(CallbackQueryHandler(handle_lock_in_callback, pattern=r"^lockpick:"))
     app.add_handler(CallbackQueryHandler(handle_change_remove_callback, pattern=r"^cprm:"))
     app.add_handler(CallbackQueryHandler(handle_change_promote_callback, pattern=r"^cpadd:"))
     app.add_handler(CallbackQueryHandler(handle_enable_callback, pattern=r"^enpick:"))
