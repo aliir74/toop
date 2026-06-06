@@ -6,14 +6,14 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 
 - **Group**: ~20 players, weekly Monday 6pm sessions, max 14 attendees (6v6 + 1 sub per team)
 - **Two teams**, no in-session rotation
-- **Peer-driven ratings**: pairwise comparisons across 3 axes (attack, defense, setting)
-- **Private voting**: votes never surface; admin sees only completion health, not content
+- **Peer-driven ratings**: absolute 1–5 scoring across 6 indicators (حمله/attack, دریافت/receive, دفاع روی تور/block, پاسور/setting, سرویس/serve, جاگیری-تحرک/positioning)
+- **Voter-linked scores**: each voter's 1–5 scores are stored with their identity so per-rater leniency/severity can be normalized out. Scores are not surfaced to the group, but (unlike the retired pairwise model) they are visible to the admin in the database.
 - **Admin-in-the-loop**: admin chases low-completion folks in person, finalizes attendees, reviews suggested teams before publishing
 
 ## Core flow
 
-1. Continuous pairwise voting via 1:1 DM with bot (standing queue of ~5 prompts per voter)
-2. Admin dashboard shows voting health (last-voted, lifetime votes, pending, coverage gaps)
+1. Continuous scoring via 1:1 DM with bot: rate one teammate on one indicator at a time, 1–5 (re-tap to change a score)
+2. Admin dashboard shows voting health (last-voted, lifetime ratings, pending, coverage gaps)
 3. RSVPs for upcoming Monday session
 4. Bot snapshots ratings + attendees, suggests balanced teams via constraint-aware snake-draft
 5. Admin reviews, optionally swaps, publishes teams to group chat
@@ -24,7 +24,7 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 - `python-telegram-bot` (async, Bot API)
 - SQLite for storage
 - `pydantic-settings` for config
-- Bradley-Terry per-axis ratings, composite weights `0.4 attack / 0.4 defense / 0.2 setting`
+- Rater-normalized 1–5 ratings (per-rater z-score + shrinkage), equal default composite weights (1/6 per indicator, env-tunable)
 
 ---
 
@@ -109,12 +109,11 @@ Group `/vote` keeps the group clean: the bot DMs the sender their next prompt (o
 ```
 🏐 New: توپ helps us balance teams.
 
-DM @<your_bot_username> and tap /vote — it'll ask you to compare
-two teammates at a time (attack / defense / setting). Your individual
-answers stay private; only the running tally is used.
+DM @<your_bot_username> and tap /vote — it'll ask you to rate one
+teammate at a time on one skill, from خیلی ضعیف to عالی. You can
+re-tap any time to change a score.
 
-The more you vote, the more accurate our teams get. Aim for ~5
-prompts a week — takes 30 seconds.
+The more you rate, the more accurate our teams get. Takes 30 seconds.
 ```
 
 ---
@@ -126,15 +125,15 @@ prompts a week — takes 30 seconds.
 - **Vote callbacks silently fail** — most often `BOT_TOKEN` is wrong or the bot isn't running. Check `logs/toop.log`.
 - **Scheduled snapshot didn't fire Monday noon** — JobQueue requires the bot process to be alive at the scheduled time. Verify with `make logs` (look for `auto_snapshot scheduled`) or trigger manually with `/snapshot`. Note `SNAPSHOT_HOUR` is interpreted as UTC inside the container.
 - **"weights sum to 0.95"** warning at startup — composite weights in `.env` don't add to 1.0. Bot still runs; ratings just scale slightly differently. Adjust to taste.
-- **All-new roster shows "low confidence"** — expected during calibration. As pairs accumulate votes, confidence rises. Front-loading 15-20 votes per voter in week 1 is the recommended pattern.
+- **All-new roster shows "low confidence"** — expected during calibration. As players accumulate scores, confidence rises. Front-loading ratings in week 1 is the recommended pattern.
 
 ---
 
 ## Privacy
 
-See `docs/PRIVACY.md` for a full audit. TL;DR: by schema design, `vote_aggregates` (outcomes) and `answered_prompts` (voter dedupe) are never joined. Admin sees completion health, never vote content.
+The rating model is **voter-linked by design** (the `scores` table carries `voter_id` plus the raw 1–5 score). This is a deliberate trade vs the retired pairwise model: storing each rater's scores is what lets the refit normalize out per-rater leniency/severity (a generous or harsh rater no longer skews a player's standing). Scores are never surfaced to the group, but the admin can see them in the database. Only the admin has DB access.
 
-"🤷 Don't know" taps are counted on `vote_aggregates.dont_know` as a per-pair aggregate with **no voter identity** — the same privacy invariant as win counts. A daily job DMs the admin a `/pause_voting` suggestion for players whose don't-know rate crosses `DK_ALERT_MIN_PROMPTS` + `DK_ALERT_RATE`; it reports only counts, never who tapped what.
+"🤷 ندیدمش" (don't know) taps are recorded in `score_skips` with no score. A daily job DMs the admin a `/pause_voting` suggestion for players whom voters most often can't rate (skip rate crossing `DK_ALERT_MIN_PROMPTS` + `DK_ALERT_RATE`); it reports only counts.
 
 ## Plan
 
