@@ -20,6 +20,9 @@ dist/
 .env.*
 !.env.example
 
+# Player photo backups (faces — PII, never commit)
+data/photos/
+
 # SQLite
 *.db
 *.db-journal
