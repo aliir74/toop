@@ -427,9 +427,14 @@ async def test_pool_handlers_return_without_message(
 async def test_dk_report_lists_by_rate(admin_settings: None, conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Alice", "alice")
     add_player(conn, 2, "Bob", "bob")
-    conn.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
-        "VALUES (1, 2, 'attack', 1, 1, 4)"
+    # Voters skip rating Alice on several indicators; Bob gets one skip too.
+    conn.executescript(
+        """
+        INSERT INTO score_skips (voter_id, player_id, indicator) VALUES
+            (2, 1, 'attack'), (2, 1, 'receive'), (2, 1, 'block'), (2, 1, 'setting');
+        INSERT INTO scores (voter_id, player_id, indicator, score) VALUES (2, 1, 'serve', 3);
+        INSERT INTO score_skips (voter_id, player_id, indicator) VALUES (1, 2, 'attack');
+        """
     )
     conn.commit()
     update = _admin_update("/dk_report")

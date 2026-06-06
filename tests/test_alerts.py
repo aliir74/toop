@@ -11,6 +11,9 @@ from telegram.error import TelegramError
 from toop.handlers.alerts import dk_alert_job
 from toop.players import add_player
 
+# Indicators used to spread skips/scores across the (voter, player, indicator) PK.
+_INDS = ("attack", "receive", "block", "setting", "serve", "positioning")
+
 
 @pytest.fixture(autouse=True)
 def patch_settings(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -30,20 +33,30 @@ def _ctx(conn: sqlite3.Connection) -> MagicMock:
     return ctx
 
 
-def _agg(conn: sqlite3.Connection, a: int, b: int, dk: int, aw: int = 0, bw: int = 0) -> None:
-    conn.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
-        "VALUES (?, ?, 'attack', ?, ?, ?)",
-        (a, b, aw, bw, dk),
-    )
+def _skips(conn: sqlite3.Connection, voter: int, player: int, n: int) -> None:
+    for ind in _INDS[:n]:
+        conn.execute(
+            "INSERT INTO score_skips (voter_id, player_id, indicator) VALUES (?, ?, ?)",
+            (voter, player, ind),
+        )
+    conn.commit()
+
+
+def _scores(conn: sqlite3.Connection, voter: int, player: int, n: int) -> None:
+    for ind in _INDS[-n:]:
+        conn.execute(
+            "INSERT INTO scores (voter_id, player_id, indicator, score) VALUES (?, ?, ?, 3)",
+            (voter, player, ind),
+        )
     conn.commit()
 
 
 async def test_dk_alert_dms_admin_for_flagged_player(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Unknown", "unknown")
     add_player(conn, 2, "Known", "known")
-    # Pair (1,2): 4 don't-know, 1+1 winners → player 1 dk_count 4, total 6, rate .67.
-    _agg(conn, 1, 2, dk=4, aw=1, bw=1)
+    # Player 1: 4 skips + 2 scores received → dk_count 4, total 6, rate .67.
+    _skips(conn, 2, 1, 4)
+    _scores(conn, 2, 1, 2)
     ctx = _ctx(conn)
     await dk_alert_job(ctx)
     ctx.bot.send_message.assert_awaited_once()
@@ -55,20 +68,17 @@ async def test_dk_alert_dms_admin_for_flagged_player(conn: sqlite3.Connection) -
 async def test_dk_alert_no_flag_no_dm(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Fine", "fine")
     add_player(conn, 2, "Fine2", "fine2")
-    _agg(conn, 1, 2, dk=1, aw=5, bw=5)  # low dk count and rate
+    _skips(conn, 2, 1, 1)  # dk_count 1 < MIN 3
+    _scores(conn, 2, 1, 5)
     ctx = _ctx(conn)
     await dk_alert_job(ctx)
     ctx.bot.send_message.assert_not_awaited()
 
 
 async def test_dk_alert_skips_already_paused(conn: sqlite3.Connection) -> None:
-    # Player 1 is the only one over threshold: dk spread across two pairs (4 total),
-    # while partners 2 and 3 each sit at dk=2 (< MIN of 3).
     add_player(conn, 1, "Unknown", "unknown")
     add_player(conn, 2, "Known", "known")
-    add_player(conn, 3, "Other", "other")
-    _agg(conn, 1, 2, dk=2)
-    _agg(conn, 1, 3, dk=2)
+    _skips(conn, 2, 1, 4)
     future = (datetime.now(UTC) + timedelta(days=5)).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute("UPDATE players SET pool_paused_until=? WHERE telegram_id=1", (future,))
     conn.commit()
@@ -88,7 +98,7 @@ async def test_dk_alert_admin_unset_skips(
     )
     add_player(conn, 1, "Unknown", "unknown")
     add_player(conn, 2, "Known", "known")
-    _agg(conn, 1, 2, dk=4, aw=1, bw=1)
+    _skips(conn, 2, 1, 4)
     ctx = _ctx(conn)
     await dk_alert_job(ctx)
     ctx.bot.send_message.assert_not_awaited()
@@ -99,7 +109,7 @@ async def test_dk_alert_handles_telegram_error(
 ) -> None:
     add_player(conn, 1, "Unknown", "unknown")
     add_player(conn, 2, "Known", "known")
-    _agg(conn, 1, 2, dk=4, aw=1, bw=1)
+    _skips(conn, 2, 1, 4)
     ctx = _ctx(conn)
     ctx.bot.send_message = AsyncMock(side_effect=TelegramError("blocked"))
     with caplog.at_level(logging.WARNING, logger="toop.handlers.alerts"):

@@ -35,7 +35,6 @@ from toop.players import (
     rename_player,
     soft_remove_player,
 )
-from toop.voting_queue import bootstrap_calibration_prompts
 
 logger = logging.getLogger(__name__)
 
@@ -258,8 +257,7 @@ def _add_and_describe(
     is_new = existed is None
     player = add_player(conn, telegram_id, display_name, username)
     if is_new:
-        inserted = bootstrap_calibration_prompts(conn, telegram_id)
-        suffix = f" Seeded {inserted} calibration prompts." if inserted else ""
+        suffix = ""
     else:
         was_inactive = existed is not None and existed["active"] == 0
         suffix = " (revived from soft-delete)" if was_inactive else ""
@@ -600,10 +598,8 @@ async def handle_add_ghost(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
     conn = _conn(context)
     ghost = add_ghost_player(conn, name)
-    seeded = bootstrap_calibration_prompts(conn, ghost.telegram_id)
-    suffix = f" Seeded {seeded} calibration prompts." if seeded else ""
     await message.reply_text(
-        f"👻 Added ghost {ghost.display_name} (id {ghost.telegram_id}).{suffix} "
+        f"👻 Added ghost {ghost.display_name} (id {ghost.telegram_id}). "
         f"When they join Telegram, run /link_player {ghost.telegram_id} @their_username."
     )
 
@@ -684,7 +680,7 @@ async def handle_link_player(update: Update, context: ContextTypes.DEFAULT_TYPE)
 def _link_summary(ghost_name: str, real_id: int, result: LinkResult) -> str:
     return (
         f"🔗 Linked ghost {ghost_name} → id {real_id}. Moved "
-        f"{result.vote_rows} vote pairs, {result.ratings} ratings, {result.rsvps} RSVPs, "
+        f"{result.score_rows} scores, {result.ratings} ratings, {result.rsvps} RSVPs, "
         f"{result.attendance} attendance rows."
     )
 

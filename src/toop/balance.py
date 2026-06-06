@@ -3,7 +3,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
-from toop.rating import AXES, composite_score, get_player_ratings
+from toop.rating import INDICATORS, composite_score, get_player_ratings
 
 
 @dataclass(frozen=True)
@@ -11,8 +11,8 @@ class TeamMetrics:
     team_a_total: float
     team_b_total: float
     abs_delta: float
-    per_axis_a: dict[str, float]
-    per_axis_b: dict[str, float]
+    per_indicator_a: dict[str, float]
+    per_indicator_b: dict[str, float]
     calibration_confidence: str
     setter_swap_applied: bool
 
@@ -21,8 +21,10 @@ def _composite_for_team(scores: dict[int, float], team: list[int]) -> float:
     return sum(scores[pid] for pid in team)
 
 
-def _per_axis_totals(axis_scores: dict[str, dict[int, float]], team: list[int]) -> dict[str, float]:
-    return {axis: sum(axis_scores[axis].get(pid, 0.0) for pid in team) for axis in AXES}
+def _per_indicator_totals(
+    indicator_scores: dict[str, dict[int, float]], team: list[int]
+) -> dict[str, float]:
+    return {ind: sum(indicator_scores[ind].get(pid, 0.0) for pid in team) for ind in INDICATORS}
 
 
 def _snake_assign(sorted_attendees: list[int]) -> tuple[list[int], list[int]]:
@@ -86,46 +88,53 @@ def _try_setter_swap(
     return new_recipient, new_donor, True
 
 
+def _empty_metrics() -> TeamMetrics:
+    return TeamMetrics(
+        team_a_total=0.0,
+        team_b_total=0.0,
+        abs_delta=0.0,
+        per_indicator_a={ind: 0.0 for ind in INDICATORS},
+        per_indicator_b={ind: 0.0 for ind in INDICATORS},
+        calibration_confidence="low",
+        setter_swap_applied=False,
+    )
+
+
+def _gather_scores(
+    conn: sqlite3.Connection, attendees: list[int], weights: dict[str, float]
+) -> tuple[dict[int, float], dict[int, str], dict[str, dict[int, float]]]:
+    composite: dict[int, float] = {}
+    statuses: dict[int, str] = {}
+    indicator_scores: dict[str, dict[int, float]] = {ind: {} for ind in INDICATORS}
+    for pid in attendees:
+        score, status = composite_score(conn, pid, weights)
+        composite[pid] = score
+        statuses[pid] = status
+        ratings = get_player_ratings(conn, pid)
+        for ind in INDICATORS:
+            indicator_scores[ind][pid] = ratings.get(ind, (0.0, 0, False))[0]
+    return composite, statuses, indicator_scores
+
+
 def generate_teams(
     conn: sqlite3.Connection,
     attendees: list[int],
-    weights: tuple[float, float, float],
+    weights: dict[str, float],
 ) -> tuple[list[int], list[int], TeamMetrics]:
     """Snake-draft attendees by composite score, then enforce setter constraint.
 
     Returns (team_a, team_b, metrics).
     """
     if not attendees:
-        return (
-            [],
-            [],
-            TeamMetrics(
-                team_a_total=0.0,
-                team_b_total=0.0,
-                abs_delta=0.0,
-                per_axis_a={a: 0.0 for a in AXES},
-                per_axis_b={a: 0.0 for a in AXES},
-                calibration_confidence="low",
-                setter_swap_applied=False,
-            ),
-        )
+        return [], [], _empty_metrics()
 
-    composite: dict[int, float] = {}
-    statuses: dict[int, str] = {}
-    axis_scores: dict[str, dict[int, float]] = {axis: {} for axis in AXES}
-    for pid in attendees:
-        score, status = composite_score(conn, pid, weights)
-        composite[pid] = score
-        statuses[pid] = status
-        ratings = get_player_ratings(conn, pid)
-        for axis in AXES:
-            axis_scores[axis][pid] = ratings.get(axis, (0.0, 0, False))[0]
+    composite, statuses, indicator_scores = _gather_scores(conn, attendees, weights)
 
     sorted_attendees = sorted(attendees, key=lambda pid: (-composite[pid], pid))
     team_a, team_b = _snake_assign(sorted_attendees)
 
     top_quartile_count = max(1, len(attendees) // 4)
-    setting_ranked = sorted(attendees, key=lambda pid: (-axis_scores["setting"][pid], pid))
+    setting_ranked = sorted(attendees, key=lambda pid: (-indicator_scores["setting"][pid], pid))
     top_setters = set(setting_ranked[:top_quartile_count])
 
     team_a, team_b, swap_applied = _try_setter_swap(team_a, team_b, top_setters, composite)
@@ -139,8 +148,8 @@ def generate_teams(
         abs_delta=abs(
             _composite_for_team(composite, team_a) - _composite_for_team(composite, team_b)
         ),
-        per_axis_a=_per_axis_totals(axis_scores, team_a),
-        per_axis_b=_per_axis_totals(axis_scores, team_b),
+        per_indicator_a=_per_indicator_totals(indicator_scores, team_a),
+        per_indicator_b=_per_indicator_totals(indicator_scores, team_b),
         calibration_confidence=confidence,
         setter_swap_applied=swap_applied,
     )
@@ -166,31 +175,14 @@ def compute_metrics(
     conn: sqlite3.Connection,
     team_a: list[int],
     team_b: list[int],
-    weights: tuple[float, float, float],
+    weights: dict[str, float],
 ) -> TeamMetrics:
     """Recompute metrics for an arbitrary (team_a, team_b) split (e.g. after admin swap)."""
     attendees = team_a + team_b
     if not attendees:
-        return TeamMetrics(
-            team_a_total=0.0,
-            team_b_total=0.0,
-            abs_delta=0.0,
-            per_axis_a={a: 0.0 for a in AXES},
-            per_axis_b={a: 0.0 for a in AXES},
-            calibration_confidence="low",
-            setter_swap_applied=False,
-        )
+        return _empty_metrics()
 
-    composite: dict[int, float] = {}
-    statuses: dict[int, str] = {}
-    axis_scores: dict[str, dict[int, float]] = {axis: {} for axis in AXES}
-    for pid in attendees:
-        score, status = composite_score(conn, pid, weights)
-        composite[pid] = score
-        statuses[pid] = status
-        ratings = get_player_ratings(conn, pid)
-        for axis in AXES:
-            axis_scores[axis][pid] = ratings.get(axis, (0.0, 0, False))[0]
+    composite, statuses, indicator_scores = _gather_scores(conn, attendees, weights)
 
     calibrated_count = sum(1 for pid in attendees if statuses[pid] == "calibrated")
     confidence = _confidence_from_ratio(calibrated_count / len(attendees))
@@ -201,8 +193,8 @@ def compute_metrics(
         abs_delta=abs(
             _composite_for_team(composite, team_a) - _composite_for_team(composite, team_b)
         ),
-        per_axis_a=_per_axis_totals(axis_scores, team_a),
-        per_axis_b=_per_axis_totals(axis_scores, team_b),
+        per_indicator_a=_per_indicator_totals(indicator_scores, team_a),
+        per_indicator_b=_per_indicator_totals(indicator_scores, team_b),
         calibration_confidence=confidence,
         setter_swap_applied=False,
     )

@@ -1,80 +1,108 @@
 from __future__ import annotations
 
-import numpy as np
-import pytest
+import sqlite3
 
-from toop.rating import fit_bradley_terry
-
-
-def test_empty_returns_empty() -> None:
-    assert fit_bradley_terry({}) == {}
+from toop.players import add_player
+from toop.rating import INDICATORS, get_player_ratings, refresh_ratings
 
 
-def test_player_ids_only_no_aggregates_returns_zeros() -> None:
-    res = fit_bradley_terry({}, player_ids=[1, 2, 3])
-    assert set(res.keys()) == {1, 2, 3}
-    for v in res.values():
-        assert v == 0.0
+def _seed_players(conn: sqlite3.Connection, n: int) -> None:
+    for i in range(1, n + 1):
+        add_player(conn, i, f"P{i}", f"p{i}")
 
 
-def test_two_player_dominance() -> None:
-    # Player 1 beats player 2 every time
-    res = fit_bradley_terry({(1, 2): (10, 0)})
-    assert res[1] > res[2]
-    assert abs(res[1] + res[2]) < 1e-9  # mean-centered
+def _score(conn: sqlite3.Connection, voter: int, player: int, indicator: str, score: int) -> None:
+    conn.execute(
+        "INSERT INTO scores (voter_id, player_id, indicator, score) VALUES (?, ?, ?, ?)",
+        (voter, player, indicator, score),
+    )
+    conn.commit()
 
 
-def test_ranking_matches_synthetic_truth() -> None:
-    """Generate matches from known skills, fitter should recover the order."""
-    rng = np.random.default_rng(seed=42)
-    true_log_skills = {1: 2.0, 2: 1.0, 3: 0.0, 4: -1.0, 5: -2.0}
-    true_pi = {p: np.exp(s) for p, s in true_log_skills.items()}
-    aggregates: dict[tuple[int, int], list[int]] = {}
-    n_games = 100
-    for i in range(1, 6):
-        for j in range(i + 1, 6):
-            p_i_wins = true_pi[i] / (true_pi[i] + true_pi[j])
-            wins_i = int(rng.binomial(n_games, p_i_wins))
-            aggregates[(i, j)] = [wins_i, n_games - wins_i]
-    agg_tuples = {k: (v[0], v[1]) for k, v in aggregates.items()}
-    res = fit_bradley_terry(agg_tuples)
-    ranking = sorted(res, key=res.get, reverse=True)
-    assert ranking == [1, 2, 3, 4, 5]
+def _player_indicator_score(conn: sqlite3.Connection, pid: int, indicator: str) -> float:
+    row = conn.execute(
+        "SELECT score FROM player_ratings WHERE telegram_id=? AND indicator=?",
+        (pid, indicator),
+    ).fetchone()
+    return row["score"]
 
 
-def test_isolated_player_gets_median() -> None:
-    aggs = {(1, 2): (5, 5), (1, 3): (5, 5), (2, 3): (5, 5)}
-    res = fit_bradley_terry(aggs, player_ids=[1, 2, 3, 99])
-    median = float(np.median([res[1], res[2], res[3]]))
-    assert abs(res[99] - median) < 1e-9
+def test_normalization_cancels_rater_leniency(conn: sqlite3.Connection) -> None:
+    """A player rated average by both a lenient and a harsh rater nets ~0 once
+    each rater is z-scored — the raw mean would not cancel the bias."""
+    _seed_players(conn, 5)
+    # Lenient rater 1 (mean 4): target=3 is BELOW their bar.
+    _score(conn, 1, 3, "attack", 3)
+    _score(conn, 1, 4, "attack", 5)
+    _score(conn, 1, 5, "attack", 4)
+    # Harsh rater 2 (mean 2): target=3 is ABOVE their bar.
+    _score(conn, 2, 3, "attack", 3)
+    _score(conn, 2, 4, "attack", 1)
+    _score(conn, 2, 5, "attack", 2)
+    refresh_ratings(conn, calibration_threshold=1, norm_min_ratings=1, shrinkage_k=0.0)
+    assert abs(_player_indicator_score(conn, 3, "attack")) < 1e-9
 
 
-def test_all_wins_no_divergence() -> None:
-    """Player 1 beats 2, 3, 4 every time; prior keeps log-skill finite."""
-    aggs = {
-        (1, 2): (10, 0),
-        (1, 3): (10, 0),
-        (1, 4): (10, 0),
-        (2, 3): (5, 5),
-        (2, 4): (5, 5),
-        (3, 4): (5, 5),
-    }
-    res = fit_bradley_terry(aggs)
-    assert np.isfinite(res[1])
-    assert res[1] > 0
-    for p in (2, 3, 4):
-        assert res[p] < res[1]
+def test_normalize_off_uses_raw_mean(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 5)
+    _score(conn, 1, 3, "attack", 3)
+    _score(conn, 1, 4, "attack", 5)
+    _score(conn, 1, 5, "attack", 4)
+    _score(conn, 2, 3, "attack", 3)
+    _score(conn, 2, 4, "attack", 1)
+    _score(conn, 2, 5, "attack", 2)
+    refresh_ratings(conn, calibration_threshold=1, normalize=False, shrinkage_k=0.0)
+    # Raw: target got 3 and 3 → mean 3.0 (no bias correction).
+    assert abs(_player_indicator_score(conn, 3, "attack") - 3.0) < 1e-9
 
 
-def test_mean_centered() -> None:
-    aggs = {(1, 2): (3, 2), (1, 3): (4, 1), (2, 3): (1, 4)}
-    res = fit_bradley_terry(aggs)
-    assert abs(sum(res.values())) < 1e-9
+def test_zero_variance_rater_falls_back_to_leniency_shift(conn: sqlite3.Connection) -> None:
+    """A rater who gives identical scores has sd=0; we shift by their mean only."""
+    _seed_players(conn, 3)
+    _score(conn, 1, 2, "attack", 3)
+    _score(conn, 1, 3, "attack", 3)
+    refresh_ratings(conn, calibration_threshold=1, norm_min_ratings=1, shrinkage_k=0.0)
+    # contribution = score - rater_mean = 3 - 3 = 0
+    assert abs(_player_indicator_score(conn, 2, "attack")) < 1e-9
 
 
-def test_idempotent_under_same_input() -> None:
-    aggs = {(1, 2): (3, 2), (1, 3): (4, 1), (2, 3): (1, 4)}
-    a = fit_bradley_terry(aggs)
-    b = fit_bradley_terry(aggs)
-    for k in a:
-        assert pytest.approx(a[k]) == b[k]
+def test_sub_threshold_rater_falls_back_to_global_shift(conn: sqlite3.Connection) -> None:
+    """A rater with fewer than norm_min_ratings scores can't anchor on their own
+    mean, so we shift by the global mean instead."""
+    _seed_players(conn, 3)
+    _score(conn, 1, 2, "attack", 5)
+    _score(conn, 1, 3, "attack", 1)
+    # global mean = 3; rater has 2 scores < norm_min_ratings=5 → global shift.
+    refresh_ratings(conn, calibration_threshold=1, norm_min_ratings=5, shrinkage_k=0.0)
+    assert abs(_player_indicator_score(conn, 2, "attack") - 2.0) < 1e-9  # 5 - 3
+    assert abs(_player_indicator_score(conn, 3, "attack") + 2.0) < 1e-9  # 1 - 3
+
+
+def test_no_scores_writes_nothing(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 3)
+    written = refresh_ratings(conn, calibration_threshold=1)
+    assert written == 0
+    rows = conn.execute("SELECT COUNT(*) AS n FROM player_ratings").fetchone()
+    assert rows["n"] == 0
+
+
+def test_inactive_target_is_skipped(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 2)
+    _score(conn, 1, 2, "attack", 4)
+    conn.execute("UPDATE players SET active=0 WHERE telegram_id=2")
+    conn.commit()
+    refresh_ratings(conn, calibration_threshold=1)
+    rows = conn.execute("SELECT COUNT(*) AS n FROM player_ratings WHERE telegram_id=2").fetchone()
+    assert rows["n"] == 0
+
+
+def test_get_player_ratings_returns_per_indicator(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 2)
+    for ind in INDICATORS:
+        _score(conn, 1, 2, ind, 4)
+    refresh_ratings(conn, calibration_threshold=1)
+    r = get_player_ratings(conn, 2)
+    assert set(r.keys()) == set(INDICATORS)
+    score, count, calibrated = r["attack"]
+    assert count == 1
+    assert calibrated is True

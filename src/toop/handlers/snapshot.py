@@ -34,7 +34,7 @@ SWAP_USAGE = "Usage: /swap @player_a @player_b"
 
 def take_snapshot(
     conn: sqlite3.Connection,
-    weights: tuple[float, float, float],
+    weights: dict[str, float],
     max_attendees: int,
     calibration_threshold: int,
 ) -> tuple[Snapshot, list[int]] | None:
@@ -49,7 +49,13 @@ def take_snapshot(
     selection = select_attendees(conn, sess.id, max_attendees)
     if not selection.selected:
         return None
-    refresh_ratings(conn, calibration_threshold)
+    refresh_ratings(
+        conn,
+        calibration_threshold,
+        normalize=settings.NORMALIZATION_ENABLED,
+        norm_min_ratings=settings.NORM_MIN_RATINGS,
+        shrinkage_k=settings.SHRINKAGE_K,
+    )
     team_a, team_b, metrics = generate_teams(conn, selection.selected, weights)
     save_snapshot(conn, sess.id, team_a, team_b, selection.cut, metrics)
     set_session_status(conn, sess.id, "snapshotted", snapshot_at=True)
@@ -65,8 +71,8 @@ def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
     return conn
 
 
-def _weights() -> tuple[float, float, float]:
-    return (settings.WEIGHT_ATTACK, settings.WEIGHT_DEFENSE, settings.WEIGHT_SETTING)
+def _weights() -> dict[str, float]:
+    return settings.composite_weights()
 
 
 def _fetch_player(conn: sqlite3.Connection, telegram_id: int) -> Player | None:

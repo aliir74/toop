@@ -14,6 +14,7 @@ from toop.handlers.health import (
     handle_health,
 )
 from toop.players import add_player
+from toop.rating import INDICATORS
 
 
 @pytest.fixture(autouse=True)
@@ -36,14 +37,14 @@ def _ctx(conn: sqlite3.Connection) -> MagicMock:
     return ctx
 
 
-def _answered(
-    conn: sqlite3.Connection, voter_id: int, pa: int, pb: int, axis: str, days_ago: int = 0
+def _score(
+    conn: sqlite3.Connection, voter: int, player: int, indicator: str, days_ago: int = 0
 ) -> None:
     ts = datetime.now(UTC) - timedelta(days=days_ago)
     conn.execute(
-        "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis, answered_at) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (voter_id, pa, pb, axis, ts.strftime("%Y-%m-%d %H:%M:%S")),
+        "INSERT INTO scores (voter_id, player_id, indicator, score, updated_at) "
+        "VALUES (?, ?, ?, 3, ?)",
+        (voter, player, indicator, ts.strftime("%Y-%m-%d %H:%M:%S")),
     )
     conn.commit()
 
@@ -52,12 +53,10 @@ def test_health_orders_never_voted_first(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Alice", "alice")
     add_player(conn, 2, "Bob", "bob")
     add_player(conn, 3, "Carol", "carol")
-    _answered(conn, 1, 2, 3, "attack", days_ago=2)
-    _answered(conn, 3, 1, 2, "attack", days_ago=14)
+    _score(conn, 1, 2, "attack", days_ago=2)  # Alice voted 2d ago
+    _score(conn, 3, 1, "attack", days_ago=14)  # Carol voted 14d ago
     rows = build_health_rows(conn)
-    # Bob: never voted, should be first
-    assert rows[0]["display_name"] == "Bob"
-    # Carol: 14 days ago, before Alice (2 days ago)
+    assert rows[0]["display_name"] == "Bob"  # never voted
     assert rows[1]["display_name"] == "Carol"
     assert rows[2]["display_name"] == "Alice"
 
@@ -65,28 +64,22 @@ def test_health_orders_never_voted_first(conn: sqlite3.Connection) -> None:
 def test_health_lifetime_and_30d_counts(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Alice", "alice")
     add_player(conn, 2, "Bob", "bob")
-    add_player(conn, 3, "Carol", "carol")
-    # Alice has 1 recent + 1 old, Bob has 0
-    _answered(conn, 1, 2, 3, "attack", days_ago=5)
-    _answered(conn, 1, 2, 3, "defense", days_ago=45)
+    _score(conn, 1, 2, "attack", days_ago=5)
+    _score(conn, 1, 2, "receive", days_ago=45)
     rows = build_health_rows(conn)
     alice = next(r for r in rows if r["display_name"] == "Alice")
     assert alice["lifetime"] == 2
     assert alice["last_30d"] == 1
 
 
-def test_health_no_vote_outcomes_exposed(conn: sqlite3.Connection) -> None:
-    """The health query touches answered_prompts (counts only) — never vote_aggregates."""
+def test_health_pending_counts_remaining_targets(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Alice", "alice")
     add_player(conn, 2, "Bob", "bob")
-    conn.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins) "
-        "VALUES (1, 2, 'attack', 999, 0)"
-    )
-    conn.commit()
+    # Alice can rate Bob on 6 indicators; she's done 1 → 5 remaining.
+    _score(conn, 1, 2, "attack")
     rows = build_health_rows(conn)
-    serialized = format_health(rows)
-    assert "999" not in serialized  # no win count leakage
+    alice = next(r for r in rows if r["display_name"] == "Alice")
+    assert alice["pending"] == len(INDICATORS) - 1
 
 
 async def test_health_handler_replies(conn: sqlite3.Connection) -> None:
@@ -97,26 +90,17 @@ async def test_health_handler_replies(conn: sqlite3.Connection) -> None:
     assert "Alice" in reply
 
 
-def test_coverage_orders_undersampled_first(conn: sqlite3.Connection) -> None:
+def test_coverage_orders_least_rated_first(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Alice", "alice")
     add_player(conn, 2, "Bob", "bob")
     add_player(conn, 3, "Carol", "carol")
-    # (1,2) saturated; (1,3) some; (2,3) empty
-    for axis, n in (("attack", 10), ("defense", 10), ("setting", 10)):
-        conn.execute(
-            "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (1, 2, axis, n // 2, n - n // 2),
-        )
-    conn.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins) "
-        "VALUES (1, 3, 'attack', 1, 1)"
-    )
-    conn.commit()
+    # Alice & Bob get rated; Carol gets nothing → Carol is the top gap.
+    for ind in INDICATORS:
+        _score(conn, 2, 1, ind)  # Alice rated
+        _score(conn, 1, 2, ind)  # Bob rated
     text = build_coverage(conn, limit=10)
     lines = text.split("\n")
-    # First gap line should be the empty pair (Bob vs Carol = 2-3)
-    assert "Bob vs Carol" in lines[1] or "Carol vs Bob" in lines[1]
+    assert "Carol" in lines[1]
 
 
 async def test_coverage_handler_replies(conn: sqlite3.Connection) -> None:
@@ -163,10 +147,9 @@ def test_format_health_empty() -> None:
 def test_build_health_rows_handles_malformed_timestamp(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Alice", "alice")
     add_player(conn, 2, "Bob", "bob")
-    add_player(conn, 3, "Carol", "carol")
     conn.execute(
-        "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis, answered_at) "
-        "VALUES (1, 2, 3, 'attack', 'not-a-date')"
+        "INSERT INTO scores (voter_id, player_id, indicator, score, updated_at) "
+        "VALUES (1, 2, 'attack', 3, 'not-a-date')"
     )
     conn.commit()
     rows = build_health_rows(conn)
@@ -181,8 +164,7 @@ async def test_health_returns_without_message(conn: sqlite3.Connection) -> None:
     await handle_health(u, _ctx(conn))
 
 
-def test_build_coverage_too_few_players(conn: sqlite3.Connection) -> None:
-    add_player(conn, 1, "Alice", "alice")
+def test_build_coverage_empty_roster(conn: sqlite3.Connection) -> None:
     assert "Not enough players" in build_coverage(conn, limit=10)
 
 

@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from toop.config import Settings
 from toop.handlers.snapshot import (
     handle_publish,
     handle_snapshot,
@@ -18,21 +19,21 @@ from toop.sessions import get_active_session, open_session
 from toop.snapshots import get_snapshot
 
 
+def _snap_settings(**overrides: object) -> Settings:
+    base: dict = dict(
+        ADMIN_TELEGRAM_ID=42,
+        MAX_ATTENDEES=14,
+        CALIBRATION_THRESHOLD=15,
+        GROUP_CHAT_ID=-100123,
+    )
+    base.update(overrides)
+    return Settings(_env_file=None, **base)
+
+
 @pytest.fixture(autouse=True)
 def patch_admin(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("toop.admin.settings", MagicMock(ADMIN_TELEGRAM_ID=42))
-    monkeypatch.setattr(
-        "toop.handlers.snapshot.settings",
-        MagicMock(
-            ADMIN_TELEGRAM_ID=42,
-            MAX_ATTENDEES=14,
-            CALIBRATION_THRESHOLD=15,
-            WEIGHT_ATTACK=0.4,
-            WEIGHT_DEFENSE=0.4,
-            WEIGHT_SETTING=0.2,
-            GROUP_CHAT_ID=-100123,
-        ),
-    )
+    monkeypatch.setattr("toop.handlers.snapshot.settings", _snap_settings())
 
 
 def _admin_update() -> MagicMock:
@@ -145,20 +146,6 @@ from toop.handlers.snapshot import (  # noqa: E402
     _fetch_player_by_username,
     auto_snapshot_job,
 )
-
-
-def _snap_settings(**overrides: object) -> MagicMock:
-    base: dict = dict(
-        ADMIN_TELEGRAM_ID=42,
-        MAX_ATTENDEES=14,
-        CALIBRATION_THRESHOLD=15,
-        WEIGHT_ATTACK=0.4,
-        WEIGHT_DEFENSE=0.4,
-        WEIGHT_SETTING=0.2,
-        GROUP_CHAT_ID=-100123,
-    )
-    base.update(overrides)
-    return MagicMock(**base)
 
 
 def _admin_update_no_msg() -> MagicMock:

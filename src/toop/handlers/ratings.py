@@ -25,5 +25,11 @@ async def handle_refresh_ratings(update: Update, context: ContextTypes.DEFAULT_T
     message = update.effective_message
     if message is None:
         return
-    rows = refresh_ratings(_conn(context), settings.CALIBRATION_THRESHOLD)
-    await message.reply_text(f"Refit ratings — wrote {rows} rows across 3 axes.")
+    rows = refresh_ratings(
+        _conn(context),
+        settings.CALIBRATION_THRESHOLD,
+        normalize=settings.NORMALIZATION_ENABLED,
+        norm_min_ratings=settings.NORM_MIN_RATINGS,
+        shrinkage_k=settings.SHRINKAGE_K,
+    )
+    await message.reply_text(f"Refit ratings — wrote {rows} rows across 6 indicators.")

@@ -9,7 +9,7 @@ from datetime import datetime
 class LinkResult:
     """Counts of what link_ghost_player migrated onto the real account."""
 
-    vote_rows: int
+    score_rows: int
     ratings: int
     rsvps: int
     attendance: int
@@ -87,19 +87,8 @@ def add_ghost_player(conn: sqlite3.Connection, display_name: str) -> Player:
     return _row_to_player(_fetch_one(conn, ghost_id))
 
 
-def _relink_pair(
-    ghost_id: int, real_id: int, player_a: int, player_b: int
-) -> tuple[int, int, int] | None:
-    """Remap a pair (one side is the ghost) onto the real account.
-
-    Returns (other, new_a, new_b) with new_a < new_b, or None when the only other
-    endpoint IS the real account (comparing the ghost to itself → void row).
-    """
-    other = player_b if player_a == ghost_id else player_a
-    if other == real_id:
-        return None
-    new_a, new_b = (real_id, other) if real_id < other else (other, real_id)
-    return other, new_a, new_b
+def _remap_endpoint(ghost_id: int, real_id: int, value: int) -> int:
+    return real_id if value == ghost_id else value
 
 
 def link_ghost_player(
@@ -111,72 +100,49 @@ def link_ghost_player(
 ) -> LinkResult:
     """Merge a ghost player into a real Telegram account.
 
-    Every row that referenced the ghost (votes, queued/answered prompts, ratings,
-    RSVPs, attendance) is remapped onto real_id, re-normalizing the player_a<player_b
-    pair ordering and merging counts on collision. Rows that would compare the real
-    account to itself, or queue a prompt to a voter now inside the pair, are dropped.
-    The ghost player row is deleted last so ON DELETE CASCADE clears any leftovers.
+    Every score and skip that referenced the ghost (as voter or as scored player)
+    is remapped onto real_id. Rows that would make the real account score itself
+    are dropped. On a (voter, player, indicator) collision the most recent score
+    wins (by updated_at). RSVPs, attendance, and ratings remap by telegram_id.
+    The ghost player row is deleted last so ON DELETE CASCADE clears leftovers.
     """
     if conn.execute("SELECT 1 FROM players WHERE telegram_id=?", (real_id,)).fetchone() is None:
         add_player(conn, real_id, display_name, username)
 
-    vote_rows = 0
+    score_rows = 0
     for row in conn.execute(
-        "SELECT player_a, player_b, axis, a_wins, b_wins, dont_know FROM vote_aggregates "
-        "WHERE player_a=? OR player_b=?",
+        "SELECT voter_id, player_id, indicator, score, updated_at FROM scores "
+        "WHERE voter_id=? OR player_id=?",
         (ghost_id, ghost_id),
     ).fetchall():
-        remap = _relink_pair(ghost_id, real_id, row["player_a"], row["player_b"])
-        if remap is None:
+        new_voter = _remap_endpoint(ghost_id, real_id, row["voter_id"])
+        new_player = _remap_endpoint(ghost_id, real_id, row["player_id"])
+        if new_voter == new_player:
             continue
-        _other, new_a, new_b = remap
-        ghost_wins = row["a_wins"] if row["player_a"] == ghost_id else row["b_wins"]
-        other_wins = row["b_wins"] if row["player_a"] == ghost_id else row["a_wins"]
-        # In the remapped pair, real_id carries the ghost's wins.
-        if new_a == real_id:
-            inc_a, inc_b = ghost_wins, other_wins
-        else:
-            inc_a, inc_b = other_wins, ghost_wins
         conn.execute(
             """
-            INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know)
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT(player_a, player_b, axis) DO UPDATE SET
-                a_wins = a_wins + excluded.a_wins,
-                b_wins = b_wins + excluded.b_wins,
-                dont_know = dont_know + excluded.dont_know,
-                updated_at = CURRENT_TIMESTAMP
+            INSERT INTO scores (voter_id, player_id, indicator, score, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(voter_id, player_id, indicator) DO UPDATE SET
+                score = excluded.score,
+                updated_at = excluded.updated_at
+            WHERE excluded.updated_at > scores.updated_at
             """,
-            (new_a, new_b, row["axis"], inc_a, inc_b, row["dont_know"]),
+            (new_voter, new_player, row["indicator"], row["score"], row["updated_at"]),
         )
-        vote_rows += 1
+        score_rows += 1
 
     for row in conn.execute(
-        "SELECT voter_id, player_a, player_b, axis, info_gain FROM pending_prompts "
-        "WHERE player_a=? OR player_b=?",
+        "SELECT voter_id, player_id, indicator FROM score_skips WHERE voter_id=? OR player_id=?",
         (ghost_id, ghost_id),
     ).fetchall():
-        remap = _relink_pair(ghost_id, real_id, row["player_a"], row["player_b"])
-        if remap is None or row["voter_id"] in (remap[1], remap[2]):
+        new_voter = _remap_endpoint(ghost_id, real_id, row["voter_id"])
+        new_player = _remap_endpoint(ghost_id, real_id, row["player_id"])
+        if new_voter == new_player:
             continue
         conn.execute(
-            "INSERT OR IGNORE INTO pending_prompts (voter_id, player_a, player_b, axis, info_gain) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (row["voter_id"], remap[1], remap[2], row["axis"], row["info_gain"]),
-        )
-
-    for row in conn.execute(
-        "SELECT voter_id, player_a, player_b, axis FROM answered_prompts "
-        "WHERE player_a=? OR player_b=?",
-        (ghost_id, ghost_id),
-    ).fetchall():
-        remap = _relink_pair(ghost_id, real_id, row["player_a"], row["player_b"])
-        if remap is None or row["voter_id"] in (remap[1], remap[2]):
-            continue
-        conn.execute(
-            "INSERT OR IGNORE INTO answered_prompts (voter_id, player_a, player_b, axis) "
-            "VALUES (?, ?, ?, ?)",
-            (row["voter_id"], remap[1], remap[2], row["axis"]),
+            "INSERT OR IGNORE INTO score_skips (voter_id, player_id, indicator) VALUES (?, ?, ?)",
+            (new_voter, new_player, row["indicator"]),
         )
 
     def _count(table: str) -> int:
@@ -187,8 +153,8 @@ def link_ghost_player(
     ratings, rsvps, attendance = _count("player_ratings"), _count("rsvps"), _count("attendance")
     conn.execute(
         "INSERT OR IGNORE INTO player_ratings "
-        "(telegram_id, axis, score, vote_count, calibrated, computed_at) "
-        "SELECT ?, axis, score, vote_count, calibrated, computed_at FROM player_ratings "
+        "(telegram_id, indicator, score, vote_count, calibrated, computed_at) "
+        "SELECT ?, indicator, score, vote_count, calibrated, computed_at FROM player_ratings "
         "WHERE telegram_id=?",
         (real_id, ghost_id),
     )
@@ -207,7 +173,7 @@ def link_ghost_player(
     conn.execute("DELETE FROM players WHERE telegram_id=?", (ghost_id,))
     conn.execute("UPDATE players SET is_ghost=0, active=1 WHERE telegram_id=?", (real_id,))
     conn.commit()
-    return LinkResult(vote_rows=vote_rows, ratings=ratings, rsvps=rsvps, attendance=attendance)
+    return LinkResult(score_rows=score_rows, ratings=ratings, rsvps=rsvps, attendance=attendance)
 
 
 def soft_remove_player(conn: sqlite3.Connection, telegram_id: int) -> bool:
@@ -291,21 +257,21 @@ def get_player_by_username(conn: sqlite3.Connection, username: str) -> Player | 
 
 
 def dont_know_stats(conn: sqlite3.Connection) -> list[DontKnowStat]:
-    """Per-active-player "don't know" signal, summed across every pair the player
-    appears in. dk_rate = dk_count / total prompts answered on those pairs (0.0
-    when none). Sorted by dk_rate descending, then name — the head of the list is
-    the player the group can least confidently rate.
+    """Per-active-player "don't know" signal: how often voters SKIPPED rating this
+    player (score_skips on player_id) vs all attempts (skips + scores received).
+    dk_rate = dk_count / total (0.0 when none). Sorted by dk_rate descending,
+    then name — the head of the list is the player the group can least rate.
     """
     rows = conn.execute(
         """
         SELECT p.telegram_id, p.display_name,
-               COALESCE(SUM(va.dont_know), 0) AS dk_count,
-               COALESCE(SUM(va.a_wins + va.b_wins + va.dont_know), 0) AS total
+               (SELECT COUNT(*) FROM score_skips sk WHERE sk.player_id = p.telegram_id)
+                   AS dk_count,
+               (SELECT COUNT(*) FROM score_skips sk WHERE sk.player_id = p.telegram_id)
+                 + (SELECT COUNT(*) FROM scores s WHERE s.player_id = p.telegram_id)
+                   AS total
         FROM players p
-        LEFT JOIN vote_aggregates va
-            ON va.player_a = p.telegram_id OR va.player_b = p.telegram_id
         WHERE p.active = 1
-        GROUP BY p.telegram_id, p.display_name
         """
     ).fetchall()
     stats = [

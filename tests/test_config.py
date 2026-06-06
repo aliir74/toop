@@ -6,13 +6,36 @@ import pytest
 from pydantic import ValidationError
 
 from toop.config import Settings
+from toop.rating import INDICATORS
 
 
 def test_defaults_load() -> None:
     s = Settings(_env_file=None)
     assert s.SNAPSHOT_HOUR == 12
     assert s.SESSION_WEEKDAY == "monday"
-    assert pytest.approx(1.0) == s.WEIGHT_ATTACK + s.WEIGHT_DEFENSE + s.WEIGHT_SETTING
+    assert pytest.approx(1.0) == sum(s.composite_weights().values())
+
+
+def test_composite_weights_keyed_by_indicator() -> None:
+    s = Settings(_env_file=None)
+    assert set(s.composite_weights().keys()) == set(INDICATORS)
+
+
+def test_normalization_defaults() -> None:
+    s = Settings(_env_file=None)
+    assert s.NORMALIZATION_ENABLED is True
+    assert s.NORM_MIN_RATINGS == 8
+    assert s.SHRINKAGE_K == 3.0
+
+
+def test_norm_min_ratings_must_be_positive() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, NORM_MIN_RATINGS=0)
+
+
+def test_shrinkage_k_must_be_non_negative() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, SHRINKAGE_K=-1.0)
 
 
 def test_dk_alert_defaults() -> None:
@@ -55,7 +78,7 @@ def test_invalid_weekday() -> None:
 
 def test_weights_not_summing_warns(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.WARNING, logger="toop.config"):
-        Settings(_env_file=None, WEIGHT_ATTACK=0.5, WEIGHT_DEFENSE=0.5, WEIGHT_SETTING=0.5)
+        Settings(_env_file=None, WEIGHT_ATTACK=0.5)
     assert any("Composite weights sum to" in r.message for r in caplog.records)
 
 
