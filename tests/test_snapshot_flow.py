@@ -119,6 +119,8 @@ async def test_full_lifecycle_open_rsvp_snapshot_swap_publish(conn: sqlite3.Conn
     await handle_publish(_admin_update(), publish_ctx)
 
     publish_ctx.bot.send_message.assert_awaited_once()
+    body = publish_ctx.bot.send_message.await_args.kwargs["text"]
+    assert "✅ Attending (14):" in body
     active = get_active_session(conn)
     assert active is not None and active.status == "published"
     attendance_rows = conn.execute(

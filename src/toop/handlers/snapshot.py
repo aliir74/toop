@@ -110,6 +110,22 @@ def _fetch_player_by_username(conn: sqlite3.Connection, username: str) -> Player
     )
 
 
+def _names(conn: sqlite3.Connection, ids: list[int]) -> list[str]:
+    return [
+        (_fetch_player(conn, pid) or Player(pid, None, f"#{pid}", True, True)).display_name
+        for pid in ids
+    ]
+
+
+def _format_attendance(conn: sqlite3.Connection, snap: Snapshot) -> str:
+    """Roster line(s) posted alongside the teams: who's playing, plus any cut."""
+    attendees = _names(conn, snap.team_a + snap.team_b)
+    line = f"✅ Attending ({len(attendees)}): " + ", ".join(attendees)
+    if snap.cut:
+        line += "\n⏳ Cut: " + ", ".join(_names(conn, snap.cut))
+    return line
+
+
 def _format_teams(conn: sqlite3.Connection, snap: Snapshot, session_date: str) -> str:
     a_names = [
         (_fetch_player(conn, pid) or Player(pid, None, f"#{pid}", True, True)).display_name
@@ -281,7 +297,11 @@ async def handle_publish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     text = _format_teams(conn, snap, sess.session_date.isoformat())
-    body = f"🏐 Teams for {sess.session_date.isoformat()}:\n\n{text}\n\nSee you on court! 🙌"
+    attendance = _format_attendance(conn, snap)
+    body = (
+        f"🏐 Teams for {sess.session_date.isoformat()}:\n\n"
+        f"{attendance}\n\n{text}\n\nSee you on court! 🙌"
+    )
     try:
         await context.bot.send_message(
             chat_id=settings.GROUP_CHAT_ID,
