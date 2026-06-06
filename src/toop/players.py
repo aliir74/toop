@@ -34,12 +34,13 @@ class Player:
     in_pool: bool = True
     pool_paused_until: str | None = None
     is_ghost: bool = False
+    photo_file_id: str | None = None
 
 
 # Shared column list so every Player query stays in sync with the dataclass.
 _PLAYER_COLS = (
     "telegram_id, username, display_name, is_calibrating, active, "
-    "in_pool, pool_paused_until, is_ghost"
+    "in_pool, pool_paused_until, is_ghost, photo_file_id"
 )
 
 
@@ -241,6 +242,29 @@ def rename_player(conn: sqlite3.Connection, telegram_id: int, new_display_name: 
     return old_name
 
 
+def set_player_photo(
+    conn: sqlite3.Connection, telegram_id: int, photo_file_id: str | None
+) -> str | None:
+    """Set (or clear, when photo_file_id is None) an active player's photo_file_id.
+
+    Returns the player's display_name on success, or None when no active player
+    has that telegram_id (nothing changed). active=1 gating mirrors rename_player
+    and still covers ghosts (they are active=1). Touches photo_file_id only.
+    """
+    row = conn.execute(
+        "SELECT display_name FROM players WHERE telegram_id=? AND active=1",
+        (telegram_id,),
+    ).fetchone()
+    if row is None:
+        return None
+    conn.execute(
+        "UPDATE players SET photo_file_id=? WHERE telegram_id=? AND active=1",
+        (photo_file_id, telegram_id),
+    )
+    conn.commit()
+    return row["display_name"]
+
+
 def list_active_players(conn: sqlite3.Connection) -> list[Player]:
     rows = conn.execute(
         f"SELECT {_PLAYER_COLS} FROM players WHERE active=1 ORDER BY display_name COLLATE NOCASE"
@@ -308,4 +332,5 @@ def _row_to_player(row: sqlite3.Row) -> Player:
         in_pool=bool(row["in_pool"]),
         pool_paused_until=row["pool_paused_until"],
         is_ghost=bool(row["is_ghost"]),
+        photo_file_id=row["photo_file_id"],
     )
