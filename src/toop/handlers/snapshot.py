@@ -6,6 +6,7 @@ import sqlite3
 from telegram import Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
+from telegram.helpers import escape_markdown
 
 from toop.admin import require_admin
 from toop.balance import (
@@ -126,26 +127,25 @@ def _format_attendance(conn: sqlite3.Connection, snap: Snapshot) -> str:
     return line
 
 
+def _team_block(label: str, names: list[str]) -> str:
+    """One team as a labelled, numbered vertical list — readable on a phone
+    without the column drift of a fixed-width two-column table."""
+    lines = [f"{label} — {len(names)}"]
+    for i, name in enumerate(names, start=1):
+        lines.append(f"{i}. {escape_markdown(name, version=1)}")
+    return "\n".join(lines)
+
+
 def _format_teams(conn: sqlite3.Connection, snap: Snapshot, session_date: str) -> str:
-    a_names = [
-        (_fetch_player(conn, pid) or Player(pid, None, f"#{pid}", True, True)).display_name
-        for pid in snap.team_a
-    ]
-    b_names = [
-        (_fetch_player(conn, pid) or Player(pid, None, f"#{pid}", True, True)).display_name
-        for pid in snap.team_b
-    ]
-    rows = []
-    for i in range(max(len(a_names), len(b_names))):
-        left = a_names[i] if i < len(a_names) else ""
-        right = b_names[i] if i < len(b_names) else ""
-        rows.append(f"{left:<20} | {right}")
+    # Simple single-string labels (Persian + English) — kept easy for Toop #2
+    # to swap during the full i18n pass.
+    a_block = _team_block("🅰️ تیم آ (Team A)", _names(conn, snap.team_a))
+    b_block = _team_block("🅱️ تیم ب (Team B)", _names(conn, snap.team_b))
     metrics = snap.metrics
-    table = "\n".join(rows)
     delta = metrics.abs_delta
     return (
         f"📅 *{session_date}* — proposed teams\n\n"
-        f"```\n{'Team A':<20} | Team B\n{'-' * 20}-+-{'-' * 20}\n{table}\n```\n"
+        f"{a_block}\n\n{b_block}\n\n"
         f"Composite Δ: *{delta:.3f}* "
         f"(A={metrics.team_a_total:.2f}, B={metrics.team_b_total:.2f})\n"
         f"Calibration confidence: *{metrics.calibration_confidence}*"
