@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import date
+from datetime import date, datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from toop.balance import TeamMetrics
 from toop.config import Settings
 from toop.handlers.snapshot import (
+    _format_attendance,
+    _format_teams,
     handle_publish,
     handle_snapshot,
     handle_swap,
@@ -15,7 +18,30 @@ from toop.handlers.snapshot import (
 from toop.players import add_player
 from toop.rsvp import upsert_rsvp
 from toop.sessions import get_active_session, open_session
-from toop.snapshots import get_snapshot
+from toop.snapshots import Snapshot, get_snapshot
+
+
+def _metrics() -> TeamMetrics:
+    return TeamMetrics(
+        team_a_total=14.20,
+        team_b_total=13.99,
+        abs_delta=0.21,
+        per_indicator_a={},
+        per_indicator_b={},
+        calibration_confidence="high",
+        setter_swap_applied=False,
+    )
+
+
+def _snap(team_a: list[int], team_b: list[int]) -> Snapshot:
+    return Snapshot(
+        session_id=1,
+        team_a=team_a,
+        team_b=team_b,
+        cut=[],
+        metrics=_metrics(),
+        created_at=datetime(2026, 5, 18, 12, 0, 0),
+    )
 
 
 def _snap_settings(**overrides: object) -> Settings:
@@ -87,6 +113,44 @@ async def test_snapshot_renders_teams_inline(conn: sqlite3.Connection) -> None:
     text = update.effective_message.reply_text.await_args.args[0]
     assert "Team A" in text and "Team B" in text
     assert "Snapshot saved" in text
+    # Vertical lists, not a side-by-side column table: no code fence, no
+    # column separator, each team labelled on its own line, names numbered.
+    assert "```" not in text
+    assert "|" not in text
+    assert "🅰️" in text and "🅱️" in text
+    assert "\n1. " in text
+
+
+def test_format_teams_escapes_markdown_in_names(conn: sqlite3.Connection) -> None:
+    # Names now live in Markdown body text (not a code fence), so special
+    # chars must be escaped or they corrupt parse_mode="Markdown" rendering.
+    add_player(conn, 1, "Ali_I", "ali")
+    add_player(conn, 2, "Meysam*Bz", "meysam")
+    text = _format_teams(conn, _snap([1], [2]), "2026-05-18")
+    assert "Ali\\_I" in text
+    assert "Meysam\\*Bz" in text
+    # The raw, unescaped forms must not appear.
+    assert "Ali_I" not in text
+    assert "Meysam*Bz" not in text
+
+
+def test_format_attendance_escapes_markdown_in_names(conn: sqlite3.Connection) -> None:
+    # The roster line is also sent with parse_mode="Markdown".
+    add_player(conn, 1, "Ali_I", "ali")
+    add_player(conn, 2, "Sina*K", "sina")
+    text = _format_attendance(conn, _snap([1], [2]))
+    assert "Ali\\_I" in text and "Sina\\*K" in text
+    assert "Ali_I" not in text
+
+
+def test_format_teams_handles_odd_team_sizes(conn: sqlite3.Connection) -> None:
+    # One team carries an extra sub: both lists render their full count with
+    # no index drift (the old fixed-width table padded a blank cell).
+    for i in range(1, 6):
+        add_player(conn, i, f"P{i}", f"p{i}")
+    text = _format_teams(conn, _snap([1, 2], [3, 4, 5]), "2026-05-18")
+    assert "1. P1" in text and "2. P2" in text
+    assert "1. P3" in text and "2. P4" in text and "3. P5" in text
 
 
 async def test_swap_persists_new_assignment(conn: sqlite3.Connection) -> None:
