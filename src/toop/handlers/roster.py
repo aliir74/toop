@@ -20,6 +20,7 @@ from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
 from toop.contacts import Contact, get_contact, list_addable_contacts, list_contacts
+from toop.i18n import t
 from toop.players import (
     LinkResult,
     Player,
@@ -38,18 +39,7 @@ from toop.players import (
 
 logger = logging.getLogger(__name__)
 
-ADD_USAGE = (
-    'Usage: /add_player @username "Display Name"  (or /add_player <telegram_id> "Display Name")'
-)
-REMOVE_USAGE = "Usage: /remove_player @username"
-PAUSE_USAGE = "Usage: /pause_voting <@username|telegram_id> <duration like 2w or 10d>"
-DISABLE_USAGE = "Usage: /disable_voting <@username|telegram_id>"
-ENABLE_USAGE = "Usage: /enable_voting <@username|telegram_id>"
-ADD_GHOST_USAGE = 'Usage: /add_ghost "Display Name"'
-LINK_USAGE = "Usage: /link_player <ghost_id> <@username|real_telegram_id>"
 RENAME_PREFIX = "rename:"
-RENAME_USAGE = 'Usage: /rename (no args) for buttons, or /rename <@username|telegram_id> "New Name"'
-RENAME_EMPTY_ROSTER = "No players on the roster yet — use /add_player first."
 PENDING_RENAME_KEY = "pending_rename"
 
 # Callback prefixes for the button-driven admin flows. Kept short because
@@ -67,9 +57,9 @@ PENDING_ADD_KEY = "pending_add"
 # Button durations offered by /pause_voting after a player is picked — each
 # token round-trips through _parse_duration so the typed fallback stays in sync.
 PAUSE_DURATIONS: tuple[tuple[str, str], ...] = (
-    ("1 week", "1w"),
-    ("2 weeks", "2w"),
-    ("1 month", "1m"),
+    ("roster.dur_1week", "1w"),
+    ("roster.dur_2weeks", "2w"),
+    ("roster.dur_1month", "1m"),
 )
 
 
@@ -147,7 +137,7 @@ async def _single_pick_action(
         (telegram_id,),
     ).fetchone()
     if row is None:
-        await query.answer("That player is no longer on the roster.", show_alert=True)
+        await query.answer(t("roster.player_gone"), show_alert=True)
         return
     action(conn, telegram_id)
     await query.answer()
@@ -196,17 +186,14 @@ async def handle_add_player(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if len(message.text.split()) > 1:
         parsed = _parse_add_args(message.text)
         if parsed is None:
-            await message.reply_text(ADD_USAGE)
+            await message.reply_text(t("roster.add_usage"))
             return
         identifier, display_name = parsed
         if isinstance(identifier, int):
             # Add-by-id: the contacts row proves we can DM them later for voting.
             contact = get_contact(conn, identifier)
             if contact is None:
-                await message.reply_text(
-                    f"That user (id {identifier}) hasn't DM'd the bot yet — they must "
-                    "DM /start first so I can message them for voting."
-                )
+                await message.reply_text(t("roster.add_by_id_not_dmd", id=identifier))
                 return
             telegram_id = identifier
             username = contact.username  # may be None — that's fine.
@@ -214,11 +201,7 @@ async def handle_add_player(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             username = identifier
             resolved = await _resolve_telegram_id(context, username)
             if resolved is None:
-                await message.reply_text(
-                    f"Couldn't find @{username}. Ask them to DM me /start, then try again. "
-                    "If they have no Telegram username, run /contacts and use "
-                    '/add_player <id> "Name" instead.'
-                )
+                await message.reply_text(t("roster.cant_find_username", username=username))
                 return
             telegram_id = resolved
         await message.reply_text(_add_and_describe(conn, telegram_id, username, display_name))
@@ -227,11 +210,11 @@ async def handle_add_player(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     # DM-only because the name step consumes a private text message.
     chat = update.effective_chat
     if chat is not None and chat.type != ChatType.PRIVATE:
-        await message.reply_text("DM me to add players. 🤫")
+        await message.reply_text(t("roster.dm_to_add"))
         return
     contacts = list_addable_contacts(conn)
     if not contacts:
-        await message.reply_text("No new contacts to add — ask people to DM me /start first.")
+        await message.reply_text(t("roster.no_new_contacts"))
         return
     keyboard = InlineKeyboardMarkup(
         [
@@ -243,7 +226,7 @@ async def handle_add_player(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             for c in contacts
         ]
     )
-    await message.reply_text("Who do you want to add?", reply_markup=keyboard)
+    await message.reply_text(t("roster.who_add"), reply_markup=keyboard)
 
 
 def _add_and_describe(
@@ -260,9 +243,9 @@ def _add_and_describe(
         suffix = ""
     else:
         was_inactive = existed is not None and existed["active"] == 0
-        suffix = " (revived from soft-delete)" if was_inactive else ""
-    handle = f"@{player.username}" if player.username else "(no username)"
-    return f"Added {player.display_name} {handle} — calibrating.{suffix}"
+        suffix = t("roster.revived_suffix") if was_inactive else ""
+    handle = f"@{player.username}" if player.username else t("roster.no_username")
+    return t("roster.added", name=player.display_name, handle=handle, suffix=suffix)
 
 
 @require_admin
@@ -278,12 +261,12 @@ async def handle_add_pick_callback(update: Update, context: ContextTypes.DEFAULT
     conn = _conn(context)
     contact = get_contact(conn, telegram_id)
     if contact is None:
-        await query.answer("That contact is no longer available.", show_alert=True)
+        await query.answer(t("roster.contact_unavailable"), show_alert=True)
         return
     if context.user_data is not None:
         context.user_data[PENDING_ADD_KEY] = telegram_id
     await query.answer()
-    await _safe_edit(query, f"Send the display name for {_contact_label(contact)}:")
+    await _safe_edit(query, t("roster.send_display_name", label=_contact_label(contact)))
 
 
 async def handle_add_player_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -302,16 +285,16 @@ async def handle_add_player_text(update: Update, context: ContextTypes.DEFAULT_T
     text = message.text.strip()
     if text.startswith("/"):
         context.user_data.pop(PENDING_ADD_KEY, None)
-        await message.reply_text("Add cancelled — you sent a command instead of a name.")
+        await message.reply_text(t("roster.add_cancelled"))
         return
     if not text:
-        await message.reply_text("Name can't be empty — send the display name.")
+        await message.reply_text(t("roster.name_empty"))
         return
     conn = _conn(context)
     contact = get_contact(conn, telegram_id)
     context.user_data.pop(PENDING_ADD_KEY, None)
     if contact is None:
-        await message.reply_text("That contact is no longer available.")
+        await message.reply_text(t("roster.contact_unavailable"))
         return
     await message.reply_text(_add_and_describe(conn, telegram_id, contact.username, text))
 
@@ -327,25 +310,25 @@ async def handle_remove_player(update: Update, context: ContextTypes.DEFAULT_TYP
     if not context.args:
         players = list_active_players(conn)
         if not players:
-            await message.reply_text("Roster is empty — nobody to remove.")
+            await message.reply_text(t("roster.roster_empty_remove"))
             return
         await message.reply_text(
-            "Who do you want to remove?",
+            t("roster.who_remove"),
             reply_markup=_player_keyboard(players, RMPICK_PREFIX),
         )
         return
     username = context.args[0].lstrip("@").lower()
     if not username:
-        await message.reply_text(REMOVE_USAGE)
+        await message.reply_text(t("roster.remove_usage"))
         return
     telegram_id = await _resolve_telegram_id(context, username)
     if telegram_id is None:
-        await message.reply_text(f"Couldn't find @{username}.")
+        await message.reply_text(t("roster.cant_find_username_short", username=username))
         return
     if soft_remove_player(conn, telegram_id):
-        await message.reply_text(f"Removed @{username}.")
+        await message.reply_text(t("roster.removed_username", username=username))
     else:
-        await message.reply_text(f"@{username} wasn't in the active roster.")
+        await message.reply_text(t("roster.not_in_active", username=username))
 
 
 @require_admin
@@ -356,7 +339,7 @@ async def handle_remove_callback(update: Update, context: ContextTypes.DEFAULT_T
         context,
         RMPICK_PREFIX,
         soft_remove_player,
-        lambda name: f"Removed {name}. ✅",
+        lambda name: t("roster.removed_name", name=name),
     )
 
 
@@ -405,29 +388,28 @@ async def handle_pause_voting(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not context.args:
         players = list_active_players(conn)
         if not players:
-            await message.reply_text("Roster is empty — nobody to pause.")
+            await message.reply_text(t("roster.roster_empty_pause"))
             return
         await message.reply_text(
-            "Who do you want to pause?",
+            t("roster.who_pause"),
             reply_markup=_player_keyboard(players, PAUSEPICK_PREFIX),
         )
         return
     if len(context.args) < 2:
-        await message.reply_text(PAUSE_USAGE)
+        await message.reply_text(t("roster.pause_usage"))
         return
     delta = _parse_duration(context.args[1])
     if delta is None:
-        await message.reply_text(PAUSE_USAGE)
+        await message.reply_text(t("roster.pause_usage"))
         return
     target = _resolve_pool_target(conn, context.args[0])
     until = datetime.now(UTC) + delta
     if target is not None and pause_player_pool(conn, target, until):
         await message.reply_text(
-            f"Paused {context.args[0]} until {until:%Y-%m-%d} — others won't be asked to "
-            "rate them, but they can still vote. /enable_voting to undo early."
+            t("roster.paused_until", target=context.args[0], date=f"{until:%Y-%m-%d}")
         )
     else:
-        await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+        await message.reply_text(t("roster.cant_find_roster", target=context.args[0]))
 
 
 @require_admin
@@ -446,16 +428,22 @@ async def handle_pause_pick_callback(update: Update, context: ContextTypes.DEFAU
         (telegram_id,),
     ).fetchone()
     if row is None:
-        await query.answer("That player is no longer on the roster.", show_alert=True)
+        await query.answer(t("roster.player_gone"), show_alert=True)
         return
     keyboard = InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton(label, callback_data=f"{PAUSEDUR_PREFIX}{telegram_id}:{token}")]
+            [
+                InlineKeyboardButton(
+                    t(label), callback_data=f"{PAUSEDUR_PREFIX}{telegram_id}:{token}"
+                )
+            ]
             for label, token in PAUSE_DURATIONS
         ]
     )
     await query.answer()
-    await _safe_edit(query, f"How long to pause {row['display_name']}?", reply_markup=keyboard)
+    await _safe_edit(
+        query, t("roster.how_long_pause", name=row["display_name"]), reply_markup=keyboard
+    )
 
 
 @require_admin
@@ -482,15 +470,14 @@ async def handle_pause_dur_callback(update: Update, context: ContextTypes.DEFAUL
         (telegram_id,),
     ).fetchone()
     if row is None:
-        await query.answer("That player is no longer on the roster.", show_alert=True)
+        await query.answer(t("roster.player_gone"), show_alert=True)
         return
     until = datetime.now(UTC) + delta
     pause_player_pool(conn, telegram_id, until)  # row verified active above
     await query.answer()
     await _safe_edit(
         query,
-        f"⏸ Paused {row['display_name']} until {until:%Y-%m-%d} — others won't be asked to "
-        "rate them; they can still vote. /enable_voting to undo early.",
+        t("roster.paused_until_edit", name=row["display_name"], date=f"{until:%Y-%m-%d}"),
     )
 
 
@@ -507,21 +494,18 @@ async def handle_disable_voting(update: Update, context: ContextTypes.DEFAULT_TY
     if not context.args:
         players = list_active_players(conn)
         if not players:
-            await message.reply_text("Roster is empty — nobody to disable.")
+            await message.reply_text(t("roster.roster_empty_disable"))
             return
         await message.reply_text(
-            "Who do you want to pull from the rating pool?",
+            t("roster.who_disable"),
             reply_markup=_player_keyboard(players, DISPICK_PREFIX),
         )
         return
     target = _resolve_pool_target(conn, context.args[0])
     if target is not None and disable_player_pool(conn, target):
-        await message.reply_text(
-            f"Disabled {context.args[0]} from the rating pool — others won't be asked to "
-            "rate them. They can still vote. /enable_voting to restore."
-        )
+        await message.reply_text(t("roster.disabled", target=context.args[0]))
     else:
-        await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+        await message.reply_text(t("roster.cant_find_roster", target=context.args[0]))
 
 
 @require_admin
@@ -532,7 +516,7 @@ async def handle_disable_callback(update: Update, context: ContextTypes.DEFAULT_
         context,
         DISPICK_PREFIX,
         disable_player_pool,
-        lambda name: f"Disabled {name} from the rating pool 🚫 — /enable_voting to restore.",
+        lambda name: t("roster.disabled_name", name=name),
     )
 
 
@@ -555,18 +539,18 @@ async def handle_enable_voting(update: Update, context: ContextTypes.DEFAULT_TYP
             if not p.in_pool or _is_paused(p.pool_paused_until, now)
         ]
         if not players:
-            await message.reply_text("Nobody is paused or disabled right now. ✅")
+            await message.reply_text(t("roster.nobody_paused"))
             return
         await message.reply_text(
-            "Who do you want to restore to the rating pool?",
+            t("roster.who_restore"),
             reply_markup=_player_keyboard(players, ENPICK_PREFIX),
         )
         return
     target = _resolve_pool_target(conn, context.args[0])
     if target is not None and enable_player_pool(conn, target):
-        await message.reply_text(f"Restored {context.args[0]} to the rating pool. ✅")
+        await message.reply_text(t("roster.restored", target=context.args[0]))
     else:
-        await message.reply_text(f"Couldn't find {context.args[0]} on the active roster.")
+        await message.reply_text(t("roster.cant_find_roster", target=context.args[0]))
 
 
 @require_admin
@@ -577,7 +561,7 @@ async def handle_enable_callback(update: Update, context: ContextTypes.DEFAULT_T
         context,
         ENPICK_PREFIX,
         enable_player_pool,
-        lambda name: f"Restored {name} to the rating pool. ✅",
+        lambda name: t("roster.restored_name", name=name),
     )
 
 
@@ -590,18 +574,15 @@ async def handle_add_ghost(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     try:
         tokens = shlex.split(message.text)
     except ValueError:
-        await message.reply_text(ADD_GHOST_USAGE)
+        await message.reply_text(t("roster.add_ghost_usage"))
         return
     name = " ".join(tokens[1:]).strip()
     if not name:
-        await message.reply_text(ADD_GHOST_USAGE)
+        await message.reply_text(t("roster.add_ghost_usage"))
         return
     conn = _conn(context)
     ghost = add_ghost_player(conn, name)
-    await message.reply_text(
-        f"👻 Added ghost {ghost.display_name} (id {ghost.telegram_id}). "
-        f"When they join Telegram, run /link_player {ghost.telegram_id} @their_username."
-    )
+    await message.reply_text(t("roster.ghost_added", name=ghost.display_name, id=ghost.telegram_id))
 
 
 @require_admin
@@ -618,7 +599,7 @@ async def handle_link_player(update: Update, context: ContextTypes.DEFAULT_TYPE)
     if not context.args:
         ghosts = [p for p in list_active_players(conn) if p.is_ghost]
         if not ghosts:
-            await message.reply_text("No ghost players to link. Add one with /add_ghost first.")
+            await message.reply_text(t("roster.no_ghosts"))
             return
         keyboard = InlineKeyboardMarkup(
             [
@@ -630,23 +611,21 @@ async def handle_link_player(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 for p in ghosts
             ]
         )
-        await message.reply_text("Which ghost do you want to link?", reply_markup=keyboard)
+        await message.reply_text(t("roster.which_ghost"), reply_markup=keyboard)
         return
     if len(context.args) < 2:
-        await message.reply_text(LINK_USAGE)
+        await message.reply_text(t("roster.link_usage"))
         return
     ghost_token = context.args[0]
     if not ghost_token.lstrip("-").isdigit():
-        await message.reply_text(LINK_USAGE)
+        await message.reply_text(t("roster.link_usage"))
         return
     ghost_id = int(ghost_token)
     ghost_row = conn.execute(
         "SELECT display_name, is_ghost FROM players WHERE telegram_id=?", (ghost_id,)
     ).fetchone()
     if ghost_row is None or ghost_row["is_ghost"] != 1:
-        await message.reply_text(
-            f"{ghost_id} isn't a ghost player. Run /list_players and use a 👻 id."
-        )
+        await message.reply_text(t("roster.not_a_ghost", id=ghost_id))
         return
 
     real_token = context.args[1]
@@ -656,16 +635,13 @@ async def handle_link_player(update: Update, context: ContextTypes.DEFAULT_TYPE)
         username = real_token.lstrip("@").lower()
         resolved = await _resolve_telegram_id(context, username)
         if resolved is None:
-            await message.reply_text(f"Couldn't find @{username}. Ask them to DM me /start first.")
+            await message.reply_text(t("roster.cant_find_start", username=username))
             return
         real_id = resolved
 
     contact = get_contact(conn, real_id)
     if contact is None:
-        await message.reply_text(
-            f"That user (id {real_id}) hasn't DM'd the bot yet — they must /start so "
-            "I can message them for voting."
-        )
+        await message.reply_text(t("roster.real_not_dmd", id=real_id))
         return
     result = link_ghost_player(
         conn,
@@ -678,10 +654,14 @@ async def handle_link_player(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 def _link_summary(ghost_name: str, real_id: int, result: LinkResult) -> str:
-    return (
-        f"🔗 Linked ghost {ghost_name} → id {real_id}. Moved "
-        f"{result.score_rows} scores, {result.ratings} ratings, {result.rsvps} RSVPs, "
-        f"{result.attendance} attendance rows."
+    return t(
+        "roster.link_summary",
+        name=ghost_name,
+        id=real_id,
+        scores=result.score_rows,
+        ratings=result.ratings,
+        rsvps=result.rsvps,
+        attendance=result.attendance,
     )
 
 
@@ -701,14 +681,14 @@ async def handle_link_ghost_callback(update: Update, context: ContextTypes.DEFAU
         (ghost_id,),
     ).fetchone()
     if ghost_row is None or ghost_row["is_ghost"] != 1:
-        await query.answer("That isn't a ghost player anymore.", show_alert=True)
+        await query.answer(t("roster.not_ghost_anymore"), show_alert=True)
         return
     contacts = list_addable_contacts(conn)
     if not contacts:
         await query.answer()
         await _safe_edit(
             query,
-            "Nobody new has DM'd the bot yet — ask them to /start, then /link_player again.",
+            t("roster.nobody_new_dmd"),
         )
         return
     keyboard = InlineKeyboardMarkup(
@@ -723,7 +703,7 @@ async def handle_link_ghost_callback(update: Update, context: ContextTypes.DEFAU
     )
     await query.answer()
     await _safe_edit(
-        query, f"Link 👻 {ghost_row['display_name']} to which account?", reply_markup=keyboard
+        query, t("roster.link_to_which", name=ghost_row["display_name"]), reply_markup=keyboard
     )
 
 
@@ -747,11 +727,11 @@ async def handle_link_real_callback(update: Update, context: ContextTypes.DEFAUL
         (ghost_id,),
     ).fetchone()
     if ghost_row is None or ghost_row["is_ghost"] != 1:
-        await query.answer("That ghost is no longer available.", show_alert=True)
+        await query.answer(t("roster.ghost_unavailable"), show_alert=True)
         return
     contact = get_contact(conn, real_id)
     if contact is None:
-        await query.answer("That contact is no longer available.", show_alert=True)
+        await query.answer(t("roster.contact_unavailable"), show_alert=True)
         return
     result = link_ghost_player(
         conn, ghost_id, real_id, contact.username, contact.display_name or ghost_row["display_name"]
@@ -769,12 +749,14 @@ async def handle_dk_report(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
     stats = dont_know_stats(_conn(context))
     if not stats:
-        await message.reply_text("No players on the roster yet.")
+        await message.reply_text(t("roster.dk_none"))
         return
-    lines = ["🤷 Don't-know report (highest rate first):"]
+    lines = [t("roster.dk_header")]
     for i, s in enumerate(stats, start=1):
         pct = round(s.dk_rate * 100)
-        lines.append(f"{i}. {s.display_name} — {s.dk_count}/{s.total} don't-know ({pct}%)")
+        lines.append(
+            t("roster.dk_row", i=i, name=s.display_name, dk=s.dk_count, total=s.total, pct=pct)
+        )
     await message.reply_text("\n".join(lines))
 
 
@@ -785,24 +767,26 @@ async def handle_list_players(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
     players = list_active_players(_conn(context))
     if not players:
-        await message.reply_text("Roster is empty. Use /add_player to start.")
+        await message.reply_text(t("roster.roster_empty_list"))
         return
     now = datetime.now(UTC)
-    lines = ["Roster:"]
+    lines = [t("roster.list_header")]
     for i, p in enumerate(players, start=1):
-        marker = "🟡 calibrating" if p.is_calibrating else "✅"
+        marker = t("roster.calibrating") if p.is_calibrating else "✅"
         if p.is_ghost:
-            handle = "👻 ghost"
+            handle = t("roster.ghost_tag")
         elif p.username:
             handle = f"@{p.username}"
         else:
-            handle = "(no username)"
+            handle = t("roster.no_username")
         tags = ""
         if not p.in_pool:
-            tags = " — 🚫 voting disabled"
+            tags = t("roster.voting_disabled_tag")
         elif _is_paused(p.pool_paused_until, now):
-            tags = " — ⏸ voting paused"
-        lines.append(f"{i}. {p.display_name} {handle} — {marker}{tags}")
+            tags = t("roster.voting_paused_tag")
+        lines.append(
+            t("roster.list_row", i=i, name=p.display_name, handle=handle, marker=marker, tags=tags)
+        )
     await message.reply_text("\n".join(lines))
 
 
@@ -820,27 +804,29 @@ async def handle_contacts(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     conn = _conn(context)
     contacts = list_contacts(conn)
     if not contacts:
-        await message.reply_text("Nobody has DM'd me yet. Ask people to send /start.")
+        await message.reply_text(t("roster.contacts_none"))
         return
     roster_ids = {
         row["telegram_id"] for row in conn.execute("SELECT telegram_id FROM players").fetchall()
     }
-    lines = ["Contacts (people who've DM'd me):"]
+    lines = [t("roster.contacts_header")]
     addable = 0
     for i, c in enumerate(contacts, start=1):
         handle = f"@{c.username}" if c.username else "(no username)"
         name = c.display_name or "?"
         first_seen = c.first_seen_at[:10] if c.first_seen_at else "?"
         if c.telegram_id in roster_ids:
-            lines.append(f"{i}. {handle} ({name}) — first seen {first_seen}")
+            lines.append(t("roster.contact_row", i=i, handle=handle, name=name, date=first_seen))
         else:
             addable += 1
-            lines.append(f"{i}. {handle} ({name}) — first seen {first_seen}  🆕 not on roster")
+            lines.append(
+                t("roster.contact_row_new", i=i, handle=handle, name=name, date=first_seen)
+            )
             # Ready-to-copy command — works even when the contact has no @username.
             copy_name = c.display_name or c.username or "Player"
             lines.append(f'   /add_player {c.telegram_id} "{copy_name}"')
     if addable:
-        lines.append(f"\n🆕 = available to /add_player ({addable} not yet on the roster).")
+        lines.append(t("roster.contacts_legend", n=addable))
     await message.reply_text("\n".join(lines))
 
 
@@ -878,18 +864,18 @@ async def _rename_one_shot(
     if isinstance(identifier, int):
         old_name = rename_player(conn, identifier, new_name)
         if old_name is None:
-            await message.reply_text(f"No active player with id {identifier}.")
+            await message.reply_text(t("roster.no_active_player_id", id=identifier))
             return
     else:
         player = get_player_by_username(conn, identifier)
         if player is None:
-            await message.reply_text(f"@{identifier} isn't on the active roster.")
+            await message.reply_text(t("roster.username_not_active", username=identifier))
             return
         old_name = rename_player(conn, player.telegram_id, new_name)
         if old_name is None:  # pragma: no cover - racey soft-delete between lookup and update
-            await message.reply_text(f"@{identifier} isn't on the active roster.")
+            await message.reply_text(t("roster.username_not_active", username=identifier))
             return
-    await message.reply_text(f"Renamed {old_name} → {new_name} ✅")
+    await message.reply_text(t("roster.renamed", old=old_name, new=new_name))
 
 
 @require_admin
@@ -904,23 +890,23 @@ async def handle_rename(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if message is None:
         return
     if chat is not None and chat.type != ChatType.PRIVATE:
-        await message.reply_text("DM me to rename players. 🤫")
+        await message.reply_text(t("roster.dm_to_rename"))
         return
     conn = _conn(context)
     if message.text is not None and len(message.text.split()) > 1:
         parsed = _parse_rename_args(message.text)
         if parsed is None:
-            await message.reply_text(RENAME_USAGE)
+            await message.reply_text(t("roster.rename_usage"))
             return
         identifier, new_name = parsed
         await _rename_one_shot(message, conn, identifier, new_name)
         return
     players = list_active_players(conn)
     if not players:
-        await message.reply_text(RENAME_EMPTY_ROSTER)
+        await message.reply_text(t("roster.rename_empty_roster"))
         return
     await message.reply_text(
-        "Who do you want to rename?",
+        t("roster.who_rename"),
         reply_markup=_player_keyboard(players, RENAME_PREFIX),
     )
 
@@ -943,12 +929,12 @@ async def handle_rename_callback(update: Update, context: ContextTypes.DEFAULT_T
         (telegram_id,),
     ).fetchone()
     if row is None:
-        await query.answer("That player is no longer on the roster.", show_alert=True)
+        await query.answer(t("roster.player_gone"), show_alert=True)
         return
     if context.user_data is not None:
         context.user_data[PENDING_RENAME_KEY] = telegram_id
     await query.answer()
-    await _safe_edit(query, f"Send the new display name for {row['display_name']}:")
+    await _safe_edit(query, t("roster.send_new_name", name=row["display_name"]))
 
 
 async def handle_rename_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -969,14 +955,14 @@ async def handle_rename_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
     text = message.text.strip()
     if text.startswith("/"):
         context.user_data.pop(PENDING_RENAME_KEY, None)
-        await message.reply_text("Rename cancelled — you sent a command instead of a name.")
+        await message.reply_text(t("roster.rename_cancelled"))
         return
     if not text:
-        await message.reply_text("Name can't be empty — send the new display name.")
+        await message.reply_text(t("roster.new_name_empty"))
         return
     old_name = rename_player(_conn(context), telegram_id, text)
     context.user_data.pop(PENDING_RENAME_KEY, None)
     if old_name is None:
-        await message.reply_text("That player is no longer on the roster.")
+        await message.reply_text(t("roster.player_gone"))
         return
-    await message.reply_text(f"Renamed {old_name} → {text} ✅")
+    await message.reply_text(t("roster.renamed", old=old_name, new=text))

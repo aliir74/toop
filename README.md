@@ -28,6 +28,17 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 
 ---
 
+## Language (Persian / English)
+
+All user-facing text (DM prompts, buttons, admin replies, group polls and the published teams message) is bilingual, resolved through the `toop.i18n` catalog. Set `BOT_LANG` in `.env`:
+
+- `BOT_LANG=fa` — Persian (default; the group is Iranian)
+- `BOT_LANG=en` — English
+
+Command **names** stay latin in both (Telegram requires ascii `/commands`); only their descriptions translate. One deliberate exception: the `/health` diagnostic keeps an LTR English monospace table, because fixed-width column alignment breaks under RTL Persian and it is an admin-only technical view.
+
+---
+
 ## Setup (first run)
 
 1. **Clone & install:**

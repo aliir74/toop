@@ -7,14 +7,16 @@ import pytest
 from telegram.constants import ChatType
 
 from toop.handlers.voting import (
-    START_DM,
-    START_GROUP,
     _build_nudge_templates,
     handle_nudge,
     handle_start,
 )
+from toop.i18n import t
 from toop.players import add_player
 from toop.rating import INDICATORS
+
+START_DM = t("vote.start_dm", "en")
+START_GROUP = t("vote.start_group", "en")
 
 
 @pytest.fixture

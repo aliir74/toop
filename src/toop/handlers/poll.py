@@ -16,18 +16,20 @@ from toop.drift import (
     get_last_drift_signature,
     set_drift_signature,
 )
+from toop.i18n import t
 from toop.poll import (
-    ATTENDANCE_OPTIONS,
-    CAPACITY_MESSAGE,
-    RESERVATION_OPTIONS,
-    RESERVATION_QUESTION,
     PollRow,
+    attendance_options,
+    attendance_question,
+    capacity_message,
     get_poll,
     list_waitlist,
     quorum_message,
     record_attendance_answer,
     record_poll,
     record_reservation_answer,
+    reservation_options,
+    reservation_question,
     set_cap_closed,
     set_quorum_announced,
 )
@@ -40,8 +42,6 @@ from toop.sessions import (
 from toop.snapshots import get_snapshot
 
 logger = logging.getLogger(__name__)
-
-ATTENDANCE_QUESTION = "آیا در برنامه والیبال دوشنبه آینده (از ساعت ۶ تا ۸) شرکت میکنید؟"
 
 
 def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
@@ -92,9 +92,9 @@ async def _send_and_record_poll(
 async def post_attendance_poll(
     context: ContextTypes.DEFAULT_TYPE, conn: sqlite3.Connection, session: Session
 ) -> None:
-    """Send the weekly بلی/خیر attendance poll to the group and record it."""
+    """Send the weekly yes/no attendance poll to the group and record it."""
     await _send_and_record_poll(
-        context, conn, session.id, ATTENDANCE_QUESTION, list(ATTENDANCE_OPTIONS), "attendance"
+        context, conn, session.id, attendance_question(), attendance_options(), "attendance"
     )
 
 
@@ -103,7 +103,7 @@ async def post_reservation_poll(
 ) -> None:
     """Send the reservation/waitlist poll opened once attendance caps."""
     await _send_and_record_poll(
-        context, conn, session_id, RESERVATION_QUESTION, list(RESERVATION_OPTIONS), "reservation"
+        context, conn, session_id, reservation_question(), reservation_options(), "reservation"
     )
 
 
@@ -133,7 +133,7 @@ async def _close_attendance_poll(
             await context.bot.stop_poll(settings.GROUP_CHAT_ID, poll.message_id)
         except TelegramError as exc:
             logger.warning("failed to stop attendance poll: %s", exc)
-    await _safe_send(context, CAPACITY_MESSAGE)
+    await _safe_send(context, capacity_message())
     set_cap_closed(conn, poll.poll_id)
     await post_reservation_poll(context, conn, poll.session_id)
 
@@ -183,15 +183,15 @@ async def _maybe_notify_drift(
     signature = drift_signature(added, removed)
     if signature == get_last_drift_signature(conn, session_id):
         return
-    parts = [f"⚠️ Attendance changed for session #{session_id}."]
+    parts = [t("poll.drift_header", sid=session_id)]
     if added:
-        parts.append("Added: " + ", ".join(display_names(conn, added)))
+        parts.append(t("poll.drift_added", names=", ".join(display_names(conn, added))))
     if removed:
-        parts.append("Dropped: " + ", ".join(display_names(conn, removed)))
+        parts.append(t("poll.drift_dropped", names=", ".join(display_names(conn, removed))))
     waitlist = list_waitlist(conn, session_id)
     if waitlist:
-        parts.append("Waitlist: " + ", ".join(display_names(conn, waitlist)))
-    parts.append("Run /change_player to fix.")
+        parts.append(t("poll.drift_waitlist", names=", ".join(display_names(conn, waitlist))))
+    parts.append(t("poll.drift_fix"))
     try:
         await context.bot.send_message(chat_id=settings.ADMIN_TELEGRAM_ID, text="\n".join(parts))
     except TelegramError as exc:

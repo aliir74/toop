@@ -3,24 +3,36 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
+from toop.i18n import t
 from toop.rsvp import is_player_on_roster, upsert_rsvp
 
-# The attendance poll's options, in order. Index 0 (بلی / "yes") means attending.
-ATTENDANCE_OPTIONS: tuple[str, str] = ("بلی", "خیر")
+# Attendance poll options, in order. Index 0 (yes) means attending — the index
+# semantics are language-independent; only the labels are translated.
 ATTENDANCE_YES_INDEX = 0
-
-# The reservation/waitlist poll. Index 0 means "put me on the waitlist".
-RESERVATION_QUESTION = (
-    "لیست انتظار - لطفا تنها در صورتی که موفق به شرکت در رای‌گیری فوق نشده‌اید و "
-    "علاقه‌مند به حضور در برنامه والیبال دوشنبه آینده هستید، اینجا اعلام بفرمایید."
-)
-RESERVATION_OPTIONS: tuple[str, str] = (
-    "مایل به قرار گرفتن در لیست انتظار هستم.",
-    "متاسفانه این جلسه نمیتوانم شرکت کنم.",
-)
+# Index 0 of the reservation poll means "put me on the waitlist".
 RESERVATION_WAITLIST_INDEX = 0
 
 POLL_KINDS = ("attendance", "reservation")
+
+
+def attendance_question(lang: str | None = None) -> str:
+    return t("poll.attendance_question", lang)
+
+
+def attendance_options(lang: str | None = None) -> list[str]:
+    return [t("poll.attendance_yes", lang), t("poll.attendance_no", lang)]
+
+
+def reservation_question(lang: str | None = None) -> str:
+    return t("poll.reservation_question", lang)
+
+
+def reservation_options(lang: str | None = None) -> list[str]:
+    return [t("poll.reservation_waitlist", lang), t("poll.reservation_decline", lang)]
+
+
+def capacity_message(lang: str | None = None) -> str:
+    return t("poll.capacity", lang)
 
 
 @dataclass(frozen=True)
@@ -78,20 +90,14 @@ def get_poll(conn: sqlite3.Connection, poll_id: str) -> PollRow | None:
     )
 
 
-CAPACITY_MESSAGE = "ظرفیت تکمیل شد."
-
-
-def quorum_message(amount: str, email: str, sheet_url: str) -> str:
+def quorum_message(amount: str, email: str, sheet_url: str, lang: str | None = None) -> str:
     """The 'it's happening + pay' announcement posted once quorum is reached."""
-    lines = ["🎉 والیبال برگزار می‌شود 🏐"]
+    lines = [t("poll.quorum_header", lang)]
     if email:
-        lines.append(
-            f"\nلطفا در صورتی که در رای‌گیری حضور اعلام کرده‌اید مبلغ {amount} دلار "
-            f"به ایمیل زیر ای-ترنسفر کنید:\n{email}"
-        )
-        lines.append("\nدوستان لطفا بعد از ارسال هزینه این پیام را لایک کنید.")
+        lines.append(t("poll.quorum_payment", lang, amount=amount, email=email))
+        lines.append(t("poll.quorum_like", lang))
     if sheet_url:
-        lines.append(f"\nجدول حسابداری:\n{sheet_url}")
+        lines.append(t("poll.quorum_sheet", lang, sheet=sheet_url))
     return "\n".join(lines)
 
 

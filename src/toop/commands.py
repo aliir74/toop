@@ -2,181 +2,72 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from toop.i18n import t
+
 # Single source of truth for the bot's command set. Adding a command means:
 # write the handler, register it in bot.py, and add ONE entry below. Both the
 # Telegram `/` menu (via set_my_commands in bot.py's post_init) and the /help
-# command render from this list, so they can't drift from each other.
+# command render from this list, so they can't drift from each other. The
+# descriptions are translated — `short`/`usage` are catalog keys resolved
+# through i18n.t() at the active language; only the latin `name` is fixed
+# (Telegram requires ascii `/commands`).
 
 
 @dataclass(frozen=True)
 class BotCmd:
     """One bot command.
 
-    `short` is the one-line blurb Telegram shows in the `/` autocomplete menu;
-    `usage` is the fuller line /help renders (it carries the quoted-example
-    syntax that won't fit in the menu). `admin` marks commands gated by the
-    @require_admin decorator on their handler.
+    `name` is the latin command (never translated). `short_key`/`usage_key` are
+    i18n catalog keys: `short` is the one-line blurb Telegram shows in the `/`
+    autocomplete menu; `usage` is the fuller line /help renders. `admin` marks
+    commands gated by the @require_admin decorator on their handler.
     """
 
     name: str
-    short: str
-    usage: str
+    short_key: str
+    usage_key: str
     admin: bool
+
+    def short(self, lang: str | None = None) -> str:
+        return t(self.short_key, lang)
+
+    def usage(self, lang: str | None = None) -> str:
+        return t(self.usage_key, lang)
+
+
+def _cmd(name: str, *, admin: bool) -> BotCmd:
+    """Build a BotCmd whose description keys follow the cmd.<name>.* convention."""
+    return BotCmd(name, f"cmd.{name}.short", f"cmd.{name}.usage", admin)
 
 
 COMMANDS: tuple[BotCmd, ...] = (
     # Public — anyone who DMs the bot.
-    BotCmd(
-        "start",
-        "Register and start rating",
-        "/start — register with the bot and start rating teammates",
-        admin=False,
-    ),
-    BotCmd(
-        "vote",
-        "Rate the next pair",
-        "/vote — show the next pair of teammates to compare",
-        admin=False,
-    ),
-    BotCmd(
-        "help",
-        "Show available commands",
-        "/help — list the commands you can use",
-        admin=False,
-    ),
+    _cmd("start", admin=False),
+    _cmd("vote", admin=False),
+    _cmd("help", admin=False),
     # Admin-only — gated by @require_admin.
-    BotCmd(
-        "add_player",
-        "Add a player to the roster",
-        '/add_player @username "Display Name"  (or /add_player <telegram_id> "Display Name")',
-        admin=True,
-    ),
-    BotCmd(
-        "remove_player",
-        "Remove a player from the roster",
-        "/remove_player (no args) for buttons, or /remove_player @username",
-        admin=True,
-    ),
-    BotCmd(
-        "pause_voting",
-        "Pause rating a player",
-        "/pause_voting <@username|telegram_id> <duration like 2w or 10d>",
-        admin=True,
-    ),
-    BotCmd(
-        "disable_voting",
-        "Stop rating a player indefinitely",
-        "/disable_voting <@username|telegram_id>",
-        admin=True,
-    ),
-    BotCmd(
-        "enable_voting",
-        "Restore a player to the rating pool",
-        "/enable_voting <@username|telegram_id>",
-        admin=True,
-    ),
-    BotCmd(
-        "dk_report",
-        "Don't-know rate report",
-        "/dk_report — list each player's don't-know rate, highest first",
-        admin=True,
-    ),
-    BotCmd(
-        "add_ghost",
-        "Add an accountless player",
-        '/add_ghost "Display Name"',
-        admin=True,
-    ),
-    BotCmd(
-        "link_player",
-        "Link a ghost to a real account",
-        "/link_player <ghost_id> <@username|real_telegram_id>",
-        admin=True,
-    ),
-    BotCmd(
-        "list_players",
-        "List the active roster",
-        "/list_players — show the active roster",
-        admin=True,
-    ),
-    BotCmd(
-        "rename",
-        "Rename a player's display name",
-        '/rename (no args) for buttons, or /rename <@username|telegram_id> "New Name"',
-        admin=True,
-    ),
-    BotCmd(
-        "contacts",
-        "List everyone who DM'd the bot",
-        "/contacts — list everyone who has DM'd the bot, flagging who's not on the roster",
-        admin=True,
-    ),
-    BotCmd(
-        "open_session",
-        "Open a session",
-        "/open_session [YYYY-MM-DD]  (defaults to the next session weekday)",
-        admin=True,
-    ),
-    BotCmd(
-        "sessions",
-        "List recent sessions",
-        "/sessions — list recent sessions and their status",
-        admin=True,
-    ),
-    BotCmd(
-        "nudge",
-        "Draft nudges for low-completion voters",
-        "/nudge — copy/paste templates to nudge the lowest-completion voters",
-        admin=True,
-    ),
-    BotCmd(
-        "snapshot",
-        "Generate balanced teams",
-        "/snapshot — build balanced teams from the current yes-RSVPs",
-        admin=True,
-    ),
-    BotCmd(
-        "swap",
-        "Swap two players between teams",
-        "/swap @player_a @player_b",
-        admin=True,
-    ),
-    BotCmd(
-        "change_player",
-        "Add/remove an attendee + rebalance",
-        "/change_player +@username (add) or -@username (remove); no args for buttons (DM only)",
-        admin=True,
-    ),
-    BotCmd(
-        "publish",
-        "Publish teams to the group",
-        "/publish — post the current teams to the group chat",
-        admin=True,
-    ),
-    BotCmd(
-        "health",
-        "Data and rating health check",
-        "/health — show data and rating health metrics",
-        admin=True,
-    ),
-    BotCmd(
-        "coverage",
-        "Rating coverage report",
-        "/coverage — show the most under-sampled pairs per axis",
-        admin=True,
-    ),
-    BotCmd(
-        "version",
-        "Show commit and uptime",
-        "/version — show the running commit SHA and uptime",
-        admin=True,
-    ),
-    BotCmd(
-        "backup_db",
-        "Back up the database",
-        "/backup_db — write a timestamped SQLite backup",
-        admin=True,
-    ),
+    _cmd("add_player", admin=True),
+    _cmd("remove_player", admin=True),
+    _cmd("pause_voting", admin=True),
+    _cmd("disable_voting", admin=True),
+    _cmd("enable_voting", admin=True),
+    _cmd("dk_report", admin=True),
+    _cmd("add_ghost", admin=True),
+    _cmd("link_player", admin=True),
+    _cmd("list_players", admin=True),
+    _cmd("rename", admin=True),
+    _cmd("contacts", admin=True),
+    _cmd("open_session", admin=True),
+    _cmd("sessions", admin=True),
+    _cmd("nudge", admin=True),
+    _cmd("snapshot", admin=True),
+    _cmd("swap", admin=True),
+    _cmd("change_player", admin=True),
+    _cmd("publish", admin=True),
+    _cmd("health", admin=True),
+    _cmd("coverage", admin=True),
+    _cmd("version", admin=True),
+    _cmd("backup_db", admin=True),
 )
 
 PUBLIC_COMMANDS: tuple[BotCmd, ...] = tuple(c for c in COMMANDS if not c.admin)
@@ -193,11 +84,11 @@ def menu_commands(*, admin: bool) -> tuple[BotCmd, ...]:
     return COMMANDS if admin else PUBLIC_COMMANDS
 
 
-def render_help(*, admin: bool) -> str:
-    """Render the /help body from the command list.
+def render_help(*, admin: bool, lang: str | None = None) -> str:
+    """Render the /help body from the command list, in the active language.
 
     Admins get every command; non-admins get only the public ones.
     """
     cmds = COMMANDS if admin else PUBLIC_COMMANDS
-    lines = [c.usage for c in cmds]
+    lines = [c.usage(lang) for c in cmds]
     return "\n".join(lines)

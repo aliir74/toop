@@ -83,7 +83,7 @@ def test_attendance_answer_off_roster_is_noop(conn: sqlite3.Connection, session_
 
 def test_quorum_message_with_payment() -> None:
     msg = quorum_message("7.5", "pay@example.com", "https://sheet")
-    assert "والیبال برگزار می‌شود" in msg
+    assert "Volleyball is on" in msg
     assert "7.5" in msg
     assert "pay@example.com" in msg
     assert "https://sheet" in msg
@@ -91,9 +91,9 @@ def test_quorum_message_with_payment() -> None:
 
 def test_quorum_message_without_payment() -> None:
     msg = quorum_message("7.5", "", "")
-    assert "والیبال برگزار می‌شود" in msg
+    assert "Volleyball is on" in msg
     assert "7.5" not in msg
-    assert "حسابداری" not in msg
+    assert "Accounting sheet" not in msg
 
 
 def test_set_quorum_announced(conn: sqlite3.Connection, session_id: int) -> None:

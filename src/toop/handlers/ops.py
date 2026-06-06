@@ -13,6 +13,7 @@ from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
 from toop.config import settings
+from toop.i18n import t
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +69,7 @@ async def handle_version(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if isinstance(started_at, datetime):
         uptime_text = _format_uptime((datetime.now(UTC) - started_at).total_seconds())
     sha = _commit_sha()
-    await message.reply_text(f"توپ commit `{sha}` · uptime {uptime_text}", parse_mode="Markdown")
+    await message.reply_text(t("ops.version", sha=sha, uptime=uptime_text), parse_mode="Markdown")
 
 
 @require_admin
@@ -78,7 +79,7 @@ async def handle_backup_db(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
     src = Path(settings.DATABASE_PATH)
     if not src.exists():
-        await message.reply_text(f"DB file not found at {src}")
+        await message.reply_text(t("ops.db_not_found", path=src))
         return
     backup_dir = src.parent / "backups"
     backup_dir.mkdir(parents=True, exist_ok=True)
@@ -92,7 +93,7 @@ async def handle_backup_db(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     finally:
         backup_conn.close()
     size_kb = dst.stat().st_size // 1024
-    await message.reply_text(f"💾 Backup saved → `{dst}` ({size_kb} KB)", parse_mode="Markdown")
+    await message.reply_text(t("ops.backup_saved", path=dst, kb=size_kb), parse_mode="Markdown")
 
 
 __all__ = [

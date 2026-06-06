@@ -198,7 +198,7 @@ async def test_quorum_fires_once(group_settings: None, conn: sqlite3.Connection)
     ctx = _bot_ctx(conn)
     await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # yes -> 13 > 12
     ctx.bot.send_message.assert_awaited_once()
-    assert "والیبال برگزار می‌شود" in ctx.bot.send_message.await_args.kwargs["text"]
+    assert "Volleyball is on" in ctx.bot.send_message.await_args.kwargs["text"]
     ctx.bot.stop_poll.assert_not_called()
     poll = get_poll(conn, "p1")
     assert poll is not None and poll.quorum_announced is True
@@ -216,7 +216,7 @@ async def test_cap_closes_poll(group_settings: None, conn: sqlite3.Connection) -
     ctx = _bot_ctx(conn)
     await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # yes -> 14 == cap
     ctx.bot.stop_poll.assert_awaited_once_with(-100123, 5)
-    assert ctx.bot.send_message.await_args.kwargs["text"] == "ظرفیت تکمیل شد."
+    assert ctx.bot.send_message.await_args.kwargs["text"] == "Capacity reached."
     poll = get_poll(conn, "p1")
     assert poll is not None and poll.cap_closed is True and poll.closed is True
     # Capping opens the reservation/waitlist poll.

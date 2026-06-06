@@ -82,7 +82,7 @@ async def _register_commands(app: Application) -> None:
     """
 
     def _to_bot_commands(admin: bool) -> list[BotCommand]:
-        return [BotCommand(c.name, c.short) for c in menu_commands(admin=admin)]
+        return [BotCommand(c.name, c.short()) for c in menu_commands(admin=admin)]
 
     await app.bot.set_my_commands(_to_bot_commands(admin=False), scope=BotCommandScopeDefault())
     admin_id = settings.ADMIN_TELEGRAM_ID

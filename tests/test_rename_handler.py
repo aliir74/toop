@@ -8,13 +8,13 @@ from telegram.constants import ChatType
 
 from toop.handlers.roster import (
     PENDING_RENAME_KEY,
-    RENAME_EMPTY_ROSTER,
     _parse_rename_args,
     _player_label,
     handle_rename,
     handle_rename_callback,
     handle_rename_text,
 )
+from toop.i18n import t
 from toop.players import add_player, list_active_players, soft_remove_player
 
 
@@ -110,7 +110,9 @@ async def test_rename_lists_active_players(admin_settings: None, conn: sqlite3.C
 async def test_rename_empty_roster(admin_settings: None, conn: sqlite3.Connection) -> None:
     update = _admin_update("/rename")
     await handle_rename(update, _ctx(conn))
-    assert update.effective_message.reply_text.await_args.args[0] == RENAME_EMPTY_ROSTER
+    assert update.effective_message.reply_text.await_args.args[0] == t(
+        "roster.rename_empty_roster", "en"
+    )
 
 
 async def test_rename_in_group_redirects_to_dm(
