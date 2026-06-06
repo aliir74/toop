@@ -10,6 +10,7 @@ from telegram.ext import ContextTypes
 from toop.admin import require_admin
 from toop.config import settings
 from toop.handlers.poll import post_attendance_poll
+from toop.i18n import t
 from toop.sessions import (
     list_recent_sessions,
     next_weekday,
@@ -17,8 +18,6 @@ from toop.sessions import (
 )
 
 logger = logging.getLogger(__name__)
-
-OPEN_USAGE = "Usage: /open_session [YYYY-MM-DD]"
 
 
 def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
@@ -37,12 +36,12 @@ async def handle_open_session(update: Update, context: ContextTypes.DEFAULT_TYPE
         try:
             session_date = date.fromisoformat(context.args[0])
         except ValueError:
-            await message.reply_text(OPEN_USAGE)
+            await message.reply_text(t("sessions.open_usage"))
             return
     else:
         session_date = next_weekday(settings.SESSION_WEEKDAY)
     sess = reopen_session(_conn(context), session_date)
-    await message.reply_text(f"Session #{sess.id} opened for {sess.session_date.isoformat()}.")
+    await message.reply_text(t("sessions.opened", sid=sess.id, date=sess.session_date.isoformat()))
     await post_attendance_poll(context, _conn(context), sess)
 
 
@@ -53,9 +52,11 @@ async def handle_list_sessions(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     sessions_ = list_recent_sessions(_conn(context))
     if not sessions_:
-        await message.reply_text("No sessions yet.")
+        await message.reply_text(t("sessions.none"))
         return
-    lines = ["Recent sessions:"]
+    lines = [t("sessions.recent_header")]
     for s in sessions_:
-        lines.append(f"#{s.id} {s.session_date.isoformat()} — {s.status}")
+        lines.append(
+            t("sessions.recent_row", sid=s.id, date=s.session_date.isoformat(), status=s.status)
+        )
     await message.reply_text("\n".join(lines))

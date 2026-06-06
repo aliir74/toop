@@ -9,6 +9,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 logger = logging.getLogger(__name__)
 
 VALID_WEEKDAYS = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+VALID_LANGS = {"fa", "en"}
 
 
 class Settings(BaseSettings):
@@ -22,6 +23,10 @@ class Settings(BaseSettings):
     BOT_TOKEN: str = ""
     ADMIN_TELEGRAM_ID: int = 0
     GROUP_CHAT_ID: int = 0
+    # Active language for all user-facing bot text. Persian by default (the group
+    # is Iranian); set BOT_LANG=en for English. Command NAMES stay latin
+    # regardless. Named BOT_LANG (not LANG) to avoid the POSIX LANG env var.
+    BOT_LANG: str = "fa"
     SNAPSHOT_HOUR: int = Field(default=12, ge=0, le=23)
     SESSION_WEEKDAY: str = "monday"
     MAX_ATTENDEES: int = Field(default=14, gt=0)
@@ -68,6 +73,14 @@ class Settings(BaseSettings):
         lower = v.lower()
         if lower not in VALID_WEEKDAYS:
             raise ValueError(f"weekday must be one of {sorted(VALID_WEEKDAYS)}, got {v!r}")
+        return lower
+
+    @field_validator("BOT_LANG")
+    @classmethod
+    def _lang_valid(cls, v: str) -> str:
+        lower = v.lower()
+        if lower not in VALID_LANGS:
+            raise ValueError(f"BOT_LANG must be one of {sorted(VALID_LANGS)}, got {v!r}")
         return lower
 
     @model_validator(mode="after")

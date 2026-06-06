@@ -4,7 +4,10 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from toop.admin import ADMIN_REJECT_MESSAGE, require_admin
+from toop.admin import require_admin
+from toop.i18n import t
+
+ADMIN_REJECT_MESSAGE = t("admin.reject", "en")
 
 
 def _mock_update(user_id: int | None) -> MagicMock:

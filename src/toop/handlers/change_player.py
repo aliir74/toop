@@ -21,15 +21,12 @@ from toop.handlers.snapshot import (
     _weights,
     take_snapshot,
 )
+from toop.i18n import t
 from toop.poll import list_waitlist, remove_from_waitlist
 from toop.rsvp import lock_in_player, upsert_rsvp
 from toop.sessions import Session, get_active_session
 from toop.snapshots import Snapshot, get_snapshot
 
-CHANGE_USAGE = (
-    "Usage: /change_player +@username (add) or /change_player -@username (remove). "
-    "Send with no args for buttons."
-)
 CP_REMOVE_PREFIX = "cprm:"
 CP_PROMOTE_PREFIX = "cpadd:"
 
@@ -86,7 +83,8 @@ def _change_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    f"➖ {_label(conn, pid)}", callback_data=f"{CP_REMOVE_PREFIX}{pid}"
+                    t("change.btn_remove", name=_label(conn, pid)),
+                    callback_data=f"{CP_REMOVE_PREFIX}{pid}",
                 )
             ]
         )
@@ -94,7 +92,8 @@ def _change_keyboard(
         rows.append(
             [
                 InlineKeyboardButton(
-                    f"⬆️ {_label(conn, pid)}", callback_data=f"{CP_PROMOTE_PREFIX}{pid}"
+                    t("change.btn_promote", name=_label(conn, pid)),
+                    callback_data=f"{CP_PROMOTE_PREFIX}{pid}",
                 )
             ]
         )
@@ -113,30 +112,30 @@ async def handle_change_player(update: Update, context: ContextTypes.DEFAULT_TYP
         return
     chat = update.effective_chat
     if chat is not None and chat.type != ChatType.PRIVATE:
-        await message.reply_text("Use /change_player in a private chat with me.")
+        await message.reply_text(t("change.dm_only"))
         return
     conn = _conn(context)
     sess = get_active_session(conn)
     if sess is None:
-        await message.reply_text("No active session.")
+        await message.reply_text(t("snapshot.no_active"))
         return
     snap = get_snapshot(conn, sess.id)
     if snap is None:
-        await message.reply_text("No snapshot yet. Run /snapshot first.")
+        await message.reply_text(t("snapshot.no_snapshot_yet"))
         return
     if not context.args:
         await message.reply_text(
-            "Tap a player to remove, or a waitlister to promote:",
+            t("change.pick_prompt"),
             reply_markup=_change_keyboard(conn, snap, sess.id),
         )
         return
     token = context.args[0]
     if token[:1] not in ("+", "-"):
-        await message.reply_text(CHANGE_USAGE)
+        await message.reply_text(t("change.usage"))
         return
     target = _resolve_target(conn, token[1:])
     if target is None:
-        await message.reply_text(f"Couldn't find {token[1:]} on the roster.")
+        await message.reply_text(t("change.not_found", target=token[1:]))
         return
     if token[0] == "+":
         _apply_add(conn, sess.id, target)
@@ -149,7 +148,7 @@ async def _rebalance_and_reply(message: Message, conn: sqlite3.Connection, sess:
     """Re-run the snapshot pipeline and reply with the fresh teams."""
     result = take_snapshot(conn, _weights(), settings.MAX_ATTENDEES, settings.CALIBRATION_THRESHOLD)
     if result is None:
-        await message.reply_text("No attendees left to balance.")
+        await message.reply_text(t("change.none_left"))
         return
     snap, _cut = result
     await message.reply_text(
@@ -173,7 +172,7 @@ async def _change_callback(
     conn = _conn(context)
     sess = get_active_session(conn)
     if sess is None:
-        await query.answer("No active session.", show_alert=True)
+        await query.answer(t("snapshot.no_active"), show_alert=True)
         return
     if add:
         _apply_add(conn, sess.id, telegram_id)
@@ -188,7 +187,7 @@ async def _rebalance_and_edit(
 ) -> None:
     result = take_snapshot(conn, _weights(), settings.MAX_ATTENDEES, settings.CALIBRATION_THRESHOLD)
     if result is None:
-        await _safe_edit(query, "No attendees left to balance.")
+        await _safe_edit(query, t("change.none_left"))
         return
     snap, _cut = result
     await _safe_edit(query, _teams_message(conn, snap, sess.session_date.isoformat()))

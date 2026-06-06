@@ -7,6 +7,7 @@ from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
 from toop.config import settings
+from toop.i18n import t
 from toop.players import dont_know_stats
 
 logger = logging.getLogger(__name__)
@@ -51,12 +52,19 @@ async def dk_alert_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     if not flagged:
         logger.info("dk_alert: no players over the don't-know thresholds")
         return
-    lines = ["⚠️ Hard-to-rate players (lots of 🤷). Consider pausing them from voting:"]
+    lines = [t("alert.header")]
     for s in flagged:
         pct = round(s.dk_rate * 100)
         lines.append(
-            f"• {s.display_name} — {s.dk_count}/{s.total} don't-know ({pct}%) → "
-            f"/pause_voting {s.telegram_id} {settings.DEFAULT_PAUSE_DAYS}d"
+            t(
+                "alert.row",
+                name=s.display_name,
+                dk=s.dk_count,
+                total=s.total,
+                pct=pct,
+                id=s.telegram_id,
+                days=settings.DEFAULT_PAUSE_DAYS,
+            )
         )
     try:
         await context.bot.send_message(chat_id=settings.ADMIN_TELEGRAM_ID, text="\n".join(lines))

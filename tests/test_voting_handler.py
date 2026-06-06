@@ -8,10 +8,6 @@ from telegram.constants import ChatType
 from telegram.error import BadRequest, Forbidden
 
 from toop.handlers.voting import (
-    GROUP_VOTE_DM_NUDGE,
-    NO_PROMPTS_REPLY,
-    START_DM,
-    START_GROUP,
     _conn,
     _send_next_prompt,
     handle_nudge,
@@ -19,8 +15,14 @@ from toop.handlers.voting import (
     handle_vote_callback,
     handle_vote_command,
 )
+from toop.i18n import t
 from toop.players import add_player
 from toop.voting_queue import ScoreTarget
+
+GROUP_VOTE_DM_NUDGE = t("vote.group_dm_nudge", "en")
+NO_PROMPTS_REPLY = t("vote.no_prompts", "en")
+START_DM = t("vote.start_dm", "en")
+START_GROUP = t("vote.start_group", "en")
 
 
 def _seed(conn: sqlite3.Connection) -> None:

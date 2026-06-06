@@ -76,6 +76,19 @@ def test_invalid_weekday() -> None:
         Settings(_env_file=None, SESSION_WEEKDAY="funday")
 
 
+def test_lang_defaults_to_persian() -> None:
+    assert Settings(_env_file=None).BOT_LANG == "fa"
+
+
+def test_lang_normalizes_case() -> None:
+    assert Settings(_env_file=None, BOT_LANG="EN").BOT_LANG == "en"
+
+
+def test_invalid_lang_rejected() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, BOT_LANG="de")
+
+
 def test_weights_not_summing_warns(caplog: pytest.LogCaptureFixture) -> None:
     with caplog.at_level(logging.WARNING, logger="toop.config"):
         Settings(_env_file=None, WEIGHT_ATTACK=0.5)

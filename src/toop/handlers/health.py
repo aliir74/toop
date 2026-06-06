@@ -9,6 +9,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
+from toop.i18n import indicator_label, t
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,10 @@ def build_health_rows(conn: sqlite3.Connection) -> list[dict]:
 
 def format_health(rows: list[dict]) -> str:
     if not rows:
-        return "Roster is empty."
+        return t("health.roster_empty")
+    # The monospace table keeps latin/LTR headers on purpose: fixed-width column
+    # alignment inside a ``` block breaks under RTL Persian, and this is an
+    # admin-only technical diagnostic. Only the empty-state line is translated.
     header = f"{'Player':<16}{'Last vote':<12}{'Lifetime':<10}{'30d':<6}{'Pending':<9}{'Cal'}"
     sep = "-" * len(header)
     lines = [header, sep]
@@ -169,20 +173,14 @@ def _name_lookup(conn: sqlite3.Connection) -> dict[int, str]:
 def build_coverage(conn: sqlite3.Connection, limit: int = 10) -> str:
     rows = conn.execute(COVERAGE_SQL, (limit,)).fetchall()
     if not rows:
-        return "Not enough players to compute coverage."
+        return t("coverage.not_enough")
     names = _name_lookup(conn)
-    lines = ["Coverage gaps (least-rated players):"]
+    indicators = ("attack", "receive", "block", "setting", "serve", "positioning")
+    lines = [t("coverage.header")]
     for r in rows:
         name = names.get(r["telegram_id"], f"#{r['telegram_id']}")
-        lines.append(
-            f"• {name} — "
-            f"attack: {r['attack']} · "
-            f"receive: {r['receive']} · "
-            f"block: {r['block']} · "
-            f"setting: {r['setting']} · "
-            f"serve: {r['serve']} · "
-            f"positioning: {r['positioning']}"
-        )
+        labels = " · ".join(f"{indicator_label(ind)}: {r[ind]}" for ind in indicators)
+        lines.append(t("coverage.row", name=name, labels=labels))
     return "\n".join(lines)
 
 

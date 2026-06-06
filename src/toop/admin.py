@@ -8,12 +8,11 @@ from telegram import Update
 from telegram.ext import ContextTypes
 
 from toop.config import settings
+from toop.i18n import t
 
 logger = logging.getLogger(__name__)
 
 Handler = Callable[[Update, ContextTypes.DEFAULT_TYPE], Awaitable[None]]
-
-ADMIN_REJECT_MESSAGE = "Sorry, this command is admin-only."
 
 
 def require_admin(handler: Handler) -> Handler:
@@ -34,7 +33,7 @@ def require_admin(handler: Handler) -> Handler:
                 admin_id,
             )
             if update.effective_message is not None:
-                await update.effective_message.reply_text(ADMIN_REJECT_MESSAGE)
+                await update.effective_message.reply_text(t("admin.reject"))
             return
         await handler(update, context)
 

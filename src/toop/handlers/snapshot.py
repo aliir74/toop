@@ -16,6 +16,7 @@ from toop.balance import (
     swap_players,
 )
 from toop.config import settings
+from toop.i18n import t
 from toop.players import Player
 from toop.rating import refresh_ratings
 from toop.selection import select_attendees
@@ -29,8 +30,6 @@ from toop.snapshots import (
 )
 
 logger = logging.getLogger(__name__)
-
-SWAP_USAGE = "Usage: /swap @player_a @player_b"
 
 
 def take_snapshot(
@@ -122,10 +121,10 @@ def _format_attendance(conn: sqlite3.Connection, snap: Snapshot) -> str:
     """Roster line(s) posted alongside the teams: who's playing, plus any cut.
     Names are markdown-escaped since this is sent with parse_mode="Markdown"."""
     attendees = [escape_markdown(n, version=1) for n in _names(conn, snap.team_a + snap.team_b)]
-    line = f"✅ Attending ({len(attendees)}): " + ", ".join(attendees)
+    line = t("snapshot.attending", n=len(attendees)) + ", ".join(attendees)
     if snap.cut:
         cut = [escape_markdown(n, version=1) for n in _names(conn, snap.cut)]
-        line += "\n⏳ Cut: " + ", ".join(cut)
+        line += t("snapshot.cut", names=", ".join(cut))
     return line
 
 
@@ -139,18 +138,20 @@ def _team_block(label: str, names: list[str]) -> str:
 
 
 def _format_teams(conn: sqlite3.Connection, snap: Snapshot, session_date: str) -> str:
-    # Simple single-string labels (Persian + English) — kept easy for Toop #2
-    # to swap during the full i18n pass.
-    a_block = _team_block("🅰️ تیم آ (Team A)", _names(conn, snap.team_a))
-    b_block = _team_block("🅱️ تیم ب (Team B)", _names(conn, snap.team_b))
+    a_block = _team_block(t("snapshot.team_a_label"), _names(conn, snap.team_a))
+    b_block = _team_block(t("snapshot.team_b_label"), _names(conn, snap.team_b))
     metrics = snap.metrics
-    delta = metrics.abs_delta
     return (
-        f"📅 *{session_date}* — proposed teams\n\n"
+        t("snapshot.proposed", date=session_date) + "\n\n"
         f"{a_block}\n\n{b_block}\n\n"
-        f"Composite Δ: *{delta:.3f}* "
-        f"(A={metrics.team_a_total:.2f}, B={metrics.team_b_total:.2f})\n"
-        f"Calibration confidence: *{metrics.calibration_confidence}*"
+        + t(
+            "snapshot.composite_delta",
+            delta=metrics.abs_delta,
+            a=metrics.team_a_total,
+            b=metrics.team_b_total,
+        )
+        + "\n"
+        + t("snapshot.calibration_conf", conf=metrics.calibration_confidence)
     )
 
 
@@ -161,12 +162,9 @@ def _format_snapshot_summary(conn: sqlite3.Connection, snap: Snapshot, cut: list
             (_fetch_player(conn, pid) or Player(pid, None, f"#{pid}", True, True)).display_name
             for pid in cut
         ]
-        cut_note = "\n\nCut: " + ", ".join(cut_names)
-    swap_note = " (setter swap applied)" if snap.metrics.setter_swap_applied else ""
-    return (
-        f"Snapshot saved for session #{snap.session_id}.{swap_note}\n"
-        f"Swap with /swap or adjust with /change_player, ship with /publish.{cut_note}"
-    )
+        cut_note = t("snapshot.summary_cut", names=", ".join(cut_names))
+    swap_note = t("snapshot.setter_swap") if snap.metrics.setter_swap_applied else ""
+    return t("snapshot.summary", sid=snap.session_id, swap=swap_note, cut=cut_note)
 
 
 @require_admin
@@ -177,11 +175,11 @@ async def handle_snapshot(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     conn = _conn(context)
     sess = get_active_session(conn)
     if sess is None:
-        await message.reply_text("No active session. Open one with /open_session.")
+        await message.reply_text(t("snapshot.no_active_open"))
         return
     result = take_snapshot(conn, _weights(), settings.MAX_ATTENDEES, settings.CALIBRATION_THRESHOLD)
     if result is None:
-        await message.reply_text("No yes-RSVPs yet — nothing to snapshot.")
+        await message.reply_text(t("snapshot.no_rsvps"))
         return
     snap, cut = result
     await message.reply_text(
@@ -208,7 +206,7 @@ async def auto_snapshot_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         await context.bot.send_message(
             chat_id=settings.ADMIN_TELEGRAM_ID,
-            text=f"⏰ Auto-snapshot ran.\n\n{summary}",
+            text=t("snapshot.auto_ran", summary=summary),
         )
     except TelegramError as exc:
         logger.warning("auto_snapshot: failed to DM admin: %s", exc)
@@ -220,22 +218,22 @@ async def handle_swap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if message is None:
         return
     if not context.args or len(context.args) < 2:
-        await message.reply_text(SWAP_USAGE)
+        await message.reply_text(t("snapshot.swap_usage"))
         return
     conn = _conn(context)
     sess = get_active_session(conn)
     if sess is None:
-        await message.reply_text("No active session.")
+        await message.reply_text(t("snapshot.no_active"))
         return
     snap = get_snapshot(conn, sess.id)
     if snap is None:
-        await message.reply_text("No snapshot yet. Run /snapshot first.")
+        await message.reply_text(t("snapshot.no_snapshot_yet"))
         return
 
     player_a = _fetch_player_by_username(conn, context.args[0])
     player_b = _fetch_player_by_username(conn, context.args[1])
     if player_a is None or player_b is None:
-        await message.reply_text("One or both usernames aren't on the roster.")
+        await message.reply_text(t("snapshot.usernames_not_roster"))
         return
 
     try:
@@ -243,7 +241,7 @@ async def handle_swap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
             snap.team_a, snap.team_b, player_a.telegram_id, player_b.telegram_id
         )
     except ValueError:
-        await message.reply_text("Both players must be on opposite teams to swap.")
+        await message.reply_text(t("snapshot.opposite_teams"))
         return
 
     new_metrics: TeamMetrics = compute_metrics(conn, new_a, new_b, _weights())
@@ -261,7 +259,7 @@ async def handle_swap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         sess.session_date.isoformat(),
     )
     await message.reply_text(
-        f"🔁 Swapped {player_a.display_name} ↔ {player_b.display_name}\n\n{text}",
+        t("snapshot.swapped", a=player_a.display_name, b=player_b.display_name, text=text),
         parse_mode="Markdown",
     )
 
@@ -274,21 +272,23 @@ async def handle_publish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     conn = _conn(context)
     sess = get_active_session(conn)
     if sess is None:
-        await message.reply_text("No active session.")
+        await message.reply_text(t("snapshot.no_active"))
         return
     snap = get_snapshot(conn, sess.id)
     if snap is None:
-        await message.reply_text("No snapshot to publish.")
+        await message.reply_text(t("snapshot.no_snapshot_publish"))
         return
     if settings.GROUP_CHAT_ID == 0:
-        await message.reply_text("GROUP_CHAT_ID is unset — can't publish to group.")
+        await message.reply_text(t("snapshot.group_unset"))
         return
 
     text = _format_teams(conn, snap, sess.session_date.isoformat())
     attendance = _format_attendance(conn, snap)
-    body = (
-        f"🏐 Teams for {sess.session_date.isoformat()}:\n\n"
-        f"{attendance}\n\n{text}\n\nSee you on court! 🙌"
+    body = t(
+        "snapshot.publish_body",
+        date=sess.session_date.isoformat(),
+        attendance=attendance,
+        text=text,
     )
     try:
         await context.bot.send_message(
@@ -297,12 +297,11 @@ async def handle_publish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             parse_mode="Markdown",
         )
     except TelegramError as exc:
-        await message.reply_text(f"Failed to publish: {exc}")
+        await message.reply_text(t("snapshot.publish_failed", err=exc))
         return
 
     write_attendance(conn, sess.id)
     set_session_status(conn, sess.id, "published")
     await message.reply_text(
-        f"✅ Published session #{sess.id} and recorded {len(snap.team_a) + len(snap.team_b)} "
-        f"attendance rows."
+        t("snapshot.published", sid=sess.id, n=len(snap.team_a) + len(snap.team_b))
     )
