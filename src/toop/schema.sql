@@ -102,6 +102,16 @@ CREATE TABLE IF NOT EXISTS score_skips (
     CHECK (voter_id != player_id)
 );
 
+-- Reserve queue, filled by the reservation poll opened once attendance caps.
+-- Ordered FIFO (created_at, then telegram_id) so promotion suggestions are
+-- stable. A row here means "willing to take a freed seat".
+CREATE TABLE IF NOT EXISTS waitlist (
+    session_id      INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+    telegram_id     INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
+    created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (session_id, telegram_id)
+);
+
 CREATE TABLE IF NOT EXISTS snapshots (
     session_id      INTEGER PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
     team_a_json     TEXT NOT NULL,

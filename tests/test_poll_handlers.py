@@ -15,7 +15,7 @@ from toop.handlers.poll import (
     weekly_attendance_job,
 )
 from toop.players import add_player
-from toop.poll import get_poll, record_poll, set_quorum_announced
+from toop.poll import get_poll, list_waitlist, record_poll, set_quorum_announced
 from toop.rsvp import count_rsvps, upsert_rsvp
 from toop.sessions import get_active_session, open_session
 
@@ -134,12 +134,22 @@ async def test_poll_answer_unknown_poll_noop(conn: sqlite3.Connection) -> None:
     await handle_poll_answer(_answer_update("zzz", (0,), 1), _ctx(conn))  # no crash
 
 
-async def test_poll_answer_non_attendance_kind_noop(conn: sqlite3.Connection) -> None:
+async def test_poll_answer_reservation_adds_to_waitlist(conn: sqlite3.Connection) -> None:
     sess = open_session(conn, date(2026, 5, 18))
     add_player(conn, 1, "Alice", "alice")
     record_poll(conn, session_id=sess.id, poll_id="r1", kind="reservation", message_id=1)
     await handle_poll_answer(_answer_update("r1", (0,), 1), _ctx(conn))
-    assert count_rsvps(conn, sess.id).yes == 0
+    assert list_waitlist(conn, sess.id) == [1]
+    assert count_rsvps(conn, sess.id).yes == 0  # reservation never touches attendance
+
+
+async def test_poll_answer_reservation_removes_on_other_option(conn: sqlite3.Connection) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    add_player(conn, 1, "Alice", "alice")
+    record_poll(conn, session_id=sess.id, poll_id="r1", kind="reservation", message_id=1)
+    await handle_poll_answer(_answer_update("r1", (0,), 1), _ctx(conn))
+    await handle_poll_answer(_answer_update("r1", (1,), 1), _ctx(conn))
+    assert list_waitlist(conn, sess.id) == []
 
 
 async def test_poll_answer_none_returns(conn: sqlite3.Connection) -> None:
@@ -162,6 +172,7 @@ def _bot_ctx(conn: sqlite3.Connection) -> MagicMock:
     ctx = _ctx(conn)
     ctx.bot.send_message = AsyncMock()
     ctx.bot.stop_poll = AsyncMock()
+    ctx.bot.send_poll = AsyncMock(return_value=_poll_message("r1", 7))
     return ctx
 
 
@@ -200,6 +211,10 @@ async def test_cap_closes_poll(group_settings: None, conn: sqlite3.Connection) -
     assert ctx.bot.send_message.await_args.kwargs["text"] == "ظرفیت تکمیل شد."
     poll = get_poll(conn, "p1")
     assert poll is not None and poll.cap_closed is True and poll.closed is True
+    # Capping opens the reservation/waitlist poll.
+    ctx.bot.send_poll.assert_awaited_once()
+    res = get_poll(conn, "r1")
+    assert res is not None and res.kind == "reservation"
 
 
 async def test_quorum_and_cap_same_call(group_settings: None, conn: sqlite3.Connection) -> None:

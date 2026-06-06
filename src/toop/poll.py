@@ -9,6 +9,17 @@ from toop.rsvp import is_player_on_roster, upsert_rsvp
 ATTENDANCE_OPTIONS: tuple[str, str] = ("بلی", "خیر")
 ATTENDANCE_YES_INDEX = 0
 
+# The reservation/waitlist poll. Index 0 means "put me on the waitlist".
+RESERVATION_QUESTION = (
+    "لیست انتظار - لطفا تنها در صورتی که موفق به شرکت در رای‌گیری فوق نشده‌اید و "
+    "علاقه‌مند به حضور در برنامه والیبال دوشنبه آینده هستید، اینجا اعلام بفرمایید."
+)
+RESERVATION_OPTIONS: tuple[str, str] = (
+    "مایل به قرار گرفتن در لیست انتظار هستم.",
+    "متاسفانه این جلسه نمیتوانم شرکت کنم.",
+)
+RESERVATION_WAITLIST_INDEX = 0
+
 POLL_KINDS = ("attendance", "reservation")
 
 
@@ -123,4 +134,49 @@ def record_attendance_answer(
         return True
     status = "yes" if ATTENDANCE_YES_INDEX in option_ids else "no"
     upsert_rsvp(conn, session_id, voter_id, status)
+    return True
+
+
+def add_to_waitlist(conn: sqlite3.Connection, session_id: int, telegram_id: int) -> None:
+    conn.execute(
+        "INSERT OR IGNORE INTO waitlist (session_id, telegram_id) VALUES (?, ?)",
+        (session_id, telegram_id),
+    )
+    conn.commit()
+
+
+def remove_from_waitlist(conn: sqlite3.Connection, session_id: int, telegram_id: int) -> None:
+    conn.execute(
+        "DELETE FROM waitlist WHERE session_id=? AND telegram_id=?",
+        (session_id, telegram_id),
+    )
+    conn.commit()
+
+
+def list_waitlist(conn: sqlite3.Connection, session_id: int) -> list[int]:
+    """Reserve players in FIFO order (earliest volunteer first)."""
+    rows = conn.execute(
+        "SELECT telegram_id FROM waitlist WHERE session_id=? ORDER BY created_at, telegram_id",
+        (session_id,),
+    ).fetchall()
+    return [r["telegram_id"] for r in rows]
+
+
+def record_reservation_answer(
+    conn: sqlite3.Connection,
+    session_id: int,
+    voter_id: int,
+    option_ids: list[int],
+) -> bool:
+    """Apply one reservation poll_answer to the waitlist.
+
+    'مایل به لیست انتظار' (index 0) adds the voter; the other option or a
+    retraction removes them. No-op (False) for off-roster voters.
+    """
+    if not is_player_on_roster(conn, voter_id):
+        return False
+    if RESERVATION_WAITLIST_INDEX in option_ids:
+        add_to_waitlist(conn, session_id, voter_id)
+    else:
+        remove_from_waitlist(conn, session_id, voter_id)
     return True

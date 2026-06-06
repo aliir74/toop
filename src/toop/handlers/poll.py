@@ -11,11 +11,14 @@ from toop.config import settings
 from toop.poll import (
     ATTENDANCE_OPTIONS,
     CAPACITY_MESSAGE,
+    RESERVATION_OPTIONS,
+    RESERVATION_QUESTION,
     PollRow,
     get_poll,
     quorum_message,
     record_attendance_answer,
     record_poll,
+    record_reservation_answer,
     set_cap_closed,
     set_quorum_announced,
 )
@@ -39,36 +42,59 @@ def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
     return conn
 
 
-async def post_attendance_poll(
-    context: ContextTypes.DEFAULT_TYPE, conn: sqlite3.Connection, session: Session
+async def _send_and_record_poll(
+    context: ContextTypes.DEFAULT_TYPE,
+    conn: sqlite3.Connection,
+    session_id: int,
+    question: str,
+    options: list[str],
+    kind: str,
 ) -> None:
-    """Send the weekly بلی/خیر attendance poll to the group and record it.
+    """Send a non-anonymous single-answer poll to the group and record it.
 
-    Non-anonymous + single-answer so the bot receives a poll_answer per voter
-    (the only Bot-API way to learn who voted). No-op when GROUP_CHAT_ID is unset.
+    Non-anonymous + single-answer is the only Bot-API way to learn who voted.
+    No-op when GROUP_CHAT_ID is unset.
     """
     if settings.GROUP_CHAT_ID == 0:
-        logger.warning("GROUP_CHAT_ID unset — skipping attendance poll")
+        logger.warning("GROUP_CHAT_ID unset — skipping %s poll", kind)
         return
     try:
         message = await context.bot.send_poll(
             chat_id=settings.GROUP_CHAT_ID,
-            question=ATTENDANCE_QUESTION,
-            options=list(ATTENDANCE_OPTIONS),
+            question=question,
+            options=options,
             is_anonymous=False,
             allows_multiple_answers=False,
         )
     except TelegramError as exc:
-        logger.warning("failed to post attendance poll: %s", exc)
+        logger.warning("failed to post %s poll: %s", kind, exc)
         return
     if message.poll is None:
         return
     record_poll(
         conn,
-        session_id=session.id,
+        session_id=session_id,
         poll_id=message.poll.id,
-        kind="attendance",
+        kind=kind,
         message_id=message.message_id,
+    )
+
+
+async def post_attendance_poll(
+    context: ContextTypes.DEFAULT_TYPE, conn: sqlite3.Connection, session: Session
+) -> None:
+    """Send the weekly بلی/خیر attendance poll to the group and record it."""
+    await _send_and_record_poll(
+        context, conn, session.id, ATTENDANCE_QUESTION, list(ATTENDANCE_OPTIONS), "attendance"
+    )
+
+
+async def post_reservation_poll(
+    context: ContextTypes.DEFAULT_TYPE, conn: sqlite3.Connection, session_id: int
+) -> None:
+    """Send the reservation/waitlist poll opened once attendance caps."""
+    await _send_and_record_poll(
+        context, conn, session_id, RESERVATION_QUESTION, list(RESERVATION_OPTIONS), "reservation"
     )
 
 
@@ -105,6 +131,7 @@ async def _close_attendance_poll(
             logger.warning("failed to stop attendance poll: %s", exc)
     await _safe_send(context, CAPACITY_MESSAGE)
     set_cap_closed(conn, poll.poll_id)
+    await post_reservation_poll(context, conn, poll.session_id)
 
 
 async def _maybe_fire_thresholds(
@@ -137,9 +164,11 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     conn = _conn(context)
     poll = get_poll(conn, answer.poll_id)
-    if poll is None or poll.kind != "attendance":
+    if poll is None or answer.user is None:
         return
-    if answer.user is None:
-        return
-    record_attendance_answer(conn, poll.session_id, answer.user.id, list(answer.option_ids))
-    await _maybe_fire_thresholds(context, conn, poll)
+    option_ids = list(answer.option_ids)
+    if poll.kind == "attendance":
+        record_attendance_answer(conn, poll.session_id, answer.user.id, option_ids)
+        await _maybe_fire_thresholds(context, conn, poll)
+    else:
+        record_reservation_answer(conn, poll.session_id, answer.user.id, option_ids)
