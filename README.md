@@ -88,6 +88,8 @@ Command **names** stay latin in both (Telegram requires ascii `/commands`); only
 | `/list_players` | Numbered roster, calibration markers, plus 👻 ghost / ⏸ paused / 🚫 disabled flags |
 | `/rename` | Tap a player from inline buttons, then type the new display name (DM-only). Updates `display_name` only. |
 | `/rename <@username\|telegram_id> "New Name"` | One-shot rename, skips the buttons |
+| `/set_photo` | Tap a player (ghosts included), then send a photo. Shown on that player's rating card so voters can tell similarly-named players apart. Re-send to replace. DM-only. |
+| `/unset_photo` | Tap a player to clear their photo — the rating card falls back to text. DM-only. |
 | `/open_session [YYYY-MM-DD]` | Manual override: auto-closes any prior session, opens a new one, and posts the attendance poll. Normally the Thursday job does this automatically. |
 | `/sessions` | Recent sessions + status |
 | `/snapshot` | Pick attendees from the poll, refit ratings, generate teams, and show them inline. Status → snapshotted. |
@@ -144,6 +146,15 @@ The more you rate, the more accurate our teams get. Takes 30 seconds.
 The rating model is **voter-linked by design** (the `scores` table carries `voter_id` plus the raw 1–5 score). This is a deliberate trade vs the retired pairwise model: storing each rater's scores is what lets the refit normalize out per-rater leniency/severity (a generous or harsh rater no longer skews a player's standing). Scores are never surfaced to the group, but the admin can see them in the database. Only the admin has DB access.
 
 "🤷 ندیدمش" (don't know) taps are recorded in `score_skips` with no score. A daily job DMs the admin a `/pause_voting` suggestion for players whom voters most often can't rate (skip rate crossing `DK_ALERT_MIN_PROMPTS` + `DK_ALERT_RATE`); it reports only counts.
+
+**Profile photos** (`/set_photo`) store a player's face in the bot DB (`players.photo_file_id`) and show it to every voter on that player's rating card. For a friend group that's fine, but be aware it's PII visible to all raters. This does **not** affect the voter-linking trade above: a photo is only a display asset on the prompt, never joined to scores.
+
+## Profile photos & the bot-token caveat
+
+`/set_photo` stores Telegram's reusable `file_id` (so the bot can re-send the same image without re-uploading) **and** backs up the original bytes to `data/photos/<telegram_id>.jpg` (gitignored). The backup exists because **`file_id`s are bound to the bot**:
+
+- Rotating the **same** bot's token via BotFather `/revoke` keeps every `file_id` valid — nothing to do.
+- Creating a **brand-new** bot (new BotFather token from scratch) invalidates all stored `file_id`s. The rating card detects a dead `file_id` (a `BadRequest` on `send_photo`) and falls back to the text prompt, so voting never blocks. Recovery is a loop over `data/photos/`: re-send each image and call `set_player_photo` with the new `file_id`.
 
 ## Plan
 
