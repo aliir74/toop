@@ -10,12 +10,12 @@ import pytest
 from toop.balance import _confidence_from_ratio, _try_setter_swap, compute_metrics
 from toop.db import init_db
 from toop.players import _fetch_one, add_player
-from toop.rating import fit_bradley_terry, refresh_ratings
+from toop.rating import INDICATORS, refresh_ratings
 from toop.sessions import set_session_status
 from toop.snapshots import write_attendance
-from toop.voting_queue import insert_priority_prompt, peek_next_prompt, record_vote
+from toop.voting_queue import select_next_score_target
 
-WEIGHTS = (0.4, 0.4, 0.2)
+WEIGHTS = dict.fromkeys(INDICATORS, 1.0 / 6.0)
 
 
 # --- balance.py ---
@@ -69,12 +69,6 @@ def test_fetch_one_raises_when_missing(conn: sqlite3.Connection) -> None:
 # --- rating.py ---
 
 
-def test_fit_bradley_terry_skips_unknown_ids() -> None:
-    # Aggregate references id 99 which isn't in player_ids → skipped, no crash.
-    scores = fit_bradley_terry({(1, 99): (1, 0)}, player_ids=[1])
-    assert set(scores) == {1}
-
-
 def test_refresh_ratings_empty_roster(conn: sqlite3.Connection) -> None:
     assert refresh_ratings(conn, 15) == 0
 
@@ -97,23 +91,7 @@ def test_write_attendance_no_snapshot_returns_zero(conn: sqlite3.Connection) -> 
 # --- voting_queue.py ---
 
 
-def test_peek_next_prompt_empty_queue(conn: sqlite3.Connection) -> None:
-    assert peek_next_prompt(conn, 1) is None
-
-
-def test_record_vote_rejects_bad_winner(conn: sqlite3.Connection) -> None:
+def test_select_next_score_target_empty_roster(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Alice", "alice")
-    add_player(conn, 2, "Bob", "bob")
-    with pytest.raises(ValueError, match="winner must be"):
-        record_vote(conn, 99, 1, 2, "attack", "x")
-
-
-def test_insert_priority_prompt_skips_self_pair(conn: sqlite3.Connection) -> None:
-    add_player(conn, 1, "Alice", "alice")
-    add_player(conn, 2, "Bob", "bob")
-    # voter 1 is one of the pair → must not insert a prompt.
-    insert_priority_prompt(conn, 1, 1, 2, "attack")
-    # degenerate pair (player_a == player_b) → must not insert either.
-    insert_priority_prompt(conn, 99, 1, 1, "attack")
-    count = conn.execute("SELECT COUNT(*) AS n FROM pending_prompts").fetchone()["n"]
-    assert count == 0
+    # Only the voter exists → no one else to rate.
+    assert select_next_score_target(conn, 1) is None

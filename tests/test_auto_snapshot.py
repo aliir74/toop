@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from toop.config import Settings
 from toop.handlers.snapshot import auto_snapshot_job
 from toop.players import add_player
 from toop.rsvp import upsert_rsvp
@@ -16,13 +17,11 @@ from toop.sessions import get_active_session, open_session
 def patch_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "toop.handlers.snapshot.settings",
-        MagicMock(
+        Settings(
+            _env_file=None,
             ADMIN_TELEGRAM_ID=42,
             MAX_ATTENDEES=14,
             CALIBRATION_THRESHOLD=15,
-            WEIGHT_ATTACK=0.4,
-            WEIGHT_DEFENSE=0.4,
-            WEIGHT_SETTING=0.2,
         ),
     )
 

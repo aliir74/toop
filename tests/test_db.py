@@ -12,10 +12,10 @@ EXPECTED_TABLES = {
     "sessions",
     "rsvps",
     "attendance",
-    "vote_aggregates",
-    "pending_prompts",
-    "answered_prompts",
-    "snoozes",
+    "scores",
+    "score_skips",
+    "player_ratings",
+    "snapshots",
 }
 
 
@@ -33,13 +33,15 @@ def test_schema_creates_all_tables(conn: sqlite3.Connection) -> None:
     assert EXPECTED_TABLES.issubset(_tables(conn))
 
 
-def test_fresh_db_has_pool_and_ghost_columns(conn: sqlite3.Connection) -> None:
+def test_fresh_db_has_pool_ghost_and_indicator_columns(conn: sqlite3.Connection) -> None:
     assert {"in_pool", "pool_paused_until", "is_ghost"}.issubset(_columns(conn, "players"))
-    assert "dont_know" in _columns(conn, "vote_aggregates")
+    assert "indicator" in _columns(conn, "player_ratings")
+    assert "axis" not in _columns(conn, "player_ratings")
+    assert {"voter_id", "player_id", "score"}.issubset(_columns(conn, "scores"))
 
 
-def test_migration_adds_columns_to_legacy_db(db_path: Path) -> None:
-    # Simulate a DB created before the pool/ghost columns existed.
+def _build_legacy_db(db_path: Path) -> None:
+    """A DB on the old pairwise schema: axis-based player_ratings + pairwise tables."""
     legacy = get_connection(db_path)
     legacy.executescript(
         """
@@ -51,49 +53,74 @@ def test_migration_adds_columns_to_legacy_db(db_path: Path) -> None:
             active INTEGER NOT NULL DEFAULT 1,
             is_calibrating INTEGER NOT NULL DEFAULT 1
         );
-        CREATE TABLE vote_aggregates (
-            player_a INTEGER NOT NULL,
-            player_b INTEGER NOT NULL,
+        CREATE TABLE player_ratings (
+            telegram_id INTEGER NOT NULL,
             axis TEXT NOT NULL,
-            a_wins INTEGER NOT NULL DEFAULT 0,
-            b_wins INTEGER NOT NULL DEFAULT 0,
-            updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            score REAL NOT NULL,
+            vote_count INTEGER NOT NULL DEFAULT 0,
+            calibrated INTEGER NOT NULL DEFAULT 0,
+            computed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (telegram_id, axis)
+        );
+        CREATE TABLE vote_aggregates (
+            player_a INTEGER NOT NULL, player_b INTEGER NOT NULL, axis TEXT NOT NULL,
+            a_wins INTEGER NOT NULL DEFAULT 0, b_wins INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (player_a, player_b, axis)
         );
+        CREATE TABLE pending_prompts (voter_id INTEGER, player_a INTEGER, player_b INTEGER);
+        CREATE TABLE answered_prompts (voter_id INTEGER, player_a INTEGER, player_b INTEGER);
+        CREATE TABLE snoozes (voter_id INTEGER, axis TEXT, snoozed_until TIMESTAMP);
         """
     )
-    legacy.execute("INSERT INTO players (telegram_id, display_name) VALUES (?, ?)", (7, "Legacy"))
-    legacy.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (7, 8, "attack", 2, 1),
+    legacy.execute("INSERT INTO players (telegram_id, display_name) VALUES (7, 'Legacy')")
+    # attack→attack (in range), defense→block (clamped from 3.0→2.0),
+    # setting→setting (clamped from -5.0→-2.0).
+    legacy.executemany(
+        "INSERT INTO player_ratings (telegram_id, axis, score) VALUES (?, ?, ?)",
+        # 'libero' has no new-indicator mapping → must be skipped by the seeder.
+        [(7, "attack", 1.5), (7, "defense", 3.0), (7, "setting", -5.0), (7, "libero", 0.9)],
     )
     legacy.commit()
     legacy.close()
 
+
+def test_pairwise_to_scores_migration(db_path: Path) -> None:
+    _build_legacy_db(db_path)
     migrated = get_connection(db_path)
     init_db(migrated)
+
+    # player_ratings rebuilt on the indicator enum.
+    cols = _columns(migrated, "player_ratings")
+    assert "indicator" in cols and "axis" not in cols
+    # New + late columns present.
     assert {"in_pool", "pool_paused_until", "is_ghost"}.issubset(_columns(migrated, "players"))
-    assert "dont_know" in _columns(migrated, "vote_aggregates")
-    # Existing rows keep sane defaults.
-    row = migrated.execute(
-        "SELECT in_pool, pool_paused_until, is_ghost FROM players WHERE telegram_id=7"
-    ).fetchone()
-    assert row["in_pool"] == 1
-    assert row["pool_paused_until"] is None
-    assert row["is_ghost"] == 0
-    agg = migrated.execute(
-        "SELECT dont_know FROM vote_aggregates WHERE player_a=7 AND player_b=8 AND axis='attack'"
-    ).fetchone()
-    assert agg["dont_know"] == 0
+    assert {"scores", "score_skips"}.issubset(_tables(migrated))
+    # Legacy pairwise tables dropped.
+    assert {"vote_aggregates", "pending_prompts", "answered_prompts", "snoozes"}.isdisjoint(
+        _tables(migrated)
+    )
+    # Seeded warm-start priors: overlapping indicators mapped + clamped.
+    priors = {
+        r["indicator"]: r["score"]
+        for r in migrated.execute(
+            "SELECT indicator, score FROM player_ratings WHERE telegram_id=7"
+        ).fetchall()
+    }
+    assert abs(priors["attack"] - 1.5) < 1e-9
+    assert abs(priors["block"] - 2.0) < 1e-9  # clamped from 3.0
+    assert abs(priors["setting"] + 2.0) < 1e-9  # clamped from -5.0
+    # Non-overlapping indicators start cold (no row); unmapped axis was skipped.
+    assert "serve" not in priors and "receive" not in priors
+    assert len(priors) == 3
     migrated.close()
 
 
-def test_migration_is_idempotent(db_path: Path) -> None:
+def test_migration_is_idempotent_after_pairwise_migration(db_path: Path) -> None:
+    _build_legacy_db(db_path)
     c = get_connection(db_path)
     init_db(c)
-    init_db(c)  # second run must not raise on already-present columns
-    assert {"in_pool", "pool_paused_until", "is_ghost"}.issubset(_columns(c, "players"))
+    init_db(c)  # second run sees indicator-based player_ratings → no-op
+    assert "indicator" in _columns(c, "player_ratings")
     c.close()
 
 
@@ -119,21 +146,21 @@ def test_foreign_keys_enforced(conn: sqlite3.Connection) -> None:
         conn.commit()
 
 
-def test_vote_aggregates_pair_invariant(conn: sqlite3.Connection) -> None:
-    for tid in (1, 2, 4, 5):
-        conn.execute(
-            "INSERT INTO players (telegram_id, display_name) VALUES (?, ?)",
-            (tid, f"P{tid}"),
-        )
-    conn.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (1, 2, "attack", 0, 0),
-    )
+def test_scores_reject_self_rating(conn: sqlite3.Connection) -> None:
+    conn.execute("INSERT INTO players (telegram_id, display_name) VALUES (1, 'A')")
+    conn.commit()
     with pytest.raises(sqlite3.IntegrityError):
         conn.execute(
-            "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (5, 4, "attack", 0, 0),
+            "INSERT INTO scores (voter_id, player_id, indicator, score) VALUES (1, 1, 'attack', 3)"
+        )
+        conn.commit()
+
+
+def test_scores_reject_out_of_range(conn: sqlite3.Connection) -> None:
+    conn.executescript("INSERT INTO players (telegram_id, display_name) VALUES (1, 'A'), (2, 'B');")
+    conn.commit()
+    with pytest.raises(sqlite3.IntegrityError):
+        conn.execute(
+            "INSERT INTO scores (voter_id, player_id, indicator, score) VALUES (1, 2, 'attack', 9)"
         )
         conn.commit()

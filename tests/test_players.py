@@ -76,7 +76,7 @@ def test_rename_player_changes_only_display_name(conn: sqlite3.Connection) -> No
     assert old == "H P"
     p = list_active_players(conn)[0]
     assert p.display_name == "Hamed Pour"
-    assert p.username == "hp"  # username untouched
+    assert p.username == "hp"
     assert p.telegram_id == 1
 
 
@@ -102,7 +102,7 @@ def test_pause_player_pool_sets_timestamp(conn: sqlite3.Connection) -> None:
     until = datetime.now(UTC) + timedelta(days=14)
     assert pause_player_pool(conn, 1, until) is True
     row = _pool_row(conn, 1)
-    assert row["in_pool"] == 1  # pause is independent of the manual toggle
+    assert row["in_pool"] == 1
     assert row["pool_paused_until"] is not None
     assert pause_player_pool(conn, 999, until) is False
 
@@ -125,37 +125,49 @@ def test_enable_player_pool_clears_both(conn: sqlite3.Connection) -> None:
     assert enable_player_pool(conn, 999) is False
 
 
-def _agg(conn: sqlite3.Connection, a: int, b: int, axis: str, aw: int, bw: int, dk: int) -> None:
+# ----- dont_know_stats (now off score_skips) -----
+
+
+def _skip(conn: sqlite3.Connection, voter: int, player: int, indicator: str) -> None:
     conn.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
-        "VALUES (?, ?, ?, ?, ?, ?)",
-        (a, b, axis, aw, bw, dk),
+        "INSERT INTO score_skips (voter_id, player_id, indicator) VALUES (?, ?, ?)",
+        (voter, player, indicator),
     )
     conn.commit()
 
 
-def test_dont_know_stats_aggregates_per_player(conn: sqlite3.Connection) -> None:
+def _score(conn: sqlite3.Connection, voter: int, player: int, indicator: str, s: int = 3) -> None:
+    conn.execute(
+        "INSERT INTO scores (voter_id, player_id, indicator, score) VALUES (?, ?, ?, ?)",
+        (voter, player, indicator, s),
+    )
+    conn.commit()
+
+
+def test_dont_know_stats_per_player(conn: sqlite3.Connection) -> None:
     for tid in (1, 2, 3):
         add_player(conn, tid, f"P{tid}", f"p{tid}")
     add_player(conn, 4, "P4", "p4")
-    soft_remove_player(conn, 4)  # inactive — must be excluded from results
-    _agg(conn, 1, 2, "attack", 2, 1, 3)
-    _agg(conn, 1, 3, "attack", 0, 0, 1)
-    _agg(conn, 2, 3, "defense", 1, 0, 0)
+    soft_remove_player(conn, 4)  # inactive — excluded
+    # Player 1: 3 skips + 4 scores received → dk 3, total 7.
+    for ind in ("attack", "receive", "block"):
+        _skip(conn, 2, 1, ind)
+    for ind in ("attack", "receive", "block", "setting"):
+        _score(conn, 3, 1, ind)
+    # Player 3: 1 skip + 1 score → dk 1, total 2.
+    _skip(conn, 1, 3, "attack")
+    _score(conn, 2, 3, "attack")
+    # Player 2: 1 score, no skips → dk 0.
+    _score(conn, 1, 2, "attack")
 
     stats = dont_know_stats(conn)
     by_id = {s.telegram_id: s for s in stats}
-    assert set(by_id) == {1, 2, 3}  # player 4 excluded
-
-    # Player 1: pairs (1,2)+(1,3) → dk 3+1=4, total 6+1=7.
-    assert by_id[1].dk_count == 4
+    assert set(by_id) == {1, 2, 3}
+    assert by_id[1].dk_count == 3
     assert by_id[1].total == 7
-    assert by_id[1].dk_rate == 4 / 7
-    # Player 3: pairs (1,3)+(2,3) → dk 1+0=1, total 1+1=2.
+    assert by_id[1].dk_rate == 3 / 7
     assert by_id[3].dk_count == 1
     assert by_id[3].total == 2
-
-    # Sorted by dk_rate descending.
     rates = [s.dk_rate for s in stats]
     assert rates == sorted(rates, reverse=True)
 
@@ -166,6 +178,9 @@ def test_dont_know_stats_zero_total_is_zero_rate(conn: sqlite3.Connection) -> No
     assert stats[0].dk_count == 0
     assert stats[0].total == 0
     assert stats[0].dk_rate == 0.0
+
+
+# ----- ghost players -----
 
 
 def test_add_ghost_player_mints_negative_id(conn: sqlite3.Connection) -> None:
@@ -192,117 +207,94 @@ def test_ghost_appears_in_active_roster(conn: sqlite3.Connection) -> None:
     assert any(p.is_ghost for p in roster)
 
 
-# ----- link_ghost_player -----
+# ----- link_ghost_player (scores model) -----
 
 
-def _agg_row(conn: sqlite3.Connection, a: int, b: int, axis: str) -> sqlite3.Row | None:
+def _score_row(conn: sqlite3.Connection, voter: int, player: int, indicator: str) -> sqlite3.Row:
     return conn.execute(
-        "SELECT a_wins, b_wins, dont_know FROM vote_aggregates "
-        "WHERE player_a=? AND player_b=? AND axis=?",
-        (a, b, axis),
+        "SELECT score FROM scores WHERE voter_id=? AND player_id=? AND indicator=?",
+        (voter, player, indicator),
     ).fetchone()
 
 
-def test_link_ghost_to_new_real_remaps_and_flips_order(conn: sqlite3.Connection) -> None:
+def test_link_ghost_remaps_ghost_as_player_and_as_voter(conn: sqlite3.Connection) -> None:
     add_player(conn, 5, "Five", "five")
-    ghost = add_ghost_player(conn, "Ghost")  # negative id < 5
+    ghost = add_ghost_player(conn, "Ghost")
     g = ghost.telegram_id
-    # Pair stored normalized: ghost is player_a (g < 5). Ghost won 3, Five won 1, 2 dk.
-    conn.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
-        "VALUES (?, 5, 'attack', 3, 1, 2)",
-        (g,),
-    )
-    conn.commit()
-    link_ghost_player(conn, ghost_id=g, real_id=10, username="ten", display_name="Ten")
-    # Remap g->10: pair becomes (5, 10) so order flips; ghost's wins follow real_id (now player_b).
-    row = _agg_row(conn, 5, 10, "attack")
-    assert row is not None
-    assert (row["a_wins"], row["b_wins"], row["dont_know"]) == (1, 3, 2)
-    # Ghost row and player gone; real player exists and is not a ghost.
-    assert _agg_row(conn, g, 5, "attack") is None
+    _score(conn, 5, g, "attack", 4)  # ghost scored ON by voter 5
+    _score(conn, g, 5, "block", 2)  # ghost scored player 5 (ghost as voter)
+    result = link_ghost_player(conn, ghost_id=g, real_id=10, username="ten", display_name="Ten")
+    assert _score_row(conn, 5, 10, "attack")["score"] == 4
+    assert _score_row(conn, 10, 5, "block")["score"] == 2
+    assert result.score_rows == 2
     assert conn.execute("SELECT 1 FROM players WHERE telegram_id=?", (g,)).fetchone() is None
     real = conn.execute("SELECT is_ghost, active FROM players WHERE telegram_id=10").fetchone()
-    assert real["is_ghost"] == 0
-    assert real["active"] == 1
+    assert real["is_ghost"] == 0 and real["active"] == 1
 
 
-def test_link_ghost_merges_into_existing_pair(conn: sqlite3.Connection) -> None:
-    add_player(conn, 5, "Five", "five")
-    add_player(conn, 10, "Ten", "ten")  # real account already exists
-    conn.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
-        "VALUES (5, 10, 'attack', 2, 0, 1)"
-    )
-    ghost = add_ghost_player(conn, "Ghost")
-    g = ghost.telegram_id
-    conn.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
-        "VALUES (?, 5, 'attack', 4, 1, 3)",
-        (g,),
-    )
-    conn.commit()
-    result = link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
-    # ghost pair (g,5): ghost won 4, five won 1 → remapped to (5,10) as five=1, ten(real)=4.
-    # Merge into existing (5,10) a=2,b=0,dk=1 → a=2+1=3, b=0+4=4, dk=1+3=4.
-    row = _agg_row(conn, 5, 10, "attack")
-    assert (row["a_wins"], row["b_wins"], row["dont_know"]) == (3, 4, 4)
-    assert result.vote_rows == 1
-
-
-def test_link_ghost_drops_self_pair(conn: sqlite3.Connection) -> None:
-    add_player(conn, 10, "Ten", "ten")
-    ghost = add_ghost_player(conn, "Ghost")
-    g = ghost.telegram_id
-    # Someone compared the ghost against person 10 (who turns out to BE the ghost).
-    conn.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
-        "VALUES (?, 10, 'attack', 2, 1, 0)",
-        (g,),
-    )
-    conn.commit()
-    link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
-    # No self-pair (10,10) created, no crash.
-    assert _agg_row(conn, 10, 10, "attack") is None
-    assert conn.execute("SELECT COUNT(*) AS n FROM vote_aggregates").fetchone()["n"] == 0
-
-
-def test_link_ghost_migrates_prompts_and_drops_voter_in_pair(conn: sqlite3.Connection) -> None:
+def test_link_ghost_merge_keeps_newest_score(conn: sqlite3.Connection) -> None:
     add_player(conn, 5, "Five", "five")
     add_player(conn, 10, "Ten", "ten")
     ghost = add_ghost_player(conn, "Ghost")
     g = ghost.telegram_id
-    a, b = (g, 5) if g < 5 else (5, g)
-    # Voter 7 answered ghost-vs-5: should remap to (5,10) answered by 7.
-    add_player(conn, 7, "Seven", "seven")
+    # attack: existing real score is OLDER → ghost's newer score wins.
     conn.execute(
-        "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis) "
-        "VALUES (7, ?, ?, 'attack')",
-        (a, b),
+        "INSERT INTO scores (voter_id, player_id, indicator, score, updated_at) "
+        "VALUES (5, 10, 'attack', 2, '2020-01-01 00:00:00')"
     )
-    # Voter 10 (the real account) has a pending prompt on ghost-vs-5: after remap the
-    # pair (5,10) would contain the voter → must be dropped, not migrated.
     conn.execute(
-        "INSERT INTO pending_prompts (voter_id, player_a, player_b, axis, info_gain) "
-        "VALUES (10, ?, ?, 'attack', 1)",
-        (a, b),
+        "INSERT INTO scores (voter_id, player_id, indicator, score, updated_at) "
+        "VALUES (5, ?, 'attack', 4, '2030-01-01 00:00:00')",
+        (g,),
+    )
+    # receive: existing real score is NEWER → ghost's older score must NOT overwrite.
+    conn.execute(
+        "INSERT INTO scores (voter_id, player_id, indicator, score, updated_at) "
+        "VALUES (5, 10, 'receive', 3, '2030-01-01 00:00:00')"
+    )
+    conn.execute(
+        "INSERT INTO scores (voter_id, player_id, indicator, score, updated_at) "
+        "VALUES (5, ?, 'receive', 1, '2020-01-01 00:00:00')",
+        (g,),
     )
     conn.commit()
     link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
-    answered = conn.execute(
-        "SELECT 1 FROM answered_prompts WHERE voter_id=7 AND player_a=5 AND player_b=10 "
-        "AND axis='attack'"
-    ).fetchone()
-    assert answered is not None
-    # The voter-in-pair pending prompt is gone (not re-inserted as an invalid row).
-    assert conn.execute("SELECT COUNT(*) AS n FROM pending_prompts").fetchone()["n"] == 0
+    assert _score_row(conn, 5, 10, "attack")["score"] == 4  # newer ghost score won
+    assert _score_row(conn, 5, 10, "receive")["score"] == 3  # newer existing kept
+
+
+def test_link_ghost_drops_self_score(conn: sqlite3.Connection) -> None:
+    add_player(conn, 10, "Ten", "ten")
+    ghost = add_ghost_player(conn, "Ghost")
+    g = ghost.telegram_id
+    # The real account (10) scored the ghost; after merge that becomes 10→10 → drop.
+    _score(conn, 10, g, "attack", 3)
+    link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
+    assert conn.execute("SELECT COUNT(*) AS n FROM scores").fetchone()["n"] == 0
+
+
+def test_link_ghost_remaps_skips_and_drops_self(conn: sqlite3.Connection) -> None:
+    add_player(conn, 5, "Five", "five")
+    add_player(conn, 10, "Ten", "ten")
+    ghost = add_ghost_player(conn, "Ghost")
+    g = ghost.telegram_id
+    _skip(conn, 5, g, "attack")  # remaps to (5, 10)
+    _skip(conn, 10, g, "block")  # becomes self (10,10) → drop
+    link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
+    assert (
+        conn.execute(
+            "SELECT 1 FROM score_skips WHERE voter_id=5 AND player_id=10 AND indicator='attack'"
+        ).fetchone()
+        is not None
+    )
+    assert conn.execute("SELECT COUNT(*) AS n FROM score_skips").fetchone()["n"] == 1
 
 
 def test_link_ghost_migrates_ratings_rsvps_attendance(conn: sqlite3.Connection) -> None:
     ghost = add_ghost_player(conn, "Ghost")
     g = ghost.telegram_id
     conn.execute(
-        "INSERT INTO player_ratings (telegram_id, axis, score, vote_count, calibrated) "
+        "INSERT INTO player_ratings (telegram_id, indicator, score, vote_count, calibrated) "
         "VALUES (?, 'attack', 1.5, 5, 1)",
         (g,),
     )
@@ -318,7 +310,7 @@ def test_link_ghost_migrates_ratings_rsvps_attendance(conn: sqlite3.Connection) 
     result = link_ghost_player(conn, ghost_id=g, real_id=10, username="ten", display_name="Ten")
     assert (
         conn.execute(
-            "SELECT 1 FROM player_ratings WHERE telegram_id=10 AND axis='attack'"
+            "SELECT 1 FROM player_ratings WHERE telegram_id=10 AND indicator='attack'"
         ).fetchone()
         is not None
     )
@@ -327,7 +319,6 @@ def test_link_ghost_migrates_ratings_rsvps_attendance(conn: sqlite3.Connection) 
         conn.execute("SELECT 1 FROM attendance WHERE session_id=1 AND telegram_id=10").fetchone()
         is not None
     )
-    # Ghost rows cascade-deleted with the ghost player.
     assert (
         conn.execute(
             "SELECT COUNT(*) AS n FROM player_ratings WHERE telegram_id=?", (g,)
@@ -339,54 +330,11 @@ def test_link_ghost_migrates_ratings_rsvps_attendance(conn: sqlite3.Connection) 
     assert result.attendance == 1
 
 
-def test_link_ghost_real_id_smaller_keeps_order(conn: sqlite3.Connection) -> None:
-    add_player(conn, 20, "Twenty", "twenty")
-    ghost = add_ghost_player(conn, "Ghost")
-    g = ghost.telegram_id
-    conn.execute(
-        "INSERT INTO vote_aggregates (player_a, player_b, axis, a_wins, b_wins, dont_know) "
-        "VALUES (?, 20, 'attack', 5, 2, 1)",
-        (g,),
-    )
-    conn.commit()
-    # real_id=3 < other=20 → real_id stays player_a and keeps the ghost's wins.
-    link_ghost_player(conn, ghost_id=g, real_id=3, username="three", display_name="Three")
-    row = _agg_row(conn, 3, 20, "attack")
-    assert (row["a_wins"], row["b_wins"], row["dont_know"]) == (5, 2, 1)
-
-
-def test_link_ghost_migrates_pending_for_other_voter(conn: sqlite3.Connection) -> None:
+def test_link_ghost_creates_real_player_if_missing(conn: sqlite3.Connection) -> None:
     add_player(conn, 5, "Five", "five")
-    add_player(conn, 7, "Seven", "seven")
     ghost = add_ghost_player(conn, "Ghost")
     g = ghost.telegram_id
-    a, b = (g, 5) if g < 5 else (5, g)
-    conn.execute(
-        "INSERT INTO pending_prompts (voter_id, player_a, player_b, axis, info_gain) "
-        "VALUES (7, ?, ?, 'attack', 9)",
-        (a, b),
-    )
-    conn.commit()
-    link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
-    migrated = conn.execute(
-        "SELECT 1 FROM pending_prompts WHERE voter_id=7 AND player_a=5 AND player_b=10 "
-        "AND axis='attack'"
-    ).fetchone()
-    assert migrated is not None
-
-
-def test_link_ghost_drops_answered_self_pair(conn: sqlite3.Connection) -> None:
-    add_player(conn, 7, "Seven", "seven")
-    add_player(conn, 10, "Ten", "ten")
-    ghost = add_ghost_player(conn, "Ghost")
-    g = ghost.telegram_id
-    a, b = (g, 10) if g < 10 else (10, g)
-    # Voter 7 answered ghost-vs-10; 10 is the real account → self-pair, must drop.
-    conn.execute(
-        "INSERT INTO answered_prompts (voter_id, player_a, player_b, axis) "
-        "VALUES (7, ?, ?, 'attack')",
-        (a, b),
-    )
-    conn.commit()
-    link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
-    assert conn.execute("SELECT COUNT(*) AS n FROM answered_prompts").fetchone()["n"] == 0
+    _score(conn, 5, g, "attack", 4)
+    # real_id 10 does not exist yet → link must create it.
+    link_ghost_player(conn, ghost_id=g, real_id=10, username="ten", display_name="Ten")
+    assert conn.execute("SELECT 1 FROM players WHERE telegram_id=10").fetchone() is not None
