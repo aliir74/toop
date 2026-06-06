@@ -15,12 +15,13 @@ from telegram import (
     Update,
 )
 from telegram.constants import ChatType
-from telegram.error import BadRequest
+from telegram.error import BadRequest, Forbidden, TimedOut
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
 from toop.contacts import Contact, get_contact, list_addable_contacts, list_contacts
 from toop.i18n import t
+from toop.photos import delete_photo_bytes, save_photo_bytes
 from toop.players import (
     LinkResult,
     Player,
@@ -34,6 +35,7 @@ from toop.players import (
     list_active_players,
     pause_player_pool,
     rename_player,
+    set_player_photo,
     soft_remove_player,
 )
 
@@ -41,6 +43,9 @@ logger = logging.getLogger(__name__)
 
 RENAME_PREFIX = "rename:"
 PENDING_RENAME_KEY = "pending_rename"
+SETPHOTO_PREFIX = "setphoto:"
+UNSETPHOTO_PREFIX = "unsetphoto:"
+PENDING_SET_PHOTO_KEY = "pending_set_photo"
 
 # Callback prefixes for the button-driven admin flows. Kept short because
 # callback_data is capped at 64 bytes; only telegram_ids ride behind them.
@@ -966,3 +971,144 @@ async def handle_rename_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await message.reply_text(t("roster.player_gone"))
         return
     await message.reply_text(t("roster.renamed", old=old_name, new=text))
+
+
+# ----- /set_photo: pick a player, then send a photo -----
+
+
+@require_admin
+async def handle_set_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Set a player's profile photo (DM-only, admin-only).
+
+    Lists active players (ghosts included) as inline buttons; tapping one arms a
+    pending capture that the next DM photo (handle_set_photo_photo) fulfils. No
+    one-shot arg form — a photo can't ride on the command line.
+    """
+    message = update.effective_message
+    chat = update.effective_chat
+    if message is None:
+        return
+    if chat is not None and chat.type != ChatType.PRIVATE:
+        await message.reply_text(t("setphoto.dm_only"))
+        return
+    players = list_active_players(_conn(context))
+    if not players:
+        await message.reply_text(t("setphoto.empty_roster"))
+        return
+    await message.reply_text(
+        t("setphoto.pick"),
+        reply_markup=_player_keyboard(players, SETPHOTO_PREFIX),
+    )
+
+
+@require_admin
+async def handle_set_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin tapped a player button: stash the target and prompt for the photo."""
+    query = update.callback_query
+    if query is None or query.data is None:
+        return
+    telegram_id = _pick_id(query.data, SETPHOTO_PREFIX)
+    if telegram_id is None:
+        await query.answer()
+        return
+    conn = _conn(context)
+    row = conn.execute(
+        "SELECT display_name FROM players WHERE telegram_id=? AND active=1",
+        (telegram_id,),
+    ).fetchone()
+    if row is None:
+        await query.answer(t("setphoto.gone"), show_alert=True)
+        return
+    if context.user_data is not None:
+        context.user_data[PENDING_SET_PHOTO_KEY] = telegram_id
+    await query.answer()
+    await _safe_edit(query, t("setphoto.send_now", name=row["display_name"]))
+
+
+async def handle_set_photo_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Store a photo for the pending /set_photo target from a DM photo message.
+
+    Registered in its own lower-priority group so it sees every private photo
+    (commands still reach their CommandHandler in the default group). Acts only
+    when this admin has a set-photo pending — otherwise returns silently.
+    """
+    message = update.effective_message
+    if message is None or not message.photo or context.user_data is None:
+        return
+    telegram_id = context.user_data.get(PENDING_SET_PHOTO_KEY)
+    if telegram_id is None:
+        return
+    # Largest PhotoSize = the full-resolution file_id (earlier entries are thumbs).
+    file_id = message.photo[-1].file_id
+    # Best-effort byte backup — a download hiccup must not block storing the
+    # file_id, which is the source of truth (bytes are just the recovery copy).
+    try:
+        tg_file = await context.bot.get_file(file_id)
+        raw = bytes(await tg_file.download_as_bytearray())
+        save_photo_bytes(telegram_id, raw)
+    except (BadRequest, Forbidden, TimedOut) as exc:  # pragma: no cover - network edge
+        logger.warning("photo backup failed for %s: %s", telegram_id, exc)
+    name = set_player_photo(_conn(context), telegram_id, file_id)
+    context.user_data.pop(PENDING_SET_PHOTO_KEY, None)
+    if name is None:
+        await message.reply_text(t("setphoto.gone"))
+        return
+    await message.reply_text(t("setphoto.done", name=name))
+
+
+async def handle_set_photo_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Nudge when a pending /set_photo gets a text message instead of a photo.
+
+    A command cancels the pending set; any other text replies with a reminder
+    and keeps the flow armed so the admin can still send the photo.
+    """
+    message = update.effective_message
+    if message is None or message.text is None or context.user_data is None:
+        return
+    if context.user_data.get(PENDING_SET_PHOTO_KEY) is None:
+        return
+    if message.text.startswith("/"):
+        context.user_data.pop(PENDING_SET_PHOTO_KEY, None)
+        await message.reply_text(t("setphoto.cancelled"))
+        return
+    await message.reply_text(t("setphoto.not_photo"))
+
+
+# ----- /unset_photo: pick a player, clear their photo -----
+
+
+@require_admin
+async def handle_unset_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Clear a player's profile photo (DM-only, admin-only) via inline buttons."""
+    message = update.effective_message
+    chat = update.effective_chat
+    if message is None:
+        return
+    if chat is not None and chat.type != ChatType.PRIVATE:
+        await message.reply_text(t("setphoto.dm_only"))
+        return
+    players = list_active_players(_conn(context))
+    if not players:
+        await message.reply_text(t("setphoto.empty_roster"))
+        return
+    await message.reply_text(
+        t("unsetphoto.pick"),
+        reply_markup=_player_keyboard(players, UNSETPHOTO_PREFIX),
+    )
+
+
+def _clear_photo(conn: sqlite3.Connection, telegram_id: int) -> None:
+    set_player_photo(conn, telegram_id, None)
+    delete_photo_bytes(telegram_id)
+
+
+@require_admin
+async def handle_unset_photo_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Admin tapped a player button: clear the stored photo + delete the backup."""
+    await _single_pick_action(
+        update,
+        context,
+        UNSETPHOTO_PREFIX,
+        action=_clear_photo,
+        success=lambda name: t("unsetphoto.done", name=name),
+    )
