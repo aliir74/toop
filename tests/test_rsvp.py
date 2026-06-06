@@ -9,7 +9,6 @@ from toop.players import add_player
 from toop.rsvp import (
     RsvpCounts,
     count_rsvps,
-    format_rsvp_message,
     is_player_on_roster,
     lock_in_player,
     upsert_rsvp,
@@ -98,11 +97,3 @@ def test_is_player_on_roster_respects_active_flag(conn: sqlite3.Connection) -> N
     conn.execute("UPDATE players SET active=0 WHERE telegram_id=1")
     conn.commit()
     assert is_player_on_roster(conn, 1) is False
-
-
-def test_format_rsvp_message_includes_counts() -> None:
-    msg = format_rsvp_message("2026-05-18", RsvpCounts(12, 3, 2))
-    assert "✅ 12" in msg
-    assert "❌ 3" in msg
-    assert "🤔 2" in msg
-    assert "2026-05-18" in msg

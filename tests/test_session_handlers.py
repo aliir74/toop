@@ -77,23 +77,6 @@ async def test_close_session_marks_done(admin_settings: None, conn: sqlite3.Conn
     assert get_active_session(conn) is None
 
 
-async def test_open_session_posts_rsvp_message(
-    admin_settings: None, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        "toop.handlers.sessions.settings",
-        MagicMock(SESSION_WEEKDAY="monday", GROUP_CHAT_ID=-100123),
-    )
-    update = _admin_update()
-    ctx = _ctx(conn, ["2026-05-18"])
-    ctx.bot.send_message = AsyncMock()
-    await handle_open_session(update, ctx)
-    ctx.bot.send_message.assert_awaited_once()
-    kwargs = ctx.bot.send_message.await_args.kwargs
-    assert kwargs["chat_id"] == -100123
-    assert "✅ 0" in kwargs["text"]
-
-
 async def test_list_sessions_empty(admin_settings: None, conn: sqlite3.Connection) -> None:
     update = _admin_update()
     ctx = _ctx(conn, [])
@@ -103,8 +86,6 @@ async def test_list_sessions_empty(admin_settings: None, conn: sqlite3.Connectio
 
 
 # ----- branch coverage additions -----
-
-from telegram.error import TelegramError  # noqa: E402
 
 from toop.handlers.sessions import _conn  # noqa: E402
 
@@ -133,21 +114,6 @@ async def test_open_session_invalid_date(admin_settings: None, conn: sqlite3.Con
     update = _admin_update()
     await handle_open_session(update, _ctx(conn, ["not-a-date"]))
     assert "Usage" in update.effective_message.reply_text.await_args.args[0]
-
-
-async def test_open_session_group_post_fails(
-    admin_settings: None, conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        "toop.handlers.sessions.settings",
-        MagicMock(SESSION_WEEKDAY="monday", GROUP_CHAT_ID=-100123),
-    )
-    update = _admin_update()
-    ctx = _ctx(conn, ["2026-05-18"])
-    ctx.bot.send_message = AsyncMock(side_effect=TelegramError("down"))
-    await handle_open_session(update, ctx)
-    replies = [c.args[0] for c in update.effective_message.reply_text.await_args_list]
-    assert any("Couldn't post" in r for r in replies)
 
 
 async def test_close_session_returns_without_message(

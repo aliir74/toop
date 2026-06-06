@@ -44,7 +44,7 @@ from toop.handlers.roster import (
     handle_rename_callback,
     handle_rename_text,
 )
-from toop.handlers.rsvp import handle_lock_in, handle_lock_in_callback, handle_rsvp_callback
+from toop.handlers.rsvp import handle_lock_in, handle_lock_in_callback
 from toop.handlers.sessions import (
     handle_close_session,
     handle_list_sessions,
@@ -151,7 +151,6 @@ def main() -> None:
             name="dk_alert",
         )
         logger.info("dk_alert scheduled daily at hour=%s UTC", settings.SNAPSHOT_HOUR)
-    app.add_handler(CallbackQueryHandler(handle_rsvp_callback, pattern=r"^rsvp:"))
     app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
     app.add_handler(CallbackQueryHandler(handle_rename_callback, pattern=r"^rename:"))
     app.add_handler(CallbackQueryHandler(handle_remove_callback, pattern=r"^rmpick:"))
