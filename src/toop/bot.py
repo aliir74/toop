@@ -18,6 +18,11 @@ from toop.commands import menu_commands
 from toop.config import settings
 from toop.db import get_connection, init_db
 from toop.handlers.alerts import dk_alert_job
+from toop.handlers.change_player import (
+    handle_change_player,
+    handle_change_promote_callback,
+    handle_change_remove_callback,
+)
 from toop.handlers.health import handle_coverage, handle_health
 from toop.handlers.help import handle_help
 from toop.handlers.ops import handle_backup_db, handle_version
@@ -129,6 +134,7 @@ def main() -> None:
     app.add_handler(CommandHandler("snapshot", handle_snapshot))
     app.add_handler(CommandHandler("teams", handle_teams))
     app.add_handler(CommandHandler("swap", handle_swap))
+    app.add_handler(CommandHandler("change_player", handle_change_player))
     app.add_handler(CommandHandler("publish", handle_publish))
     app.add_handler(CommandHandler("health", handle_health))
     app.add_handler(CommandHandler("coverage", handle_coverage))
@@ -175,6 +181,8 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_remove_callback, pattern=r"^rmpick:"))
     app.add_handler(CallbackQueryHandler(handle_disable_callback, pattern=r"^dispick:"))
     app.add_handler(CallbackQueryHandler(handle_lock_in_callback, pattern=r"^lockpick:"))
+    app.add_handler(CallbackQueryHandler(handle_change_remove_callback, pattern=r"^cprm:"))
+    app.add_handler(CallbackQueryHandler(handle_change_promote_callback, pattern=r"^cpadd:"))
     app.add_handler(CallbackQueryHandler(handle_enable_callback, pattern=r"^enpick:"))
     app.add_handler(CallbackQueryHandler(handle_pause_pick_callback, pattern=r"^pausepick:"))
     app.add_handler(CallbackQueryHandler(handle_pause_dur_callback, pattern=r"^pausedur:"))

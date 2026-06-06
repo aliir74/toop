@@ -166,6 +166,12 @@ COMMANDS: tuple[BotCmd, ...] = (
         admin=True,
     ),
     BotCmd(
+        "change_player",
+        "Add/remove an attendee + rebalance",
+        "/change_player +@username (add) or -@username (remove); no args for buttons (DM only)",
+        admin=True,
+    ),
+    BotCmd(
         "publish",
         "Publish teams to the group",
         "/publish — post the current teams to the group chat",
