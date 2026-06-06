@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
 from toop.config import settings
+from toop.handlers.poll import post_attendance_poll
 from toop.sessions import (
     SessionStateError,
     close_session,
@@ -48,6 +49,7 @@ async def handle_open_session(update: Update, context: ContextTypes.DEFAULT_TYPE
         await message.reply_text(str(exc))
         return
     await message.reply_text(f"Session #{sess.id} opened for {sess.session_date.isoformat()}.")
+    await post_attendance_poll(context, _conn(context), sess)
 
 
 @require_admin

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime, time
+from zoneinfo import ZoneInfo
 
 from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault
 from telegram.ext import (
@@ -9,6 +10,7 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
+    PollAnswerHandler,
     filters,
 )
 
@@ -19,6 +21,7 @@ from toop.handlers.alerts import dk_alert_job
 from toop.handlers.health import handle_coverage, handle_health
 from toop.handlers.help import handle_help
 from toop.handlers.ops import handle_backup_db, handle_version
+from toop.handlers.poll import handle_poll_answer, weekly_attendance_job
 from toop.handlers.ratings import handle_refresh_ratings
 from toop.handlers.roster import (
     handle_add_ghost,
@@ -151,6 +154,22 @@ def main() -> None:
             name="dk_alert",
         )
         logger.info("dk_alert scheduled daily at hour=%s UTC", settings.SNAPSHOT_HOUR)
+        poll_weekday = WEEKDAY_INDEX[settings.SESSION_POLL_WEEKDAY.lower()]
+        app.job_queue.run_daily(
+            weekly_attendance_job,
+            time=time(
+                hour=settings.SESSION_POLL_HOUR, minute=0, tzinfo=ZoneInfo(settings.SESSION_POLL_TZ)
+            ),
+            days=(poll_weekday,),
+            name="attendance_poll",
+        )
+        logger.info(
+            "attendance_poll scheduled: weekday=%s hour=%s %s",
+            settings.SESSION_POLL_WEEKDAY,
+            settings.SESSION_POLL_HOUR,
+            settings.SESSION_POLL_TZ,
+        )
+    app.add_handler(PollAnswerHandler(handle_poll_answer))
     app.add_handler(CallbackQueryHandler(handle_vote_callback, pattern=r"^v:"))
     app.add_handler(CallbackQueryHandler(handle_rename_callback, pattern=r"^rename:"))
     app.add_handler(CallbackQueryHandler(handle_remove_callback, pattern=r"^rmpick:"))

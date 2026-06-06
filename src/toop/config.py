@@ -25,6 +25,20 @@ class Settings(BaseSettings):
     SNAPSHOT_HOUR: int = Field(default=12, ge=0, le=23)
     SESSION_WEEKDAY: str = "monday"
     MAX_ATTENDEES: int = Field(default=14, gt=0)
+    # Attendance-poll schedule: the bot posts the weekly بلی/خیر poll on this
+    # weekday + hour in SESSION_POLL_TZ (the group's real Thursday-8pm-PST
+    # cadence). QUORUM_THRESHOLD is the yes-count above which the bot announces
+    # the session is on and posts payment; MAX_ATTENDEES is the cap that closes
+    # the poll and opens the reservation/waitlist poll.
+    SESSION_POLL_WEEKDAY: str = "thursday"
+    SESSION_POLL_HOUR: int = Field(default=20, ge=0, le=23)
+    SESSION_POLL_TZ: str = "America/Los_Angeles"
+    QUORUM_THRESHOLD: int = Field(default=12, ge=0)
+    # Payment block posted once quorum is reached (interpolated into the Persian
+    # announcement). Left blank by default; fill in .env for the live group.
+    PAYMENT_EMAIL: str = ""
+    PAYMENT_AMOUNT: str = "7.5"
+    ACCOUNTING_SHEET_URL: str = ""
     # Composite weights, one per indicator. Default = equal (1/6 each, summing to
     # 1.0). Env-tunable; they need not sum to 1.0 (a warning logs if they don't).
     WEIGHT_ATTACK: float = 0.1667
@@ -48,12 +62,12 @@ class Settings(BaseSettings):
     DK_ALERT_RATE: float = Field(default=0.5, ge=0.0, le=1.0)
     DEFAULT_PAUSE_DAYS: int = Field(default=14, gt=0)
 
-    @field_validator("SESSION_WEEKDAY")
+    @field_validator("SESSION_WEEKDAY", "SESSION_POLL_WEEKDAY")
     @classmethod
     def _weekday_valid(cls, v: str) -> str:
         lower = v.lower()
         if lower not in VALID_WEEKDAYS:
-            raise ValueError(f"SESSION_WEEKDAY must be one of {sorted(VALID_WEEKDAYS)}, got {v!r}")
+            raise ValueError(f"weekday must be one of {sorted(VALID_WEEKDAYS)}, got {v!r}")
         return lower
 
     @model_validator(mode="after")

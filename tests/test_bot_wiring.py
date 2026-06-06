@@ -15,6 +15,9 @@ def patched_main(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         DATABASE_PATH="/tmp/toop-test.db",
         SESSION_WEEKDAY="Monday",
         SNAPSHOT_HOUR=12,
+        SESSION_POLL_WEEKDAY="Thursday",
+        SESSION_POLL_HOUR=20,
+        SESSION_POLL_TZ="America/Los_Angeles",
         ADMIN_TELEGRAM_ID=42,
         GROUP_CHAT_ID=-100123,
     )
@@ -41,9 +44,9 @@ def test_main_registers_all_handlers_and_schedules_snapshot(
 
     bot.main()
 
-    # 28 command handlers + 11 callback-query handlers + 2 message handlers.
-    assert mock_app.add_handler.call_count == 41
-    assert mock_app.job_queue.run_daily.call_count == 2
+    # 28 command + 11 callback-query + 1 poll-answer + 2 message handlers.
+    assert mock_app.add_handler.call_count == 42
+    assert mock_app.job_queue.run_daily.call_count == 3
     assert "conn" in mock_app.bot_data
     assert "started_at" in mock_app.bot_data
     # The command-registration hook is wired via post_init.
@@ -58,7 +61,7 @@ def test_main_skips_scheduling_when_no_job_queue(patched_main: MagicMock) -> Non
     bot.main()
 
     # Handlers still register even without a job queue.
-    assert mock_app.add_handler.call_count == 41
+    assert mock_app.add_handler.call_count == 42
     mock_app.run_polling.assert_called_once()
 
 
