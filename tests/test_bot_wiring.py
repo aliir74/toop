@@ -44,9 +44,19 @@ def test_main_registers_all_handlers_and_schedules_snapshot(
 
     bot.main()
 
-    # 27 command + 14 callback-query + 1 poll-answer + 4 message handlers.
-    assert mock_app.add_handler.call_count == 46
+    # 29 command + 15 callback-query + 1 poll-answer + 4 message handlers.
+    assert mock_app.add_handler.call_count == 49
     assert mock_app.job_queue.run_daily.call_count == 3
+    # Jobs must be scheduled on PTB's weekday numbering (0=Sunday..6=Saturday),
+    # NOT datetime's Monday=0 — else every job fires a day early. With the fake
+    # settings (session Monday, poll Thursday): snapshot→1 (Mon), poll→4 (Thu).
+    days_by_name = {
+        call.kwargs["name"]: call.kwargs["days"]
+        for call in mock_app.job_queue.run_daily.call_args_list
+        if "days" in call.kwargs
+    }
+    assert days_by_name["auto_snapshot"] == (1,)
+    assert days_by_name["attendance_poll"] == (4,)
     assert "conn" in mock_app.bot_data
     assert "started_at" in mock_app.bot_data
     # The command-registration hook is wired via post_init.
@@ -61,7 +71,7 @@ def test_main_skips_scheduling_when_no_job_queue(patched_main: MagicMock) -> Non
     bot.main()
 
     # Handlers still register even without a job queue.
-    assert mock_app.add_handler.call_count == 46
+    assert mock_app.add_handler.call_count == 49
     mock_app.run_polling.assert_called_once()
 
 

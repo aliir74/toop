@@ -12,6 +12,7 @@ from toop.sessions import (
     list_recent_sessions,
     next_weekday,
     open_session,
+    to_ptb_weekday,
 )
 
 
@@ -21,6 +22,15 @@ def test_next_weekday_skips_today() -> None:
     assert nxt == date(2026, 5, 18)
     nxt_fri = next_weekday("friday", today=monday)
     assert nxt_fri == date(2026, 5, 15)
+
+
+def test_to_ptb_weekday_shifts_to_sunday_zero() -> None:
+    # WEEKDAY_INDEX is Monday=0..Sunday=6; PTB run_daily wants Sunday=0..Saturday=6.
+    assert to_ptb_weekday("sunday") == 0
+    assert to_ptb_weekday("monday") == 1
+    assert to_ptb_weekday("thursday") == 4  # the bug: was passing 3 (Wednesday)
+    assert to_ptb_weekday("saturday") == 6
+    assert to_ptb_weekday("THURSDAY") == 4  # case-insensitive
 
 
 def test_open_session_creates_open_row(conn: sqlite3.Connection) -> None:

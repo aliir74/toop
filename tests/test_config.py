@@ -13,6 +13,8 @@ def test_defaults_load() -> None:
     s = Settings(_env_file=None)
     assert s.SNAPSHOT_HOUR == 12
     assert s.SESSION_WEEKDAY == "monday"
+    # Poll posts Thursday 8pm PST, ahead of the following Monday session.
+    assert s.SESSION_POLL_WEEKDAY == "thursday"
     assert pytest.approx(1.0) == sum(s.composite_weights().values())
 
 

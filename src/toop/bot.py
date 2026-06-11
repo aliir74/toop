@@ -23,6 +23,11 @@ from toop.handlers.change_player import (
     handle_change_promote_callback,
     handle_change_remove_callback,
 )
+from toop.handlers.events import (
+    handle_pause_events,
+    handle_pause_events_dur_callback,
+    handle_resume_events,
+)
 from toop.handlers.health import handle_coverage, handle_health
 from toop.handlers.help import handle_help
 from toop.handlers.ops import handle_backup_db, handle_version
@@ -73,7 +78,7 @@ from toop.handlers.voting import (
     handle_vote_callback,
     handle_vote_command,
 )
-from toop.sessions import WEEKDAY_INDEX
+from toop.sessions import to_ptb_weekday
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +133,8 @@ def main() -> None:
     app.add_handler(CommandHandler("contacts", handle_contacts))
     app.add_handler(CommandHandler("open_session", handle_open_session))
     app.add_handler(CommandHandler("sessions", handle_list_sessions))
+    app.add_handler(CommandHandler("pause_events", handle_pause_events))
+    app.add_handler(CommandHandler("resume_events", handle_resume_events))
     app.add_handler(CommandHandler("start", handle_start))
     app.add_handler(CommandHandler("vote", handle_vote_command))
     app.add_handler(CommandHandler("help", handle_help))
@@ -142,7 +149,7 @@ def main() -> None:
     app.add_handler(CommandHandler("backup_db", handle_backup_db))
 
     if app.job_queue is not None:
-        weekday = WEEKDAY_INDEX[settings.SESSION_WEEKDAY.lower()]
+        weekday = to_ptb_weekday(settings.SESSION_WEEKDAY)
         app.job_queue.run_daily(
             auto_snapshot_job,
             time=time(hour=settings.SNAPSHOT_HOUR, minute=0, tzinfo=UTC),
@@ -160,7 +167,7 @@ def main() -> None:
             name="dk_alert",
         )
         logger.info("dk_alert scheduled daily at hour=%s UTC", settings.SNAPSHOT_HOUR)
-        poll_weekday = WEEKDAY_INDEX[settings.SESSION_POLL_WEEKDAY.lower()]
+        poll_weekday = to_ptb_weekday(settings.SESSION_POLL_WEEKDAY)
         app.job_queue.run_daily(
             weekly_attendance_job,
             time=time(
@@ -187,6 +194,7 @@ def main() -> None:
     app.add_handler(CallbackQueryHandler(handle_enable_callback, pattern=r"^enpick:"))
     app.add_handler(CallbackQueryHandler(handle_pause_pick_callback, pattern=r"^pausepick:"))
     app.add_handler(CallbackQueryHandler(handle_pause_dur_callback, pattern=r"^pausedur:"))
+    app.add_handler(CallbackQueryHandler(handle_pause_events_dur_callback, pattern=r"^evpausedur:"))
     app.add_handler(CallbackQueryHandler(handle_link_ghost_callback, pattern=r"^lnkghost:"))
     app.add_handler(CallbackQueryHandler(handle_link_real_callback, pattern=r"^lnkreal:"))
     app.add_handler(CallbackQueryHandler(handle_add_pick_callback, pattern=r"^addpick:"))

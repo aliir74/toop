@@ -89,6 +89,13 @@ def _fa() -> dict[str, str]:
         "cmd.open_session.usage": "/open_session [YYYY-MM-DD]  (پیش‌فرض: روز جلسه بعدی)",
         "cmd.sessions.short": "فهرست جلسه‌های اخیر",
         "cmd.sessions.usage": "/sessions — فهرست جلسه‌های اخیر و وضعیت آن‌ها",
+        "cmd.pause_events.short": "توقف موقت برنامه هفتگی",
+        "cmd.pause_events.usage": (
+            "/pause_events <مدت مثل 2w یا 10d>  (بدون آرگومان برای دکمه‌ها) — "
+            "تا آن زمان نظرسنجی و جلسه‌ای ساخته نمی‌شود"
+        ),
+        "cmd.resume_events.short": "از سرگیری برنامه هفتگی",
+        "cmd.resume_events.usage": "/resume_events — لغو توقف و بازگشت نظرسنجی هفتگی",
         "cmd.nudge.short": "تهیه یادآور برای کم‌امتیازترین رای‌دهندگان",
         "cmd.nudge.usage": "/nudge — قالب‌های آماده برای یادآوری به کم‌فعال‌ترین رای‌دهندگان",
         "cmd.snapshot.short": "ساخت تیم‌های متوازن",
@@ -217,6 +224,19 @@ def _fa() -> dict[str, str]:
         "sessions.none": "هنوز جلسه‌ای نیست.",
         "sessions.recent_header": "جلسه‌های اخیر:",
         "sessions.recent_row": "#{sid} {date} — {status}",
+        # --- events pause (/pause_events, /resume_events) ---
+        "events.pause_usage": (
+            "روش استفاده: /pause_events <مدت مثل 2w یا 10d> "
+            "(یا /pause_events بدون آرگومان برای دکمه‌ها)"
+        ),
+        "events.how_long_pause": "برنامه هفتگی چه مدت متوقف شود؟",
+        "events.currently_paused": "⏸ برنامه هفتگی تا {date} متوقف است.",
+        "events.paused_until": (
+            "⏸ برنامه هفتگی تا {date} متوقف شد — تا آن زمان نظرسنجی یا جلسه‌ای "
+            "ساخته نمی‌شود. برای لغو از /resume_events استفاده کن."
+        ),
+        "events.resumed": "▶ برنامه هفتگی از سر گرفته شد — نظرسنجی هفتگی به روال عادی برگشت.",
+        "events.not_paused": "برنامه هفتگی متوقف نیست. ✅",
         # --- roster ---
         "roster.add_usage": (
             'روش استفاده: /add_player @username "نام نمایشی"  '
@@ -419,6 +439,13 @@ def _en() -> dict[str, str]:
         ),
         "cmd.sessions.short": "List recent sessions",
         "cmd.sessions.usage": "/sessions — list recent sessions and their status",
+        "cmd.pause_events.short": "Pause the weekly schedule",
+        "cmd.pause_events.usage": (
+            "/pause_events <duration like 2w or 10d>  (no argument for buttons) — "
+            "no poll or session is created until then"
+        ),
+        "cmd.resume_events.short": "Resume the weekly schedule",
+        "cmd.resume_events.usage": "/resume_events — lift the pause and resume the weekly poll",
         "cmd.nudge.short": "Draft nudges for low-completion voters",
         "cmd.nudge.usage": "/nudge — copy/paste templates to nudge the lowest-completion voters",
         "cmd.snapshot.short": "Generate balanced teams",
@@ -540,6 +567,19 @@ def _en() -> dict[str, str]:
         "sessions.none": "No sessions yet.",
         "sessions.recent_header": "Recent sessions:",
         "sessions.recent_row": "#{sid} {date} — {status}",
+        # --- events pause (/pause_events, /resume_events) ---
+        "events.pause_usage": (
+            "Usage: /pause_events <duration like 2w or 10d> "
+            "(or /pause_events with no argument for buttons)"
+        ),
+        "events.how_long_pause": "How long should I pause the weekly schedule?",
+        "events.currently_paused": "⏸ The weekly schedule is paused until {date}.",
+        "events.paused_until": (
+            "⏸ Weekly schedule paused until {date} — no poll or session will be "
+            "created until then. Use /resume_events to lift it."
+        ),
+        "events.resumed": "▶ Weekly schedule resumed — the weekly poll is back on schedule.",
+        "events.not_paused": "The weekly schedule isn't paused. ✅",
         "roster.add_usage": (
             'Usage: /add_player @username "Display Name"  '
             '(or /add_player <telegram_id> "Display Name")'

@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from toop.config import Settings
 from toop.handlers.snapshot import auto_snapshot_job
+from toop.pause import pause_events_until
 from toop.players import add_player
 from toop.rsvp import upsert_rsvp
 from toop.sessions import get_active_session, open_session
@@ -60,3 +61,17 @@ async def test_auto_snapshot_no_rsvps_skips(conn: sqlite3.Connection) -> None:
     ctx = _ctx(conn)
     await auto_snapshot_job(ctx)
     ctx.bot.send_message.assert_not_called()
+
+
+async def test_auto_snapshot_skips_when_events_paused(conn: sqlite3.Connection) -> None:
+    # A full, snapshot-ready session must NOT be snapshotted while paused.
+    sess = open_session(conn, date(2026, 5, 18))
+    for i in range(1, 17):
+        add_player(conn, i, f"P{i}", f"p{i}")
+        upsert_rsvp(conn, sess.id, i, "yes")
+    pause_events_until(conn, datetime.now(UTC) + timedelta(days=7))
+    ctx = _ctx(conn)
+    await auto_snapshot_job(ctx)
+    ctx.bot.send_message.assert_not_called()
+    active = get_active_session(conn)
+    assert active is not None and active.status == "open"  # untouched

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from datetime import UTC, datetime
 
 from telegram import Update
 from telegram.error import TelegramError
@@ -17,6 +18,7 @@ from toop.balance import (
 )
 from toop.config import settings
 from toop.i18n import t
+from toop.pause import events_are_paused
 from toop.players import Player
 from toop.rating import refresh_ratings
 from toop.selection import select_attendees
@@ -192,8 +194,14 @@ async def handle_snapshot(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def auto_snapshot_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Scheduled job: runs the snapshot pipeline and DMs admin when done.
     Does NOT auto-publish — admin must /publish manually.
+
+    Skips while the schedule is paused (/pause_events) so a leftover open session
+    can't get snapshotted during a paused week.
     """
     conn = _conn(context)
+    if events_are_paused(conn, datetime.now(UTC)):
+        logger.info("auto_snapshot: events paused; skipping")
+        return
     result = take_snapshot(conn, _weights(), settings.MAX_ATTENDEES, settings.CALIBRATION_THRESHOLD)
     if result is None:
         logger.info("auto_snapshot: no active session with yes-RSVPs; skipping")

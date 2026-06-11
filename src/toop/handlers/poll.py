@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from datetime import UTC, datetime
 
 from telegram import Update
 from telegram.error import TelegramError
@@ -17,6 +18,7 @@ from toop.drift import (
     set_drift_signature,
 )
 from toop.i18n import t
+from toop.pause import events_are_paused
 from toop.poll import (
     PollRow,
     attendance_options,
@@ -111,8 +113,14 @@ async def weekly_attendance_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Scheduled job: auto-close the prior session, open the coming one, and
     post the attendance poll. Closing here is what retires last week's session
     now that there is no manual /close_session.
+
+    Skips entirely while the schedule is paused (/pause_events): no session is
+    opened and no poll is posted in that window.
     """
     conn = _conn(context)
+    if events_are_paused(conn, datetime.now(UTC)):
+        logger.info("weekly_attendance_job: events paused; skipping poll")
+        return
     sess = reopen_session(conn, next_weekday(settings.SESSION_WEEKDAY))
     await post_attendance_poll(context, conn, sess)
 

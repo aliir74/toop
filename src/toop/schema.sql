@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS players (
     photo_file_id   TEXT
 );
 
+-- Global key/value bot state, distinct from any per-player or per-session row.
+-- Currently holds 'events_paused_until' (an ISO-8601 UTC timestamp): while that
+-- instant is in the future, the weekly attendance-poll job and the auto-snapshot
+-- job skip, so no session is created in that window. Cleared by /resume_events.
+CREATE TABLE IF NOT EXISTS bot_state (
+    key             TEXT PRIMARY KEY,
+    value           TEXT NOT NULL,
+    updated_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS sessions (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     session_date    DATE NOT NULL,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sqlite3
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -16,6 +16,7 @@ from toop.handlers.poll import (
     post_attendance_poll,
     weekly_attendance_job,
 )
+from toop.pause import pause_events_until
 from toop.players import add_player
 from toop.poll import add_to_waitlist, get_poll, list_waitlist, record_poll, set_quorum_announced
 from toop.rsvp import count_rsvps, upsert_rsvp
@@ -97,6 +98,29 @@ async def test_post_attendance_poll_no_poll_on_message(
 
 
 async def test_weekly_job_opens_and_posts(group_settings: None, conn: sqlite3.Connection) -> None:
+    ctx = _ctx(conn)
+    ctx.bot.send_poll = AsyncMock(return_value=_poll_message())
+    await weekly_attendance_job(ctx)
+    assert get_active_session(conn) is not None
+    ctx.bot.send_poll.assert_awaited_once()
+
+
+async def test_weekly_job_skips_when_events_paused(
+    group_settings: None, conn: sqlite3.Connection
+) -> None:
+    pause_events_until(conn, datetime.now(UTC) + timedelta(days=7))
+    ctx = _ctx(conn)
+    ctx.bot.send_poll = AsyncMock(return_value=_poll_message())
+    await weekly_attendance_job(ctx)
+    assert get_active_session(conn) is None  # no session opened
+    ctx.bot.send_poll.assert_not_called()
+
+
+async def test_weekly_job_runs_when_pause_expired(
+    group_settings: None, conn: sqlite3.Connection
+) -> None:
+    # A pause whose window already elapsed must not block the job.
+    pause_events_until(conn, datetime.now(UTC) - timedelta(days=1))
     ctx = _ctx(conn)
     ctx.bot.send_poll = AsyncMock(return_value=_poll_message())
     await weekly_attendance_job(ctx)
