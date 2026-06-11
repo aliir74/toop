@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import logging
-import re
 import shlex
 import sqlite3
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from telegram import (
     CallbackQuery,
@@ -20,6 +19,7 @@ from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
 from toop.contacts import Contact, get_contact, list_addable_contacts, list_contacts
+from toop.durations import DURATION_DAYS, parse_duration
 from toop.i18n import t
 from toop.photos import delete_photo_bytes, save_photo_bytes
 from toop.players import (
@@ -348,20 +348,10 @@ async def handle_remove_callback(update: Update, context: ContextTypes.DEFAULT_T
     )
 
 
-_DURATION_DAYS = {"d": 1, "w": 7, "m": 30}
-
-
-def _parse_duration(token: str) -> timedelta | None:
-    """Parse a pause duration like ``2w``, ``10d`` or ``1m`` into a timedelta.
-
-    ``m`` is a coarse month (30 days) — exact enough for a "pull them for a
-    month" pause. Returns None when the token doesn't match.
-    """
-    match = re.fullmatch(r"(\d+)([dwm])", token.lower())
-    if not match:
-        return None
-    amount = int(match.group(1))
-    return timedelta(days=amount * _DURATION_DAYS[match.group(2)])
+# Duration parsing now lives in toop.durations so /pause_events can share it.
+# Aliased here under the original names for the existing call sites and tests.
+_DURATION_DAYS = DURATION_DAYS
+_parse_duration = parse_duration
 
 
 def _is_paused(pool_paused_until: str | None, now: datetime) -> bool:

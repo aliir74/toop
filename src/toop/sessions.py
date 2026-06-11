@@ -28,6 +28,17 @@ class Session:
     status: str
 
 
+def to_ptb_weekday(weekday: str) -> int:
+    """Convert a weekday name to python-telegram-bot's ``run_daily(days=)`` index.
+
+    PTB v20+ numbers weekdays 0=Sunday..6=Saturday, whereas WEEKDAY_INDEX (and
+    :meth:`datetime.date.weekday`) use 0=Monday..6=Sunday. Feeding the datetime
+    index straight to ``run_daily`` fired every scheduled job one day early
+    (a Thursday poll posted Wednesday). Shift by one, mod 7, to bridge the two.
+    """
+    return (WEEKDAY_INDEX[weekday.lower()] + 1) % 7
+
+
 def next_weekday(target_weekday: str, today: date | None = None) -> date:
     """Return the next date matching target_weekday. If today is that weekday, return today + 7."""
     today = today or date.today()
