@@ -37,7 +37,9 @@ SELECT
     r.telegram_id AS player_id,
     i.indicator AS indicator,
     (SELECT COUNT(*) FROM scores s
-        WHERE s.player_id = r.telegram_id AND s.indicator = i.indicator) AS total
+        WHERE s.player_id = r.telegram_id AND s.indicator = i.indicator) AS total,
+    (SELECT COUNT(*) FROM scores s
+        WHERE s.voter_id = :voter AND s.player_id = r.telegram_id) AS voter_count
 FROM rateable r
 CROSS JOIN indicators i
 WHERE NOT EXISTS (
@@ -51,6 +53,7 @@ WHERE NOT EXISTS (
 ORDER BY
     (r.telegram_id = :exclude_player),
     total ASC,
+    voter_count ASC,
     r.telegram_id, i.indicator
 LIMIT 1
 """

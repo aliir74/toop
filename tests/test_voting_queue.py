@@ -121,6 +121,24 @@ def test_record_score_inserts(conn: sqlite3.Connection) -> None:
     assert row["score"] == 4
 
 
+def test_voter_count_interleaves_filler_picks(conn: sqlite3.Connection) -> None:
+    """When multiple players are tied on global total, the one this voter has
+    rated fewer times surfaces next — so the voter sees fresh faces instead of
+    cycling the same low-id player as the filler between exclude_player rounds."""
+    _seed_players(conn, 4)  # voter=1, targets=2,3,4 (ids ascending)
+    # Voter 1 scores player 2 and 3 each once (attack). Both now have voter_count=1.
+    # Player 4 still has voter_count=0.
+    record_score(conn, voter_id=1, player_id=2, indicator="attack", score=3)
+    record_score(conn, voter_id=1, player_id=3, indicator="attack", score=3)
+    # Excluding player 3: next should be player 4 (voter_count=0) not player 2 (voter_count=1).
+    t = select_next_score_target(conn, voter_id=1, exclude_player=3)
+    assert t is not None
+    assert t.player_id == 4, (
+        "voter_count tiebreaker should prefer player 4 (unvisited by this voter) "
+        f"over player 2 (already scored once); got player_id={t.player_id}"
+    )
+
+
 def test_record_score_is_editable(conn: sqlite3.Connection) -> None:
     _seed_players(conn, 2)
     record_score(conn, 1, 2, "attack", 4)
