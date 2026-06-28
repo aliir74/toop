@@ -4,7 +4,7 @@ import sqlite3
 from dataclasses import dataclass
 
 from toop.i18n import t
-from toop.rsvp import is_player_on_roster, upsert_rsvp
+from toop.rsvp import upsert_rsvp
 
 # Attendance poll options, in order. Index 0 (yes) means attending — the index
 # semantics are language-independent; only the labels are translated.
@@ -126,11 +126,10 @@ def record_attendance_answer(
     `option_ids` is what Telegram delivers: the chosen option indices, or an
     empty list when the voter retracts. A 'yes' (بلی) writes status='yes'; any
     other choice writes 'no'; a retraction removes the row entirely so the voter
-    counts as neither. Returns False (a no-op) when the voter isn't on the
-    roster, so off-roster taps never touch attendance.
+    counts as neither. The voter must already be a registered player — the poll
+    handler auto-registers unknown voters first — so every vote in the group
+    poll counts toward quorum/capacity, not just rostered players'. Returns True.
     """
-    if not is_player_on_roster(conn, voter_id):
-        return False
     if not option_ids:
         conn.execute(
             "DELETE FROM rsvps WHERE session_id=? AND telegram_id=?",
@@ -177,10 +176,9 @@ def record_reservation_answer(
     """Apply one reservation poll_answer to the waitlist.
 
     'مایل به لیست انتظار' (index 0) adds the voter; the other option or a
-    retraction removes them. No-op (False) for off-roster voters.
+    retraction removes them. The voter must already be a registered player (the
+    poll handler auto-registers unknown voters first). Returns True.
     """
-    if not is_player_on_roster(conn, voter_id):
-        return False
     if RESERVATION_WAITLIST_INDEX in option_ids:
         add_to_waitlist(conn, session_id, voter_id)
     else:

@@ -19,7 +19,7 @@ from toop.handlers.poll import (
 from toop.pause import pause_events_until
 from toop.players import add_player
 from toop.poll import add_to_waitlist, get_poll, list_waitlist, record_poll, set_quorum_announced
-from toop.rsvp import count_rsvps, upsert_rsvp
+from toop.rsvp import count_rsvps, is_player_on_roster, upsert_rsvp
 from toop.sessions import get_active_session, open_session
 
 
@@ -149,7 +149,11 @@ def _answer_update(poll_id: str, option_ids: tuple[int, ...], user_id: int | Non
     ans = MagicMock()
     ans.poll_id = poll_id
     ans.option_ids = option_ids
-    ans.user = MagicMock(id=user_id) if user_id is not None else None
+    ans.user = (
+        MagicMock(id=user_id, full_name=f"User {user_id}", username=None)
+        if user_id is not None
+        else None
+    )
     u.poll_answer = ans
     return u
 
@@ -159,6 +163,17 @@ async def test_poll_answer_records_yes(conn: sqlite3.Connection) -> None:
     add_player(conn, 1, "Alice", "alice")
     record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=1)
     await handle_poll_answer(_answer_update("p1", (0,), 1), _ctx(conn))
+    assert count_rsvps(conn, sess.id).yes == 1
+
+
+async def test_poll_answer_auto_registers_unknown_voter(conn: sqlite3.Connection) -> None:
+    # A group member who isn't on the roster yet still counts: the handler adds
+    # them so their vote lands in rsvps (the old roster gate dropped it).
+    sess = open_session(conn, date(2026, 5, 18))
+    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=1)
+    assert is_player_on_roster(conn, 999) is False
+    await handle_poll_answer(_answer_update("p1", (0,), 999), _ctx(conn))
+    assert is_player_on_roster(conn, 999) is True
     assert count_rsvps(conn, sess.id).yes == 1
 
 
