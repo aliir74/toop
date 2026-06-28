@@ -217,16 +217,16 @@ def _seed_yes(conn: sqlite3.Connection, session_id: int, n: int, start: int = 10
 async def test_quorum_fires_once(group_settings: None, conn: sqlite3.Connection) -> None:
     sess = open_session(conn, date(2026, 5, 18))
     record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
-    _seed_yes(conn, sess.id, 12)  # exactly at threshold; not yet over
+    _seed_yes(conn, sess.id, 9)  # one short of the 10-yes quorum
     add_player(conn, 200, "Quorum", "q")
     ctx = _bot_ctx(conn)
-    await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # yes -> 13 > 12
+    await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # yes -> 10 >= 10
     ctx.bot.send_message.assert_awaited_once()
     assert "Volleyball is on" in ctx.bot.send_message.await_args.kwargs["text"]
     ctx.bot.stop_poll.assert_not_called()
     poll = get_poll(conn, "p1")
     assert poll is not None and poll.quorum_announced is True
-    # Re-voting the same player keeps yes at 13: quorum must not re-announce.
+    # Re-voting the same player keeps yes at 10: quorum must not re-announce.
     await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)
     ctx.bot.send_message.assert_awaited_once()
 

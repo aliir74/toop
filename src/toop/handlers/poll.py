@@ -157,7 +157,7 @@ async def _maybe_fire_thresholds(
     if settings.GROUP_CHAT_ID == 0:
         return
     yes = count_rsvps(conn, poll.session_id).yes
-    if not poll.quorum_announced and yes > settings.QUORUM_THRESHOLD:
+    if not poll.quorum_announced and yes >= settings.QUORUM_THRESHOLD:
         await _safe_send(
             context,
             quorum_message(
