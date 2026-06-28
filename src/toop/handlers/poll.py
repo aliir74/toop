@@ -4,7 +4,7 @@ import logging
 import sqlite3
 from datetime import UTC, datetime
 
-from telegram import Update
+from telegram import Update, User
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 
@@ -19,6 +19,7 @@ from toop.drift import (
 )
 from toop.i18n import t
 from toop.pause import events_are_paused
+from toop.players import add_player
 from toop.poll import (
     PollRow,
     attendance_options,
@@ -35,7 +36,7 @@ from toop.poll import (
     set_cap_closed,
     set_quorum_announced,
 )
-from toop.rsvp import count_rsvps
+from toop.rsvp import count_rsvps, is_player_on_roster
 from toop.sessions import (
     Session,
     next_weekday,
@@ -51,6 +52,21 @@ def _conn(context: ContextTypes.DEFAULT_TYPE) -> sqlite3.Connection:
     if conn is None:
         raise RuntimeError("DB connection missing from bot_data")
     return conn
+
+
+def _ensure_voter_registered(conn: sqlite3.Connection, user: User) -> None:
+    """Auto-add a poll voter to the roster if they aren't already on it.
+
+    Group polls are bot-owned and only group members can answer, so every voter
+    is a real player. The rsvps/waitlist tables FK to players, and a roster gate
+    used to silently drop votes from anyone not yet added — which made quorum and
+    capacity undercount actual attendance (a 14-yes poll counted as 13).
+    Registering unknown voters first means every vote counts. Only fills in
+    unknown voters; never overwrites an existing player's admin-set name.
+    """
+    if is_player_on_roster(conn, user.id):
+        return
+    add_player(conn, user.id, user.full_name or str(user.id), user.username)
 
 
 async def _send_and_record_poll(
@@ -157,7 +173,7 @@ async def _maybe_fire_thresholds(
     if settings.GROUP_CHAT_ID == 0:
         return
     yes = count_rsvps(conn, poll.session_id).yes
-    if not poll.quorum_announced and yes > settings.QUORUM_THRESHOLD:
+    if not poll.quorum_announced and yes >= settings.QUORUM_THRESHOLD:
         await _safe_send(
             context,
             quorum_message(
@@ -216,6 +232,7 @@ async def handle_poll_answer(update: Update, context: ContextTypes.DEFAULT_TYPE)
     poll = get_poll(conn, answer.poll_id)
     if poll is None or answer.user is None:
         return
+    _ensure_voter_registered(conn, answer.user)
     option_ids = list(answer.option_ids)
     if poll.kind == "attendance":
         record_attendance_answer(conn, poll.session_id, answer.user.id, option_ids)

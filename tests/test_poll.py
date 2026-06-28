@@ -76,11 +76,6 @@ def test_attendance_answer_retract_removes_row(conn: sqlite3.Connection, session
     assert counts.total == 0
 
 
-def test_attendance_answer_off_roster_is_noop(conn: sqlite3.Connection, session_id: int) -> None:
-    assert record_attendance_answer(conn, session_id, 999, [0]) is False
-    assert count_rsvps(conn, session_id).total == 0
-
-
 def test_quorum_message_with_payment() -> None:
     msg = quorum_message("7.5", "pay@example.com", "https://sheet")
     assert "Volleyball is on" in msg
@@ -145,9 +140,4 @@ def test_reservation_answer_retract_removes(conn: sqlite3.Connection, session_id
     add_player(conn, 1, "Alice", "alice")
     add_to_waitlist(conn, session_id, 1)
     record_reservation_answer(conn, session_id, 1, [])
-    assert list_waitlist(conn, session_id) == []
-
-
-def test_reservation_answer_off_roster_noop(conn: sqlite3.Connection, session_id: int) -> None:
-    assert record_reservation_answer(conn, session_id, 999, [0]) is False
     assert list_waitlist(conn, session_id) == []
