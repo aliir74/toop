@@ -187,7 +187,7 @@ def _fa() -> dict[str, str]:
         "snapshot.calibration_conf": "اطمینان کالیبراسیون: *{conf}*",
         "snapshot.summary": (
             "اسنپ‌شات برای جلسه #{sid} ذخیره شد.{swap}\n"
-            "با /swap جابه‌جا کن یا با /change_player تنظیم کن، با /publish منتشر کن.{cut}"
+            "با `/swap` جابه‌جا کن یا با `/change_player` تنظیم کن، با `/publish` منتشر کن.{cut}"
         ),
         "snapshot.setter_swap": " (جابه‌جایی پاسور اعمال شد)",
         "snapshot.summary_cut": "\n\nخط‌خورده‌ها: {names}",
@@ -536,7 +536,7 @@ def _en() -> dict[str, str]:
         "snapshot.calibration_conf": "Calibration confidence: *{conf}*",
         "snapshot.summary": (
             "Snapshot saved for session #{sid}.{swap}\n"
-            "Swap with /swap or adjust with /change_player, ship with /publish.{cut}"
+            "Swap with `/swap` or adjust with `/change_player`, ship with `/publish`.{cut}"
         ),
         "snapshot.setter_swap": " (setter swap applied)",
         "snapshot.summary_cut": "\n\nCut: {names}",

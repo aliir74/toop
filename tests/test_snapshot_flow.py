@@ -10,6 +10,7 @@ from toop.balance import TeamMetrics
 from toop.config import Settings
 from toop.handlers.snapshot import (
     _format_attendance,
+    _format_snapshot_summary,
     _format_teams,
     handle_publish,
     handle_snapshot,
@@ -119,6 +120,10 @@ async def test_snapshot_renders_teams_inline(conn: sqlite3.Connection) -> None:
     assert "|" not in text
     assert "🅰️" in text and "🅱️" in text
     assert "\n1. " in text
+    # Commands in summary must be backtick-wrapped — bare /change_player
+    # contains an underscore that breaks Telegram Markdown v1 entity parsing.
+    assert "`/swap`" in text
+    assert "`/change_player`" in text
 
 
 def test_format_teams_escapes_markdown_in_names(conn: sqlite3.Connection) -> None:
@@ -141,6 +146,32 @@ def test_format_attendance_escapes_markdown_in_names(conn: sqlite3.Connection) -
     text = _format_attendance(conn, _snap([1], [2]))
     assert "Ali\\_I" in text and "Sina\\*K" in text
     assert "Ali_I" not in text
+
+
+def test_format_snapshot_summary_escapes_cut_names(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Ali_Ivan", "ali")
+    text = _format_snapshot_summary(conn, _snap([], []), [1])
+    assert "Ali\\_Ivan" in text
+    assert "Ali_Ivan" not in text
+
+
+async def test_swap_reply_escapes_player_names(conn: sqlite3.Connection) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    add_player(conn, 1, "Ali_A", "alia")
+    add_player(conn, 2, "Bob_B", "bobb")
+    upsert_rsvp(conn, sess.id, 1, "yes")
+    upsert_rsvp(conn, sess.id, 2, "yes")
+    await handle_snapshot(_admin_update(), _ctx(conn))
+    snap = get_snapshot(conn, sess.id)
+    assert snap is not None
+    id_to_user = {1: "alia", 2: "bobb"}
+    a_user = id_to_user[snap.team_a[0]]
+    b_user = id_to_user[snap.team_b[0]]
+    update = _admin_update()
+    await handle_swap(update, _ctx(conn, args=[f"@{a_user}", f"@{b_user}"]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Ali\\_A" in reply
+    assert "Bob\\_B" in reply
 
 
 def test_format_teams_handles_odd_team_sizes(conn: sqlite3.Connection) -> None:
