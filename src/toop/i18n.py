@@ -36,6 +36,27 @@ _INDICATORS: dict[str, dict[str, str]] = {
     },
 }
 
+# Compact indicator labels for the snapshot balance bars: short enough to keep each
+# bar row on a single line on a phone (the full labels above wrap).
+_INDICATORS_SHORT: dict[str, dict[str, str]] = {
+    "fa": {
+        "attack": "حمله",
+        "receive": "دریافت",
+        "block": "دفاع",
+        "setting": "پاسور",
+        "serve": "سرویس",
+        "positioning": "جاگیری",
+    },
+    "en": {
+        "attack": "Attack",
+        "receive": "Receive",
+        "block": "Block",
+        "setting": "Setting",
+        "serve": "Serve",
+        "positioning": "Position",
+    },
+}
+
 # Score 1-5 → scale word, per language. The numeric score only ever travels in
 # callback_data; players see these words on the buttons.
 _SCORES: dict[str, dict[int, str]] = {
@@ -185,6 +206,8 @@ def _fa() -> dict[str, str]:
         "snapshot.proposed": "📅 *{date}* — تیم‌های پیشنهادی",
         "snapshot.composite_delta": "اختلاف ترکیبی: *{delta:.3f}* (آ={a:.2f}، ب={b:.2f})",
         "snapshot.calibration_conf": "اطمینان کالیبراسیون: *{conf}*",
+        "snapshot.skill_balance_header": "⚖️ تعادل مهارت‌ها (نوار پُر و سبز = متعادل‌تر):",
+        "snapshot.skill_balance_legend": "🟩 متعادل · 🟨 قابل‌قبول · 🟥 نامتعادل",
         "snapshot.summary": (
             "اسنپ‌شات برای جلسه #{sid} ذخیره شد.{swap}\n"
             "با `/swap` جابه‌جا کن یا با `/change_player` تنظیم کن، با `/publish` منتشر کن.{cut}"
@@ -534,6 +557,8 @@ def _en() -> dict[str, str]:
         "snapshot.proposed": "📅 *{date}* — proposed teams",
         "snapshot.composite_delta": "Composite Δ: *{delta:.3f}* (A={a:.2f}, B={b:.2f})",
         "snapshot.calibration_conf": "Calibration confidence: *{conf}*",
+        "snapshot.skill_balance_header": "⚖️ Skill balance (fuller & greener = better balanced):",
+        "snapshot.skill_balance_legend": "🟩 balanced · 🟨 ok · 🟥 lopsided",
         "snapshot.summary": (
             "Snapshot saved for session #{sid}.{swap}\n"
             "Swap with `/swap` or adjust with `/change_player`, ship with `/publish`.{cut}"
@@ -761,6 +786,14 @@ def indicator_label(indicator: str, lang: str | None = None) -> str:
     """Human display name for a skill indicator (falls back to the raw code)."""
     chosen = _resolve_lang(lang)
     return _INDICATORS[chosen].get(indicator, indicator)
+
+
+def indicator_label_short(indicator: str, lang: str | None = None) -> str:
+    """Short display name for a skill indicator, used in the snapshot balance bars
+    where a compact label keeps each row on one line (falls back to the full
+    label, then the raw code)."""
+    chosen = _resolve_lang(lang)
+    return _INDICATORS_SHORT[chosen].get(indicator, indicator_label(indicator, chosen))
 
 
 def score_word(score: int, lang: str | None = None) -> str:
