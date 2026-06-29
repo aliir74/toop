@@ -200,32 +200,38 @@ def test_swap_players_raises_when_same_team() -> None:
         swap_players([1, 2, 3], [4, 5, 6], 1, 2)
 
 
+_BAR_LABELS = {ind: ind for ind in INDICATORS}  # identity labels for assertions
+
+
 def test_skill_balance_bars_one_row_per_skill() -> None:
-    bars = skill_balance_bars({}, {})
+    bars = skill_balance_bars({}, {}, _BAR_LABELS)
     lines = bars.splitlines()
     assert len(lines) == len(INDICATORS)
-    # Empty score dicts → every gap is 0.00 and fully balanced.
+    # Empty score dicts → every gap is 0.00 → a full green balance meter.
     for line in lines:
-        assert "0.00" in line
-        assert "🟢" in line
+        assert "(0.00)" in line
+        assert "🟩" * 5 in line
+        assert "⬜" not in line
 
 
-def test_skill_balance_bars_fairness_marks() -> None:
+def test_skill_balance_bars_fairness_colours() -> None:
     a = {"attack": 1.0, "receive": 0.6}  # other skills default to 0.0
     b: dict[str, float] = {}
-    rows = {line.split()[0]: line for line in skill_balance_bars(a, b).splitlines()}
-    assert "🟢" in rows["Block"]  # gap 0.00 → balanced
-    assert "🟡" in rows["Receive"]  # gap 0.60 → ok (0.40 < g ≤ 0.80)
-    assert "🔴" in rows["Attack"]  # gap 1.00 → lopsided (> 0.80)
+    rows = {
+        line.rsplit("  ", 2)[1]: line for line in skill_balance_bars(a, b, _BAR_LABELS).splitlines()
+    }
+    assert "🟩" in rows["block"]  # gap 0.00 → balanced (green fill)
+    assert "🟨" in rows["receive"]  # gap 0.60 → ok (0.40 < g ≤ 0.80)
+    assert "🟥" in rows["attack"]  # gap 1.00 → lopsided (> 0.80)
 
 
-def test_skill_balance_bars_caps_at_scale() -> None:
-    # A gap beyond `scale` fills the whole bar (no overflow past `width`).
-    a = {"attack": 9.0}
-    bars = skill_balance_bars(a, {}, width=10, scale=2.5)
-    attack_line = next(line for line in bars.splitlines() if line.startswith("Attack"))
-    assert attack_line.count("█") == 10
-    assert "░" not in attack_line
+def test_skill_balance_bars_lopsided_always_shows_red() -> None:
+    # A gap far beyond `scale` empties the meter, but a lopsided skill must still
+    # show at least one red square (never an all-white bar that hides the problem).
+    bars = skill_balance_bars({"attack": 9.0}, {}, _BAR_LABELS)
+    attack_line = next(line for line in bars.splitlines() if "attack" in line)
+    assert attack_line.count("🟥") == 1
+    assert attack_line.count("⬜") == 4
 
 
 def test_compute_metrics_recomputes_after_manual_swap(conn: sqlite3.Connection) -> None:

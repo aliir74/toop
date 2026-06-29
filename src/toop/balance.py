@@ -19,53 +19,58 @@ class TeamMetrics:
 
 
 # Per-skill balance display ----------------------------------------------------
-# English labels keep the bar columns aligned regardless of the bot's UI language:
-# Telegram renders ``` code blocks ``` left-to-right, so RTL (Persian) labels would
-# scramble the alignment. Volleyball skill names are widely understood in English.
-_SKILL_BAR_LABELS = {
-    "attack": "Attack",
-    "receive": "Receive",
-    "block": "Block",
-    "setting": "Setting",
-    "serve": "Serve",
-    "positioning": "Position",
-}
-_BAR_FILLED = "█"
-_BAR_EMPTY = "░"
+# A "balance meter" rendered with colour-emoji squares: fuller + greener = the two
+# teams are closer in that skill. Emoji squares render identically on every device
+# (no monospace needed) and stay correct under RTL, unlike block-glyph bars in a
+# code fence. The fairness colour lives in the bar itself.
+_BAR_WIDTH = 5
+_BAR_SCALE = 1.5  # a gap of this much empties the bar; tuned for the small gaps the
+# weighted-per-skill objective produces, so typical skills read as mostly-full green.
+_FILL_BALANCED = "🟩"
+_FILL_OK = "🟨"
+_FILL_LOPSIDED = "🟥"
+_BAR_TRACK = "⬜"
 # Fairness thresholds mirror the HTML comparison report (green ≤0.40, amber ≤0.80).
 _FAIR_BALANCED = 0.40
 _FAIR_OK = 0.80
+# Wrap the bar in a left-to-right isolate so the square order never flips inside an
+# RTL (Persian) message.
+_LRI = "⁦"
+_PDI = "⁩"
 
 
-def _fairness_mark(gap: float) -> str:
+def _fill_emoji(gap: float) -> str:
     if gap <= _FAIR_BALANCED:
-        return "🟢"
+        return _FILL_BALANCED
     if gap <= _FAIR_OK:
-        return "🟡"
-    return "🔴"
+        return _FILL_OK
+    return _FILL_LOPSIDED
 
 
 def skill_balance_bars(
     per_indicator_a: dict[str, float],
     per_indicator_b: dict[str, float],
+    labels: dict[str, str],
     *,
-    width: int = 12,
-    scale: float = 2.5,
+    width: int = _BAR_WIDTH,
+    scale: float = _BAR_SCALE,
 ) -> str:
-    """Monospace per-skill gap bars: one row per skill, bar length = how far apart
-    the two teams are in that skill (shorter = more balanced), with the numeric gap
-    and a fairness dot. Returned WITHOUT code-block fences so the caller can wrap it
-    for its channel. Mirrors the HTML balance report so the group can see, at a
-    glance, that every skill is close between the teams.
+    """Per-skill balance meter, one row per skill: a colour-emoji bar (fuller +
+    greener = the teams are closer in that skill), the localised skill label, and
+    the numeric gap. `labels` maps each indicator to its display name. Returned
+    without a header/legend so the caller can wrap it for its channel; mirrors the
+    HTML balance report so the group can see, at a glance, that every skill is
+    close between the teams.
     """
-    label_w = max(len(v) for v in _SKILL_BAR_LABELS.values())
     lines = []
     for ind in INDICATORS:
         gap = abs(per_indicator_a.get(ind, 0.0) - per_indicator_b.get(ind, 0.0))
-        filled = round(min(gap, scale) / scale * width)
-        bar = _BAR_FILLED * filled + _BAR_EMPTY * (width - filled)
-        label = _SKILL_BAR_LABELS[ind].ljust(label_w)
-        lines.append(f"{label}  {bar}  {gap:4.2f} {_fairness_mark(gap)}")
+        balance = 1.0 - min(gap, scale) / scale  # 1.0 = teams identical in this skill
+        filled = round(balance * width)
+        if filled == 0 and gap > _FAIR_OK:
+            filled = 1  # a lopsided skill always shows at least one red square
+        bar = _fill_emoji(gap) * filled + _BAR_TRACK * (width - filled)
+        lines.append(f"{_LRI}{bar}{_PDI}  {labels[ind]}  ({gap:.2f})")
     return "\n".join(lines)
 
 

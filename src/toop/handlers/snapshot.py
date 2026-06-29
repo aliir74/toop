@@ -18,10 +18,10 @@ from toop.balance import (
     swap_players,
 )
 from toop.config import settings
-from toop.i18n import t
+from toop.i18n import indicator_label_short, t
 from toop.pause import events_are_paused
 from toop.players import Player
-from toop.rating import refresh_ratings
+from toop.rating import INDICATORS, refresh_ratings
 from toop.selection import select_attendees
 from toop.sessions import get_active_session, set_session_status
 from toop.snapshots import (
@@ -144,13 +144,14 @@ def _format_teams(conn: sqlite3.Connection, snap: Snapshot, session_date: str) -
     a_block = _team_block(t("snapshot.team_a_label"), _names(conn, snap.team_a))
     b_block = _team_block(t("snapshot.team_b_label"), _names(conn, snap.team_b))
     metrics = snap.metrics
-    bars = skill_balance_bars(metrics.per_indicator_a, metrics.per_indicator_b)
+    labels = {ind: indicator_label_short(ind) for ind in INDICATORS}
+    bars = skill_balance_bars(metrics.per_indicator_a, metrics.per_indicator_b, labels)
     return (
         t("snapshot.proposed", date=session_date) + "\n\n"
         f"{a_block}\n\n{b_block}\n\n"
         + t("snapshot.skill_balance_header")
         + "\n"
-        + f"```\n{bars}\n```\n"
+        + f"{bars}\n"
         + t("snapshot.skill_balance_legend")
         + "\n\n"
         + t(

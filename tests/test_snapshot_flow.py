@@ -119,10 +119,9 @@ async def test_snapshot_renders_teams_inline(conn: sqlite3.Connection) -> None:
     assert "|" not in text
     assert "🅰️" in text and "🅱️" in text
     assert "\n1. " in text
-    # Per-skill balance bars render in a code fence so the columns stay aligned.
+    # Per-skill balance meter: emoji-square bars (no code fence, no monospace).
     assert "Skill balance" in text
-    assert "```" in text
-    assert "░" in text
+    assert "🟩" in text or "⬜" in text
     # Commands in summary must be backtick-wrapped — bare /change_player
     # contains an underscore that breaks Telegram Markdown v1 entity parsing.
     assert "`/swap`" in text
