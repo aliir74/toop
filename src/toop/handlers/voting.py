@@ -14,9 +14,11 @@ from telegram.error import BadRequest, Forbidden
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
-from toop.contacts import upsert_contact
+from toop.config import settings
+from toop.contacts import get_contact, upsert_contact
 from toop.i18n import indicator_label, score_word, t
 from toop.players import Player
+from toop.sessions import get_active_session
 from toop.voting_queue import (
     ScoreTarget,
     record_score,
@@ -163,8 +165,11 @@ async def _send_next_prompt(
     edit_message_id: int | None = None,
     exclude_player: int | None = None,
     current_is_photo: bool = False,
+    session_id: int | None = None,
 ) -> None:
-    target = select_next_score_target(conn, voter_id, exclude_player=exclude_player)
+    target = select_next_score_target(
+        conn, voter_id, exclude_player=exclude_player, session_id=session_id
+    )
     if target is None:
         await _show_no_prompts(context, chat_id, edit_message_id, current_is_photo)
         return
@@ -219,7 +224,10 @@ async def _safe_delete(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message
 
 
 async def _try_dm_voter(
-    conn: sqlite3.Connection, context: ContextTypes.DEFAULT_TYPE, user_id: int
+    conn: sqlite3.Connection,
+    context: ContextTypes.DEFAULT_TYPE,
+    user_id: int,
+    session_id: int | None = None,
 ) -> bool:
     """DM the voter their next prompt (or a nudge). Returns True if the DM landed.
 
@@ -227,7 +235,9 @@ async def _try_dm_voter(
     """
     try:
         if _get_player(conn, user_id) is not None:
-            await _send_next_prompt(conn, context, chat_id=user_id, voter_id=user_id)
+            await _send_next_prompt(
+                conn, context, chat_id=user_id, voter_id=user_id, session_id=session_id
+            )
         else:
             await context.bot.send_message(chat_id=user_id, text=t("vote.group_dm_nudge"))
         return True
@@ -263,11 +273,13 @@ async def handle_vote_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     if message is None or chat is None or user is None:
         return
     conn = _conn(context)
+    active = get_active_session(conn)
+    session_id = active.id if active else None
     if chat.type != ChatType.PRIVATE:
         # Never leave a standing reply in the group: it quotes the /vote and
         # orphans into "Deleted message" chatter when the player tidies up.
         # Instead push the prompt into a DM and clear the command from the group.
-        dm_sent = await _try_dm_voter(conn, context, user.id)
+        dm_sent = await _try_dm_voter(conn, context, user.id, session_id=session_id)
         await _safe_delete(context, chat.id, message.message_id)
         if not dm_sent:
             await _post_transient_group_nudge(context, chat.id, user, context.bot.username)
@@ -275,7 +287,7 @@ async def handle_vote_command(update: Update, context: ContextTypes.DEFAULT_TYPE
     if _get_player(conn, user.id) is None:
         await message.reply_text(t("vote.not_on_roster"))
         return
-    await _send_next_prompt(conn, context, chat_id=chat.id, voter_id=user.id)
+    await _send_next_prompt(conn, context, chat_id=chat.id, voter_id=user.id, session_id=session_id)
 
 
 async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -294,6 +306,8 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     payload = query.data.removeprefix(CALLBACK_PREFIX)
     parts = payload.split(":")
     action = parts[0]
+    active = get_active_session(conn)
+    session_id = active.id if active else None
 
     if action == "sk":
         if len(parts) < 2:
@@ -313,6 +327,7 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             edit_message_id=message_id,
             exclude_player=player_id,
             current_is_photo=current_is_photo,
+            session_id=session_id,
         )
         return
 
@@ -330,7 +345,7 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             await query.answer()
             return
         if action == "dk":
-            record_skip(conn, voter_id, player_id, indicator)
+            record_skip(conn, voter_id, player_id, indicator, session_id=session_id)
             await query.answer(t("vote.answer_dk"))
         else:
             try:
@@ -353,6 +368,7 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             edit_message_id=message_id,
             exclude_player=player_id,
             current_is_photo=current_is_photo,
+            session_id=session_id,
         )
         return
 
@@ -367,15 +383,38 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if chat.type == ChatType.PRIVATE:
         user = update.effective_user
         if user is not None:
-            upsert_contact(
-                _conn(context),
-                user.id,
-                username=user.username,
-                display_name=user.full_name,
-            )
+            conn = _conn(context)
+            is_new = get_contact(conn, user.id) is None
+            upsert_contact(conn, user.id, username=user.username, display_name=user.full_name)
+            if is_new and settings.GROUP_CHAT_ID:
+                await _notify_group_new_contact(context, conn, user.full_name)
         await message.reply_text(t("vote.start_dm"))
     else:
         await message.reply_text(t("vote.start_group"))
+
+
+async def _notify_group_new_contact(
+    context: ContextTypes.DEFAULT_TYPE,
+    conn: sqlite3.Connection,
+    display_name: str,
+) -> None:
+    """Post a group notice when a new contact DMs /start and an attendance poll is live."""
+    poll_open = conn.execute(
+        "SELECT 1 FROM session_polls sp "
+        "JOIN sessions s ON s.id = sp.session_id "
+        "WHERE sp.kind = 'attendance' AND sp.closed = 0 "
+        "AND s.status IN ('open', 'snapshotted', 'published') "
+        "LIMIT 1"
+    ).fetchone()
+    if poll_open is None:
+        return
+    try:
+        await context.bot.send_message(
+            chat_id=settings.GROUP_CHAT_ID,
+            text=t("contact.new_player_notify", name=display_name),
+        )
+    except Exception as exc:
+        logger.warning("could not send new-contact group notice: %s", exc)
 
 
 def _build_nudge_templates(conn: sqlite3.Connection, limit: int = 5) -> list[str]:

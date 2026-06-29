@@ -105,13 +105,17 @@ CREATE TABLE IF NOT EXISTS scores (
     CHECK (voter_id != player_id)
 );
 
--- Voter-side "skip / 🤷 don't know" dedupe. Carries no score; only prevents the
--- (voter, player, indicator) target from being re-asked.
+-- Voter-side "skip / 🤷 don't know" dedupe. Carries no score; prevents the
+-- (voter, player, indicator) target from being re-asked within the same session.
+-- session_id ties the skip to the active session so it resets automatically
+-- when a new session opens — the query filters by current session_id, so a skip
+-- from session N is invisible to session N+1 without any cleanup job.
 CREATE TABLE IF NOT EXISTS score_skips (
     voter_id        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
     player_id       INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
     indicator       TEXT NOT NULL CHECK (indicator IN
                         ('attack', 'receive', 'block', 'setting', 'serve', 'positioning')),
+    session_id      INTEGER REFERENCES sessions(id) ON DELETE SET NULL,
     skipped_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (voter_id, player_id, indicator),
     CHECK (voter_id != player_id)

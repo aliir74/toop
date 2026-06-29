@@ -387,6 +387,10 @@ def _fa() -> dict[str, str]:
         # --- alerts ---
         "alert.header": "⚠️ بازیکنان سخت‌امتیاز (🤷 زیاد). توقف امتیازدهی به آن‌ها را در نظر بگیر:",
         "alert.row": "• {name} — {dk}/{total} نمی‌دانم ({pct}%) → /pause_voting {id} {days}d",
+        # --- new contact notification ---
+        "contact.new_player_notify": (
+            "🏐 {name} به گروه ملحق شد! اگر هنوز در نظرسنجی رای نداده‌اید، فرصت دارید رای بدهید."
+        ),
         # --- ops ---
         "ops.version": "توپ کامیت `{sha}` · کارکرد {uptime}",
         "ops.db_not_found": "فایل پایگاه‌داده در {path} پیدا نشد",
@@ -719,6 +723,10 @@ def _en() -> dict[str, str]:
         "coverage.row": "• {name} — {labels}",
         "alert.header": "⚠️ Hard-to-rate players (lots of 🤷). Consider pausing them from voting:",
         "alert.row": "• {name} — {dk}/{total} don't-know ({pct}%) → /pause_voting {id} {days}d",
+        "contact.new_player_notify": (
+            "🏐 {name} just joined!"
+            " If you haven't voted in the poll yet, you can still cast your vote."
+        ),
         "ops.version": "توپ commit `{sha}` · uptime {uptime}",
         "ops.db_not_found": "DB file not found at {path}",
         "ops.backup_saved": "💾 Backup saved → `{path}` ({kb} KB)",
