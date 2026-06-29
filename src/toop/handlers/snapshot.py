@@ -14,6 +14,7 @@ from toop.balance import (
     TeamMetrics,
     compute_metrics,
     generate_teams,
+    skill_balance_bars,
     swap_players,
 )
 from toop.config import settings
@@ -143,9 +144,15 @@ def _format_teams(conn: sqlite3.Connection, snap: Snapshot, session_date: str) -
     a_block = _team_block(t("snapshot.team_a_label"), _names(conn, snap.team_a))
     b_block = _team_block(t("snapshot.team_b_label"), _names(conn, snap.team_b))
     metrics = snap.metrics
+    bars = skill_balance_bars(metrics.per_indicator_a, metrics.per_indicator_b)
     return (
         t("snapshot.proposed", date=session_date) + "\n\n"
         f"{a_block}\n\n{b_block}\n\n"
+        + t("snapshot.skill_balance_header")
+        + "\n"
+        + f"```\n{bars}\n```\n"
+        + t("snapshot.skill_balance_legend")
+        + "\n\n"
         + t(
             "snapshot.composite_delta",
             delta=metrics.abs_delta,

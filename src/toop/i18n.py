@@ -185,6 +185,8 @@ def _fa() -> dict[str, str]:
         "snapshot.proposed": "📅 *{date}* — تیم‌های پیشنهادی",
         "snapshot.composite_delta": "اختلاف ترکیبی: *{delta:.3f}* (آ={a:.2f}، ب={b:.2f})",
         "snapshot.calibration_conf": "اطمینان کالیبراسیون: *{conf}*",
+        "snapshot.skill_balance_header": "⚖️ تعادل مهارت‌ها (نوار کوتاه‌تر = متعادل‌تر):",
+        "snapshot.skill_balance_legend": "🟢 متعادل · 🟡 قابل‌قبول · 🔴 نامتعادل",
         "snapshot.summary": (
             "اسنپ‌شات برای جلسه #{sid} ذخیره شد.{swap}\n"
             "با `/swap` جابه‌جا کن یا با `/change_player` تنظیم کن، با `/publish` منتشر کن.{cut}"
@@ -534,6 +536,8 @@ def _en() -> dict[str, str]:
         "snapshot.proposed": "📅 *{date}* — proposed teams",
         "snapshot.composite_delta": "Composite Δ: *{delta:.3f}* (A={a:.2f}, B={b:.2f})",
         "snapshot.calibration_conf": "Calibration confidence: *{conf}*",
+        "snapshot.skill_balance_header": "⚖️ Skill balance (shorter bar = better balanced):",
+        "snapshot.skill_balance_legend": "🟢 balanced · 🟡 ok · 🔴 lopsided",
         "snapshot.summary": (
             "Snapshot saved for session #{sid}.{swap}\n"
             "Swap with `/swap` or adjust with `/change_player`, ship with `/publish`.{cut}"

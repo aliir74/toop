@@ -7,6 +7,7 @@ import pytest
 from toop.balance import (
     compute_metrics,
     generate_teams,
+    skill_balance_bars,
     swap_players,
 )
 from toop.players import add_player
@@ -197,6 +198,34 @@ def test_swap_players_reverse_args() -> None:
 def test_swap_players_raises_when_same_team() -> None:
     with pytest.raises(ValueError):
         swap_players([1, 2, 3], [4, 5, 6], 1, 2)
+
+
+def test_skill_balance_bars_one_row_per_skill() -> None:
+    bars = skill_balance_bars({}, {})
+    lines = bars.splitlines()
+    assert len(lines) == len(INDICATORS)
+    # Empty score dicts → every gap is 0.00 and fully balanced.
+    for line in lines:
+        assert "0.00" in line
+        assert "🟢" in line
+
+
+def test_skill_balance_bars_fairness_marks() -> None:
+    a = {"attack": 1.0, "receive": 0.6}  # other skills default to 0.0
+    b: dict[str, float] = {}
+    rows = {line.split()[0]: line for line in skill_balance_bars(a, b).splitlines()}
+    assert "🟢" in rows["Block"]  # gap 0.00 → balanced
+    assert "🟡" in rows["Receive"]  # gap 0.60 → ok (0.40 < g ≤ 0.80)
+    assert "🔴" in rows["Attack"]  # gap 1.00 → lopsided (> 0.80)
+
+
+def test_skill_balance_bars_caps_at_scale() -> None:
+    # A gap beyond `scale` fills the whole bar (no overflow past `width`).
+    a = {"attack": 9.0}
+    bars = skill_balance_bars(a, {}, width=10, scale=2.5)
+    attack_line = next(line for line in bars.splitlines() if line.startswith("Attack"))
+    assert attack_line.count("█") == 10
+    assert "░" not in attack_line
 
 
 def test_compute_metrics_recomputes_after_manual_swap(conn: sqlite3.Connection) -> None:

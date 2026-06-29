@@ -18,6 +18,57 @@ class TeamMetrics:
     setter_swap_applied: bool
 
 
+# Per-skill balance display ----------------------------------------------------
+# English labels keep the bar columns aligned regardless of the bot's UI language:
+# Telegram renders ``` code blocks ``` left-to-right, so RTL (Persian) labels would
+# scramble the alignment. Volleyball skill names are widely understood in English.
+_SKILL_BAR_LABELS = {
+    "attack": "Attack",
+    "receive": "Receive",
+    "block": "Block",
+    "setting": "Setting",
+    "serve": "Serve",
+    "positioning": "Position",
+}
+_BAR_FILLED = "█"
+_BAR_EMPTY = "░"
+# Fairness thresholds mirror the HTML comparison report (green ≤0.40, amber ≤0.80).
+_FAIR_BALANCED = 0.40
+_FAIR_OK = 0.80
+
+
+def _fairness_mark(gap: float) -> str:
+    if gap <= _FAIR_BALANCED:
+        return "🟢"
+    if gap <= _FAIR_OK:
+        return "🟡"
+    return "🔴"
+
+
+def skill_balance_bars(
+    per_indicator_a: dict[str, float],
+    per_indicator_b: dict[str, float],
+    *,
+    width: int = 12,
+    scale: float = 2.5,
+) -> str:
+    """Monospace per-skill gap bars: one row per skill, bar length = how far apart
+    the two teams are in that skill (shorter = more balanced), with the numeric gap
+    and a fairness dot. Returned WITHOUT code-block fences so the caller can wrap it
+    for its channel. Mirrors the HTML balance report so the group can see, at a
+    glance, that every skill is close between the teams.
+    """
+    label_w = max(len(v) for v in _SKILL_BAR_LABELS.values())
+    lines = []
+    for ind in INDICATORS:
+        gap = abs(per_indicator_a.get(ind, 0.0) - per_indicator_b.get(ind, 0.0))
+        filled = round(min(gap, scale) / scale * width)
+        bar = _BAR_FILLED * filled + _BAR_EMPTY * (width - filled)
+        label = _SKILL_BAR_LABELS[ind].ljust(label_w)
+        lines.append(f"{label}  {bar}  {gap:4.2f} {_fairness_mark(gap)}")
+    return "\n".join(lines)
+
+
 def _composite_for_team(scores: dict[int, float], team: list[int]) -> float:
     return sum(scores[pid] for pid in team)
 

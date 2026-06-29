@@ -114,12 +114,15 @@ async def test_snapshot_renders_teams_inline(conn: sqlite3.Connection) -> None:
     text = update.effective_message.reply_text.await_args.args[0]
     assert "Team A" in text and "Team B" in text
     assert "Snapshot saved" in text
-    # Vertical lists, not a side-by-side column table: no code fence, no
+    # Rosters are vertical numbered lists, not a side-by-side column table: no
     # column separator, each team labelled on its own line, names numbered.
-    assert "```" not in text
     assert "|" not in text
     assert "🅰️" in text and "🅱️" in text
     assert "\n1. " in text
+    # Per-skill balance bars render in a code fence so the columns stay aligned.
+    assert "Skill balance" in text
+    assert "```" in text
+    assert "░" in text
     # Commands in summary must be backtick-wrapped — bare /change_player
     # contains an underscore that breaks Telegram Markdown v1 entity parsing.
     assert "`/swap`" in text
