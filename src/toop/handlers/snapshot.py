@@ -161,7 +161,10 @@ def _format_snapshot_summary(conn: sqlite3.Connection, snap: Snapshot, cut: list
     cut_note = ""
     if cut:
         cut_names = [
-            (_fetch_player(conn, pid) or Player(pid, None, f"#{pid}", True, True)).display_name
+            escape_markdown(
+                (_fetch_player(conn, pid) or Player(pid, None, f"#{pid}", True, True)).display_name,
+                version=1,
+            )
             for pid in cut
         ]
         cut_note = t("snapshot.summary_cut", names=", ".join(cut_names))
@@ -271,7 +274,12 @@ async def handle_swap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         sess.session_date.isoformat(),
     )
     await message.reply_text(
-        t("snapshot.swapped", a=player_a.display_name, b=player_b.display_name, text=text),
+        t(
+            "snapshot.swapped",
+            a=escape_markdown(player_a.display_name, version=1),
+            b=escape_markdown(player_b.display_name, version=1),
+            text=text,
+        ),
         parse_mode="Markdown",
     )
 
