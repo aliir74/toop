@@ -46,6 +46,9 @@ async def test_auto_snapshot_dms_admin(conn: sqlite3.Connection) -> None:
     kwargs = ctx.bot.send_message.await_args.kwargs
     assert kwargs["chat_id"] == 42
     assert "Auto-snapshot" in kwargs["text"]
+    # The DM must include the proposed-teams preview, not just a confirmation.
+    assert "proposed teams" in kwargs["text"]
+    assert kwargs["parse_mode"] == "Markdown"
     active = get_active_session(conn)
     assert active is not None and active.status == "snapshotted"
 

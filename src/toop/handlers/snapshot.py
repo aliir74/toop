@@ -210,11 +210,15 @@ async def auto_snapshot_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     if settings.ADMIN_TELEGRAM_ID == 0:
         logger.warning("auto_snapshot: ADMIN_TELEGRAM_ID unset; not DMing")
         return
+    sess = get_active_session(conn)
+    assert sess is not None  # take_snapshot just set this session to "snapshotted"
     summary = _format_snapshot_summary(conn, snap, cut)
+    teams = _format_teams(conn, snap, sess.session_date.isoformat())
     try:
         await context.bot.send_message(
             chat_id=settings.ADMIN_TELEGRAM_ID,
-            text=t("snapshot.auto_ran", summary=summary),
+            text=t("snapshot.auto_ran", summary=f"{summary}\n\n{teams}"),
+            parse_mode="Markdown",
         )
     except TelegramError as exc:
         logger.warning("auto_snapshot: failed to DM admin: %s", exc)
