@@ -49,6 +49,7 @@ WHERE NOT EXISTS (
   AND NOT EXISTS (
         SELECT 1 FROM score_skips sk
         WHERE sk.voter_id = :voter AND sk.player_id = r.telegram_id AND sk.indicator = i.indicator
+          AND sk.session_id = :session_id
     )
 ORDER BY
     (r.telegram_id = :exclude_player),
@@ -63,11 +64,18 @@ def select_next_score_target(
     conn: sqlite3.Connection,
     voter_id: int,
     exclude_player: int | None = None,
+    session_id: int | None = None,
 ) -> ScoreTarget | None:
     """Return the next (player, indicator) the voter should rate, or None when
-    they've covered everyone."""
+    they've covered everyone.
+
+    session_id scopes the ندیدمش skips: only skips recorded for the current
+    session are excluded. NULL session_id never matches (SQL NULL != NULL), so
+    skips from a prior session are transparently ignored without any cleanup.
+    """
     row = conn.execute(
-        _NEXT_TARGET_SQL, {"voter": voter_id, "exclude_player": exclude_player}
+        _NEXT_TARGET_SQL,
+        {"voter": voter_id, "exclude_player": exclude_player, "session_id": session_id},
     ).fetchone()
     if row is None:
         return None
@@ -114,18 +122,25 @@ def record_skip(
     voter_id: int,
     player_id: int,
     indicator: str,
+    session_id: int | None = None,
 ) -> None:
     """Voter declined to rate this target (🤷 ندیدمش). Records a dedupe row so it
-    isn't re-asked; stores no score."""
+    isn't re-asked within the same session. The session_id is updated on conflict
+    so a skip carries the current session — if the voter skips again next session
+    the row is refreshed and the filter picks up the new session_id.
+    """
     if indicator not in _VALID_INDICATORS:
         raise ValueError(f"unknown indicator {indicator!r}")
     if voter_id == player_id:
         raise ValueError("a voter cannot skip themselves")
     conn.execute(
         """
-        INSERT OR IGNORE INTO score_skips (voter_id, player_id, indicator)
-        VALUES (?, ?, ?)
+        INSERT INTO score_skips (voter_id, player_id, indicator, session_id)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(voter_id, player_id, indicator) DO UPDATE SET
+            session_id = excluded.session_id,
+            skipped_at = CURRENT_TIMESTAMP
         """,
-        (voter_id, player_id, indicator),
+        (voter_id, player_id, indicator, session_id),
     )
     conn.commit()

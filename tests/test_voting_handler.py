@@ -7,6 +7,7 @@ import pytest
 from telegram.constants import ChatType
 from telegram.error import BadRequest, Forbidden
 
+from toop.config import settings
 from toop.handlers.voting import (
     _conn,
     _send_next_prompt,
@@ -415,6 +416,65 @@ async def test_nudge_with_players(
     reply = update.effective_message.reply_text.await_args.args[0]
     assert "nudge" in reply.lower()
     assert "Alice" in reply
+
+
+def _open_attendance_poll(conn: sqlite3.Connection) -> None:
+    conn.execute("INSERT INTO sessions (session_date, status) VALUES ('2099-01-01', 'open')")
+    conn.commit()
+    sid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
+    conn.execute(
+        "INSERT INTO session_polls (poll_id, session_id, kind) VALUES ('p1', ?, 'attendance')",
+        (sid,),
+    )
+    conn.commit()
+
+
+async def test_start_new_contact_with_open_poll_sends_group_notice(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "GROUP_CHAT_ID", -100456)
+    _open_attendance_poll(conn)
+    ctx = _ctx(conn)
+    await handle_start(_dm_update(user_id=77), ctx)
+    ctx.bot.send_message.assert_awaited_once()
+    args = ctx.bot.send_message.await_args
+    assert args.kwargs["chat_id"] == -100456
+    assert "User 77" in args.kwargs["text"]
+
+
+async def test_start_new_contact_no_open_poll_no_group_notice(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "GROUP_CHAT_ID", -100456)
+    # No session / poll in DB.
+    ctx = _ctx(conn)
+    await handle_start(_dm_update(user_id=77), ctx)
+    ctx.bot.send_message.assert_not_awaited()
+
+
+async def test_start_existing_contact_no_group_notice(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "GROUP_CHAT_ID", -100456)
+    _open_attendance_poll(conn)
+    ctx = _ctx(conn)
+    # First /start registers the contact.
+    await handle_start(_dm_update(user_id=77), ctx)
+    ctx.bot.send_message.reset_mock()
+    # Second /start: already known, no group notice.
+    await handle_start(_dm_update(user_id=77), ctx)
+    ctx.bot.send_message.assert_not_awaited()
+
+
+async def test_notify_group_new_contact_swallows_send_failure(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(settings, "GROUP_CHAT_ID", -100456)
+    _open_attendance_poll(conn)
+    ctx = _ctx(conn)
+    ctx.bot.send_message = AsyncMock(side_effect=Exception("network error"))
+    # Must not raise even if send_message fails.
+    await handle_start(_dm_update(user_id=77), ctx)
 
 
 def _patch_selector(monkeypatch: pytest.MonkeyPatch, target: ScoreTarget | None) -> None:

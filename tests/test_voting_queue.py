@@ -44,10 +44,14 @@ def test_selector_never_targets_self(conn: sqlite3.Connection) -> None:
 
 def test_selector_excludes_scored_and_skipped(conn: sqlite3.Connection) -> None:
     _seed_players(conn, 2)
+    # Create a session so the session-scoped skip filter can match.
+    conn.execute("INSERT INTO sessions (session_date, status) VALUES ('2099-01-01', 'open')")
+    conn.commit()
+    sid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     record_score(conn, 1, 2, "attack", 4)
-    record_skip(conn, 1, 2, "receive")
+    record_skip(conn, 1, 2, "receive", session_id=sid)
     remaining = set()
-    while (t := select_next_score_target(conn, voter_id=1)) is not None:
+    while (t := select_next_score_target(conn, voter_id=1, session_id=sid)) is not None:
         remaining.add(t.indicator)
         record_score(conn, 1, 2, t.indicator, 3)
     assert "attack" not in remaining
