@@ -39,13 +39,76 @@ def _seed_balanced(conn: sqlite3.Connection, n: int) -> None:
             _set_rating(conn, i, ind, base)
 
 
-def test_snake_draft_14_split_seven_seven(conn: sqlite3.Connection) -> None:
+def _set_composite(conn: sqlite3.Connection, pid: int, score: float, calibrated: int = 1) -> None:
+    """Set all 6 indicators to score so composite == score under equal weights (w=1/6)."""
+    for ind in INDICATORS:
+        _set_rating(conn, pid, ind, score, calibrated)
+
+
+def test_generate_teams_14_split_seven_seven(conn: sqlite3.Connection) -> None:
     _seed_balanced(conn, 14)
     team_a, team_b, metrics = generate_teams(conn, list(range(1, 15)), WEIGHTS)
     assert len(team_a) == 7
     assert len(team_b) == 7
     assert set(team_a).isdisjoint(team_b)
-    assert metrics.abs_delta < 0.5
+    assert metrics.abs_delta < 0.1
+
+
+def test_optimal_beats_snake_skewed_13_players(conn: sqlite3.Connection) -> None:
+    """Snake draft gives delta=9 on this score distribution; optimal gives delta≤1.
+
+    Scores: one elite (10), three mid (5,5,5), one good (4), nine zeros.
+    Snake: A={10,5,4,0,0,0,0}=19, B={5,5,0,0,0,0}=10 → delta=9
+    Optimal: B={10,4,0,0,0,0}=14, A={5,5,5,0,0,0,0}=15 → delta=1
+    """
+    scores = [10, 5, 5, 5, 4, 0, 0, 0, 0, 0, 0, 0, 0]
+    for i, score in enumerate(scores, start=1):
+        add_player(conn, i, f"P{i}", f"p{i}")
+        _set_composite(conn, i, score)
+
+    team_a, team_b, metrics = generate_teams(conn, list(range(1, 14)), WEIGHTS)
+    assert len(team_a) == 7
+    assert len(team_b) == 6
+    assert set(team_a).isdisjoint(team_b)
+    assert metrics.abs_delta < 2.0  # snake would give 9; optimal gives 1
+
+
+def test_balances_each_skill_not_just_composite(conn: sqlite3.Connection) -> None:
+    """The whole point of the weighted-per-skill objective: a split with a perfect
+    composite total but one lopsided skill must be rejected in favour of one that
+    balances every skill.
+
+    Construct two "attack specialists" and two "block specialists" plus fillers.
+    Putting both attackers on one team and both blockers on the other gives a
+    perfect composite (the skills cancel) but a brutal per-skill gap. The optimal
+    split must instead spread one attacker and one blocker onto each team.
+    """
+    # P1,P2: high attack, low block.  P3,P4: low attack, high block.  P5,P6: neutral.
+    specs = {
+        1: {"attack": 2.0, "block": -2.0},
+        2: {"attack": 2.0, "block": -2.0},
+        3: {"attack": -2.0, "block": 2.0},
+        4: {"attack": -2.0, "block": 2.0},
+        5: {"attack": 0.0, "block": 0.0},
+        6: {"attack": 0.0, "block": 0.0},
+    }
+    for pid, sk in specs.items():
+        add_player(conn, pid, f"P{pid}", f"p{pid}")
+        for ind in INDICATORS:
+            _set_rating(conn, pid, ind, sk.get(ind, 0.0))
+
+    team_a, team_b, _ = generate_teams(conn, [1, 2, 3, 4, 5, 6], WEIGHTS)
+
+    # Each team must get exactly one attacker (1 or 2) and one blocker (3 or 4),
+    # never both specialists of one kind together.
+    a_attackers = len({1, 2} & set(team_a))
+    a_blockers = len({3, 4} & set(team_a))
+    assert a_attackers == 1, f"attackers split unevenly: Team A has {a_attackers}"
+    assert a_blockers == 1, f"blockers split unevenly: Team A has {a_blockers}"
+
+    metrics = compute_metrics(conn, team_a, team_b, WEIGHTS)
+    assert abs(metrics.per_indicator_a["attack"] - metrics.per_indicator_b["attack"]) < 1e-6
+    assert abs(metrics.per_indicator_a["block"] - metrics.per_indicator_b["block"]) < 1e-6
 
 
 def test_metrics_high_confidence_when_all_calibrated(conn: sqlite3.Connection) -> None:
@@ -74,6 +137,35 @@ def test_setter_constraint_holds_after_generate(conn: sqlite3.Connection) -> Non
     a_setters = sum(1 for p in team_a if p in {1, 2})
     b_setters = sum(1 for p in team_b if p in {1, 2})
     assert a_setters >= 1 and b_setters >= 1
+
+
+def test_setter_constraint_team_a_donates(conn: sqlite3.Connection) -> None:
+    """Optimal puts the top setter on Team A; swap moves it to Team B (line 103 path).
+
+    6 players: P1 strongest overall (composite=3), P2 top setter (setting=8,
+    composite≈2.58), P3 decent (2.5), P4-P6 weak (0.5).
+    Optimal: B={P1,P4,P5}, A={P2,P3,P6} → P2 (top setter) on A, none on B →
+    Team A donates P2 to Team B.
+    """
+    add_player(conn, 1, "P1", "p1")
+    _set_composite(conn, 1, 3.0)
+
+    add_player(conn, 2, "P2", "p2")
+    for ind in NON_SETTING:
+        _set_rating(conn, 2, ind, 1.5)
+    _set_rating(conn, 2, "setting", 8.0)
+
+    add_player(conn, 3, "P3", "p3")
+    _set_composite(conn, 3, 2.5)
+
+    for i in (4, 5, 6):
+        add_player(conn, i, f"P{i}", f"p{i}")
+        _set_composite(conn, i, 0.5)
+
+    team_a, team_b, _ = generate_teams(conn, [1, 2, 3, 4, 5, 6], WEIGHTS)
+    assert 2 in team_b, "Setter swap (A→B) should have placed top setter on Team B"
+    assert set(team_a) | set(team_b) == {1, 2, 3, 4, 5, 6}
+    assert set(team_a) & set(team_b) == set()
 
 
 def test_per_indicator_metrics_have_six_keys(conn: sqlite3.Connection) -> None:

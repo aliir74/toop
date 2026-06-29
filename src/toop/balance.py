@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
+from itertools import combinations
 
 from toop.rating import INDICATORS, composite_score, get_player_ratings
 
@@ -27,18 +28,45 @@ def _per_indicator_totals(
     return {ind: sum(indicator_scores[ind].get(pid, 0.0) for pid in team) for ind in INDICATORS}
 
 
-def _snake_assign(sorted_attendees: list[int]) -> tuple[list[int], list[int]]:
-    team_a: list[int] = []
-    team_b: list[int] = []
-    for i, pid in enumerate(sorted_attendees):
-        round_idx = i // 2
-        pick_in_round = i % 2
-        a_starts = round_idx % 2 == 0
-        first_pick = pick_in_round == 0
-        if a_starts == first_pick:
-            team_a.append(pid)
-        else:
-            team_b.append(pid)
+def _optimal_assign(
+    attendees: list[int],
+    indicator_scores: dict[str, dict[int, float]],
+    weights: dict[str, float],
+) -> tuple[list[int], list[int]]:
+    """Exhaustive search for the (ceil(n/2), floor(n/2)) split that minimises the
+    weighted sum of per-indicator gaps: Σ_k weight_k · |Σ_A score_k − Σ_B score_k|.
+
+    Balancing this instead of a single composite delta stops a strong-attack /
+    weak-defence imbalance from cancelling into a fake-balanced total — each skill
+    is balanced in proportion to its weight, so no individual skill ends up
+    lopsided. (Minimising |composite_A − composite_B| = |Σ_k w_k·(A_k − B_k)|
+    lets opposite-sign skill gaps cancel; moving the abs inside the sum prevents
+    that.) C(n, floor(n/2)) ≤ C(20, 10) = 184 756 — fast enough for any real group.
+    """
+    n = len(attendees)
+    size_b = n // 2
+    indicators = list(weights)
+    w = [weights[ind] for ind in indicators]
+    # Per-player score vector aligned to `indicators`, plus the all-attendee totals
+    # (so each indicator gap = |total − 2·b_sum|).
+    vecs = [[indicator_scores[ind].get(pid, 0.0) for ind in indicators] for pid in attendees]
+    totals = [sum(vec[j] for vec in vecs) for j in range(len(indicators))]
+
+    best_obj = float("inf")
+    best_b_idx: tuple[int, ...] = tuple(range(size_b))
+
+    for b_idx in combinations(range(n), size_b):
+        obj = 0.0
+        for j in range(len(indicators)):
+            b_sum = sum(vecs[i][j] for i in b_idx)
+            obj += w[j] * abs(totals[j] - 2 * b_sum)
+        if obj < best_obj:
+            best_obj = obj
+            best_b_idx = b_idx
+
+    b_set = set(best_b_idx)
+    team_b = [attendees[i] for i in best_b_idx]
+    team_a = [attendees[i] for i in range(n) if i not in b_set]
     return team_a, team_b
 
 
@@ -130,8 +158,7 @@ def generate_teams(
 
     composite, statuses, indicator_scores = _gather_scores(conn, attendees, weights)
 
-    sorted_attendees = sorted(attendees, key=lambda pid: (-composite[pid], pid))
-    team_a, team_b = _snake_assign(sorted_attendees)
+    team_a, team_b = _optimal_assign(attendees, indicator_scores, weights)
 
     top_quartile_count = max(1, len(attendees) // 4)
     setting_ranked = sorted(attendees, key=lambda pid: (-indicator_scores["setting"][pid], pid))
