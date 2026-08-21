@@ -156,6 +156,31 @@ The rating model is **voter-linked by design** (the `scores` table carries `vote
 - Rotating the **same** bot's token via BotFather `/revoke` keeps every `file_id` valid — nothing to do.
 - Creating a **brand-new** bot (new BotFather token from scratch) invalidates all stored `file_id`s. The rating card detects a dead `file_id` (a `BadRequest` on `send_photo`) and falls back to the text prompt, so voting never blocks. Recovery is a loop over `data/photos/`: re-send each image and call `set_player_photo` with the new `file_id`.
 
+### Backfilling photos from Telegram avatars
+
+`/set_photo` is one player at a time, from an image the admin collected by hand,
+so a roster of twenty means twenty DMs. Most people already have a profile
+picture, and where their privacy setting allows it the bot can read it directly:
+
+```bash
+# report only: who has a pullable avatar, who still needs a DM
+docker exec -w /app toop-bot-1 uv run python scripts/pull_profile_photos.py
+
+# write them (largest PhotoSize -> photo_file_id, plus the data/photos/ backup)
+docker exec -w /app toop-bot-1 uv run python scripts/pull_profile_photos.py --apply
+```
+
+It stores photos exactly the way the `/set_photo` handler does, never messages
+anyone, and reports each skip with a reason, so the leftover list *is* the DM
+list. Three reasons show up:
+
+- **`no avatar`** — none set, or their profile photo is hidden from bots. Needs a DM.
+- **`unreachable`** — the bot cannot see this user at all (blocked, deleted, or
+  never `/start`ed). They also cannot receive vote prompts, so this is worth
+  chasing on its own.
+- **`ghost`** — a `/add_ghost` player has no Telegram account, so only
+  `/set_photo` can cover them.
+
 ## Plan
 
 See `docs/plans/done/2026-05-14-toop-volleyball-team-balancing-bot.md` for the implementation history.
