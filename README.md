@@ -170,6 +170,19 @@ docker exec -w /app toop-bot-1 uv run python scripts/pull_profile_photos.py
 docker exec -w /app toop-bot-1 uv run python scripts/pull_profile_photos.py --apply
 ```
 
+**An avatar is not necessarily a face.** People use monuments, calligraphy, logos
+and group shots, and a rating card needs one recognisable person. The script
+cannot tell the difference, so look before you write:
+
+```bash
+# save every pullable avatar so you can actually look at them
+docker exec -w /app toop-bot-1 uv run python scripts/pull_profile_photos.py --dump-avatars /tmp/av
+docker cp toop-bot-1:/tmp/av ./av
+
+# then write only the ones that are usable
+docker exec -w /app toop-bot-1 uv run python scripts/pull_profile_photos.py --apply --only 8022429014
+```
+
 It stores photos exactly the way the `/set_photo` handler does, never messages
 anyone, and reports each skip with a reason, so the leftover list *is* the DM
 list. Three reasons show up:

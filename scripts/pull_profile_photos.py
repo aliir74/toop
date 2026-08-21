@@ -15,12 +15,18 @@ This walks every active player with ``photo_file_id IS NULL``, asks
 Only reads Telegram; the sole writes are the local DB row and the backup file. It
 never messages anyone. Dry-run by default -- pass ``--apply`` to write.
 
-    uv run python scripts/pull_profile_photos.py            # report only
-    uv run python scripts/pull_profile_photos.py --apply     # write
-    uv run python scripts/pull_profile_photos.py --apply --only 154050001
+    uv run python scripts/pull_profile_photos.py                     # report only
+    uv run python scripts/pull_profile_photos.py --dump-avatars /tmp/av
+    uv run python scripts/pull_profile_photos.py --apply --only 8022429014
 
 A player whose privacy hides their avatar (or who has none) is reported as
 ``no avatar`` and left alone -- those are the ones that still need a DM.
+
+**An avatar is not necessarily a face.** People use monuments, calligraphy,
+logos, or group shots, and a rating card needs one recognisable person. This
+script cannot tell the difference, so the intended flow is: dry run, then
+``--dump-avatars`` to look at them, then ``--apply --only`` the ones that are
+actually usable. Applying blindly can put a landscape photo on a rating card.
 """
 
 from __future__ import annotations
@@ -32,6 +38,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 
 from toop.config import settings
 from toop.photos import save_photo_bytes
@@ -99,6 +106,12 @@ def main() -> int:
         metavar="TELEGRAM_ID",
         help="restrict to these telegram ids (repeatable)",
     )
+    parser.add_argument(
+        "--dump-avatars",
+        metavar="DIR",
+        help="save each pullable avatar to DIR as <id>-<name>.jpg so you can look "
+        "at them before applying (implies a dry run unless --apply is also given)",
+    )
     args = parser.parse_args()
 
     conn = sqlite3.connect(settings.DATABASE_PATH)
@@ -128,6 +141,27 @@ def main() -> int:
             skipped += 1
             continue
 
+        # One getFile serves both the --dump-avatars copy and the byte backup.
+        raw: bytes | None = None
+        got = _call("getFile", file_id=file_id)
+        if got.get("ok"):
+            try:
+                raw = _download(got["result"]["file_path"])
+            except OSError as exc:
+                print(f"         (download failed for {name}: {exc})", file=sys.stderr)
+        else:
+            print(
+                f"         (download skipped for {name}: {got.get('description')})",
+                file=sys.stderr,
+            )
+
+        if args.dump_avatars and raw is not None:
+            slug = "".join(c if c.isalnum() else "-" for c in name).strip("-")
+            dest = Path(args.dump_avatars) / f"{tid}-{slug}.jpg"
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(raw)
+            print(f"  dumped {name} {handle} -> {dest}")
+
         if not args.apply:
             print(f"  would pull {name} {handle} (avatar {note})")
             pulled += 1
@@ -135,17 +169,11 @@ def main() -> int:
 
         # Byte backup is best effort, same as the /set_photo handler: file_id is
         # the source of truth and a download hiccup must not block storing it.
-        got = _call("getFile", file_id=file_id)
-        if got.get("ok"):
+        if raw is not None:
             try:
-                save_photo_bytes(tid, _download(got["result"]["file_path"]))
+                save_photo_bytes(tid, raw)
             except OSError as exc:
                 print(f"         (backup failed for {name}: {exc})", file=sys.stderr)
-        else:
-            print(
-                f"         (backup skipped for {name}: {got.get('description')})",
-                file=sys.stderr,
-            )
 
         if set_player_photo(conn, tid, file_id) is None:
             print(f"  skip   {name} {handle} (vanished from roster mid-run)")
