@@ -194,6 +194,23 @@ list. Three reasons show up:
 - **`ghost`** — a `/add_ghost` player has no Telegram account, so only
   `/set_photo` can cover them.
 
+### Storing a photo someone sent you
+
+`/set_photo` is an interactive inline-button flow in the admin's DM, which is
+fine for one or two and tedious for twenty. `scripts/ingest_photo.py` is the same
+operation over a local file, so a photo that arrives in Telegram can be filed in
+one command. It works for ghosts too, which the avatar pull cannot help with.
+
+```bash
+# who still needs one
+docker exec -w /app toop-bot-1 uv run python scripts/ingest_photo.py --list
+
+# store it (upload lands in the admin's own chat, which is how the Bot API
+# hands back a reusable file_id; the player is never messaged)
+docker cp ghasem.jpg toop-bot-1:/tmp/
+docker exec -w /app toop-bot-1 uv run python scripts/ingest_photo.py 137207815 /tmp/ghasem.jpg
+```
+
 ## Plan
 
 See `docs/plans/done/2026-05-14-toop-volleyball-team-balancing-bot.md` for the implementation history.
