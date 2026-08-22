@@ -156,6 +156,61 @@ The rating model is **voter-linked by design** (the `scores` table carries `vote
 - Rotating the **same** bot's token via BotFather `/revoke` keeps every `file_id` valid — nothing to do.
 - Creating a **brand-new** bot (new BotFather token from scratch) invalidates all stored `file_id`s. The rating card detects a dead `file_id` (a `BadRequest` on `send_photo`) and falls back to the text prompt, so voting never blocks. Recovery is a loop over `data/photos/`: re-send each image and call `set_player_photo` with the new `file_id`.
 
+### Backfilling photos from Telegram avatars
+
+`/set_photo` is one player at a time, from an image the admin collected by hand,
+so a roster of twenty means twenty DMs. Most people already have a profile
+picture, and where their privacy setting allows it the bot can read it directly:
+
+```bash
+# report only: who has a pullable avatar, who still needs a DM
+docker exec -w /app toop-bot-1 uv run python scripts/pull_profile_photos.py
+
+# write them (largest PhotoSize -> photo_file_id, plus the data/photos/ backup)
+docker exec -w /app toop-bot-1 uv run python scripts/pull_profile_photos.py --apply
+```
+
+**An avatar is not necessarily a face.** People use monuments, calligraphy, logos
+and group shots, and a rating card needs one recognisable person. The script
+cannot tell the difference, so look before you write:
+
+```bash
+# save every pullable avatar so you can actually look at them
+docker exec -w /app toop-bot-1 uv run python scripts/pull_profile_photos.py --dump-avatars /tmp/av
+docker cp toop-bot-1:/tmp/av ./av
+
+# then write only the ones that are usable
+docker exec -w /app toop-bot-1 uv run python scripts/pull_profile_photos.py --apply --only 8022429014
+```
+
+It stores photos exactly the way the `/set_photo` handler does, never messages
+anyone, and reports each skip with a reason, so the leftover list *is* the DM
+list. Three reasons show up:
+
+- **`no avatar`** — none set, or their profile photo is hidden from bots. Needs a DM.
+- **`unreachable`** — the bot cannot see this user at all (blocked, deleted, or
+  never `/start`ed). They also cannot receive vote prompts, so this is worth
+  chasing on its own.
+- **`ghost`** — a `/add_ghost` player has no Telegram account, so only
+  `/set_photo` can cover them.
+
+### Storing a photo someone sent you
+
+`/set_photo` is an interactive inline-button flow in the admin's DM, which is
+fine for one or two and tedious for twenty. `scripts/ingest_photo.py` is the same
+operation over a local file, so a photo that arrives in Telegram can be filed in
+one command. It works for ghosts too, which the avatar pull cannot help with.
+
+```bash
+# who still needs one
+docker exec -w /app toop-bot-1 uv run python scripts/ingest_photo.py --list
+
+# store it (upload lands in the admin's own chat, which is how the Bot API
+# hands back a reusable file_id; the player is never messaged)
+docker cp ghasem.jpg toop-bot-1:/tmp/
+docker exec -w /app toop-bot-1 uv run python scripts/ingest_photo.py 137207815 /tmp/ghasem.jpg
+```
+
 ## Plan
 
 See `docs/plans/done/2026-05-14-toop-volleyball-team-balancing-bot.md` for the implementation history.
