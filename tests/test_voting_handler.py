@@ -539,3 +539,30 @@ async def test_send_next_prompt_edit_fails_with_target_sends(
     ctx.bot.edit_message_text = AsyncMock(side_effect=BadRequest("boom"))
     await _send_next_prompt(conn, ctx, chat_id=1, voter_id=1, edit_message_id=5)
     ctx.bot.send_message.assert_awaited_once()
+
+
+async def test_callback_dk_hides_player_from_every_later_prompt(
+    conn: sqlite3.Connection,
+) -> None:
+    """Tapping ندیدمش on Bob must retire Bob for this voter entirely. A
+    next-card-only assertion would pass before the fix too, because the dk
+    branch already passes exclude_player — so drain the whole queue."""
+    _seed(conn)
+    ctx = _ctx(conn)
+    await handle_vote_callback(_callback_update(1, "v:dk:2:atk"), ctx)
+    seen: list[str] = []
+    for _ in range(30):
+        kwargs = ctx.bot.edit_message_text.await_args.kwargs
+        text = kwargs["text"]
+        if text == NO_PROMPTS_REPLY:
+            break
+        seen.append(text)
+        markup = kwargs["reply_markup"]
+        # Score whoever is on screen so the queue advances.
+        data = markup.inline_keyboard[0][0].callback_data
+        await handle_vote_callback(_callback_update(1, data), ctx)
+    else:  # pragma: no cover - only trips if the queue never drains
+        raise AssertionError("queue never reached the no-prompts state")
+    assert not any("Bob" in text for text in seen), (
+        f"skipped player resurfaced under another skill: {seen}"
+    )
