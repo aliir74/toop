@@ -100,7 +100,9 @@ def record_score(
     """Record (or update) a voter's 1-5 score for a player on one indicator.
 
     UPSERT on the (voter, player, indicator) key makes re-tapping edit the prior
-    score. Any earlier skip of the same target is cleared.
+    score. Every skip of that PLAYER is cleared, not just the matching
+    indicator: a score proves the voter can rate them, which retracts the
+    "I haven't seen them play" claim the skip stood for.
     """
     if indicator not in _VALID_INDICATORS:
         raise ValueError(f"unknown indicator {indicator!r}")
@@ -119,8 +121,8 @@ def record_score(
         (voter_id, player_id, indicator, score),
     )
     conn.execute(
-        "DELETE FROM score_skips WHERE voter_id=? AND player_id=? AND indicator=?",
-        (voter_id, player_id, indicator),
+        "DELETE FROM score_skips WHERE voter_id=? AND player_id=?",
+        (voter_id, player_id),
     )
     conn.commit()
 

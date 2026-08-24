@@ -243,3 +243,15 @@ def test_skip_expires_after_cooldown(conn: sqlite3.Connection) -> None:
         seen.add(t.player_id)
         record_score(conn, 1, t.player_id, t.indicator, 3)
     assert 2 in seen
+
+
+def test_record_score_clears_all_skips_for_player(conn: sqlite3.Connection) -> None:
+    """Scoring a player on ANY skill retracts the "I haven't seen them" claim,
+    so every skip row for that pair goes — not just the matching indicator."""
+    _seed_players(conn, 2)
+    record_skip(conn, 1, 2, "attack")
+    record_score(conn, 1, 2, "serve", 4)
+    n = conn.execute(
+        "SELECT COUNT(*) AS n FROM score_skips WHERE voter_id=1 AND player_id=2"
+    ).fetchone()["n"]
+    assert n == 0
