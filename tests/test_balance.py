@@ -240,3 +240,65 @@ def test_compute_metrics_recomputes_after_manual_swap(conn: sqlite3.Connection) 
     new_a, new_b = swap_players(initial_a, initial_b, initial_a[0], initial_b[0])
     new_metrics = compute_metrics(conn, new_a, new_b, WEIGHTS)
     assert new_metrics.team_a_total != initial_metrics.team_a_total
+
+
+def test_squared_objective_refuses_to_dump_imbalance_into_one_skill(
+    conn: sqlite3.Connection,
+) -> None:
+    """Regression for session 11 (2026-08-24).
+
+    A sum of ABSOLUTE gaps is indifferent to how imbalance is distributed, so it will
+    concentrate all of it in one skill to shave a hair off the total. Squaring the gap
+    makes concentration expensive.
+
+    Six players. P1/P2 are elite blockers, P5/P6 are terrible blockers, P3/P4 are the
+    flat middle, and every player carries an attack score chosen so that the split
+    {P1,P2,P3} vs {P4,P5,P6} is perfect on attack (0.00) while being ruinous on block
+    (3.00). Spreading the blockers instead costs a little attack but fixes the net.
+
+                     attack   block
+        P1              3.0     2.0
+        P2              1.0     1.0
+        P3              2.0     0.0
+        P4              2.0     0.0
+        P5              1.0    -1.0
+        P6              3.0    -2.0
+
+    {P1,P2,P3} vs {P4,P5,P6}: attack 6.0 vs 6.0 (gap 0.00), block 3.0 vs -3.0 (gap 3.00)
+      → sum|gap| = 3.00                (the absolute objective's pick)
+    {P1,P3,P5} vs {P2,P4,P6}: attack 6.0 vs 6.0 (gap 0.00), block 1.0 vs -1.0 (gap 2.00)
+      → sum|gap| = 2.00, and no split reaches a smaller worst-skill gap.
+    """
+    profile = {
+        1: {"attack": 3.0, "block": 2.0},
+        2: {"attack": 1.0, "block": 1.0},
+        3: {"attack": 2.0, "block": 0.0},
+        4: {"attack": 2.0, "block": 0.0},
+        5: {"attack": 1.0, "block": -1.0},
+        6: {"attack": 3.0, "block": -2.0},
+    }
+    for pid, sk in profile.items():
+        add_player(conn, pid, f"P{pid}", f"p{pid}")
+        for ind in INDICATORS:
+            _set_rating(conn, pid, ind, sk.get(ind, 0.0))
+
+    team_a, team_b, metrics = generate_teams(conn, [1, 2, 3, 4, 5, 6], WEIGHTS)
+
+    block_gap = abs(metrics.per_indicator_a["block"] - metrics.per_indicator_b["block"])
+    assert block_gap <= 2.0, f"imbalance concentrated in block: gap {block_gap}"
+    # The two elite blockers must not end up together — that is the failure mode.
+    assert len({1, 2} & set(team_a)) == 1, "both elite blockers landed on the same team"
+    assert len({5, 6} & set(team_a)) == 1, "both weak blockers landed on the same team"
+
+
+def test_squared_objective_still_finds_a_perfect_split(conn: sqlite3.Connection) -> None:
+    """Squaring must not break the easy case: when a zero-gap split exists, take it."""
+    for pid, score in enumerate([4.0, 3.0, 3.0, 4.0], start=1):
+        add_player(conn, pid, f"P{pid}", f"p{pid}")
+        for ind in INDICATORS:
+            _set_rating(conn, pid, ind, score)
+
+    _, _, metrics = generate_teams(conn, [1, 2, 3, 4], WEIGHTS)
+    for ind in INDICATORS:
+        gap = abs(metrics.per_indicator_a[ind] - metrics.per_indicator_b[ind])
+        assert gap < 1e-9, f"{ind} gap {gap} on a roster that splits perfectly"

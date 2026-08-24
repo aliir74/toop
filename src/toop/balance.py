@@ -24,15 +24,20 @@ class TeamMetrics:
 # (no monospace needed) and stay correct under RTL, unlike block-glyph bars in a
 # code fence. The fairness colour lives in the bar itself.
 _BAR_WIDTH = 5
-_BAR_SCALE = 1.5  # a gap of this much empties the bar; tuned for the small gaps the
-# weighted-per-skill objective produces, so typical skills read as mostly-full green.
+_BAR_SCALE = 1.0  # a gap of this much empties the bar; sized so the bar actually
+# travels across the gap range the squared objective produces (p50 ≈ 0.28, max ≈ 0.84)
+# instead of sitting near-full for everything.
 _FILL_BALANCED = "🟩"
 _FILL_OK = "🟨"
 _FILL_LOPSIDED = "🟥"
 _BAR_TRACK = "⬜"
-# Fairness thresholds mirror the HTML comparison report (green ≤0.40, amber ≤0.80).
-_FAIR_BALANCED = 0.40
-_FAIR_OK = 0.80
+# Fairness thresholds, set from the observed gap distribution over sessions 3-11 under
+# the squared objective (54 skill-gaps): green is the p60 cut, amber the p90 cut. The
+# previous 0.40/0.80 pair was inherited from the composite-only model and was far too
+# lenient — session 11's 0.73 block gap rendered as amber "acceptable" while being 4.5x
+# the next-worst skill, which is what made the group stop trusting the bars.
+_FAIR_BALANCED = 0.30
+_FAIR_OK = 0.60
 # Wrap the bar in a left-to-right isolate so the square order never flips inside an
 # RTL (Persian) message.
 _LRI = "⁦"
@@ -90,14 +95,27 @@ def _optimal_assign(
     weights: dict[str, float],
 ) -> tuple[list[int], list[int]]:
     """Exhaustive search for the (ceil(n/2), floor(n/2)) split that minimises the
-    weighted sum of per-indicator gaps: Σ_k weight_k · |Σ_A score_k − Σ_B score_k|.
+    weighted sum of SQUARED per-indicator gaps: Σ_k weight_k · (Σ_A score_k − Σ_B score_k)².
 
-    Balancing this instead of a single composite delta stops a strong-attack /
-    weak-defence imbalance from cancelling into a fake-balanced total — each skill
-    is balanced in proportion to its weight, so no individual skill ends up
-    lopsided. (Minimising |composite_A − composite_B| = |Σ_k w_k·(A_k − B_k)|
-    lets opposite-sign skill gaps cancel; moving the abs inside the sum prevents
-    that.) C(n, floor(n/2)) ≤ C(20, 10) = 184 756 — fast enough for any real group.
+    Two things are deliberate here, each fixing a different way a split can be
+    "balanced on paper" but lopsided on court:
+
+    1. Summing per-indicator gaps rather than balancing one composite delta. Minimising
+       |composite_A − composite_B| = |Σ_k w_k·(A_k − B_k)| lets a strong-attack /
+       weak-defence imbalance cancel into a fake-balanced total; keeping the gaps
+       separate prevents that.
+
+    2. Squaring each gap rather than taking its absolute value. A sum of absolute gaps
+       is indifferent to how imbalance is *distributed*: six 0.23 gaps and one 0.73 gap
+       plus five near-zeros score almost identically, so the optimiser would happily
+       dump every ounce of slack into one skill to shave a hair off the total. Squaring
+       makes a 0.73 gap cost 4.5x what four 0.20 gaps cost, so concentrating imbalance
+       stops being free. Session 11 (2026-08-24) is the worked example: the absolute
+       objective handed Team A a 0.73 block gap (53% of all imbalance in one skill,
+       and the most visible skill on a volleyball court) to buy a 0.03 attack gap.
+       See docs/algorithm/README.md.
+
+    C(n, floor(n/2)) ≤ C(20, 10) = 184 756 — fast enough for any real group.
     """
     n = len(attendees)
     size_b = n // 2
@@ -115,7 +133,8 @@ def _optimal_assign(
         obj = 0.0
         for j in range(len(indicators)):
             b_sum = sum(vecs[i][j] for i in b_idx)
-            obj += w[j] * abs(totals[j] - 2 * b_sum)
+            gap = totals[j] - 2 * b_sum
+            obj += w[j] * gap * gap
         if obj < best_obj:
             best_obj = obj
             best_b_idx = b_idx
