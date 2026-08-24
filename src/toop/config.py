@@ -70,6 +70,9 @@ class Settings(BaseSettings):
     DK_ALERT_MIN_PROMPTS: int = Field(default=10, ge=0)
     DK_ALERT_RATE: float = Field(default=0.5, ge=0.0, le=1.0)
     DEFAULT_PAUSE_DAYS: int = Field(default=14, gt=0)
+    # A 🤷 ندیدمش tap means "I have not seen this person play", so it hides that
+    # whole player from that voter (every indicator) for this many days.
+    SKIP_COOLDOWN_DAYS: int = Field(default=7, gt=0)
 
     @field_validator("SESSION_WEEKDAY", "SESSION_POLL_WEEKDAY")
     @classmethod
