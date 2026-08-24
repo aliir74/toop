@@ -15,7 +15,7 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 1. Continuous scoring via 1:1 DM with bot: rate one teammate on one indicator at a time, 1–5 (re-tap to change a score)
 2. Admin dashboard shows voting health (last-voted, lifetime ratings, pending, coverage gaps)
 3. Every Thursday 8pm PST the bot posts a بلی/خیر **attendance poll** to the group (and opens the session). As yes-votes land it announces the session is on + posts payment at quorum, then closes the poll and opens a **reservation/waitlist poll** at capacity.
-4. Bot snapshots ratings + the poll's attendees, suggests balanced teams via constraint-aware snake-draft
+4. Bot snapshots ratings + the poll's attendees, suggests balanced teams by exhaustively minimising the weighted sum of *squared* per-skill gaps (see [`docs/algorithm/`](docs/algorithm/README.md))
 5. Admin reviews, optionally swaps; if attendance later drifts the bot DMs the admin to fix it with `/change_player`; admin publishes teams to group chat
 
 ## Stack
@@ -25,6 +25,15 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 - SQLite for storage
 - `pydantic-settings` for config
 - Rater-normalized 1–5 ratings (per-rater z-score + shrinkage), equal default composite weights (1/6 per indicator, env-tunable)
+
+---
+
+## Algorithm history
+
+Every change to how players are scored or teams are split is logged in
+[`docs/algorithm/README.md`](docs/algorithm/README.md), along with its measured effect and
+the open issues that are known but not yet fixed. Read it before changing `balance.py` or
+`rating.py`, and add an entry when you do.
 
 ---
 

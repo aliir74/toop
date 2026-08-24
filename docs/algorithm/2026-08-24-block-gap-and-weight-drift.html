@@ -1,0 +1,1429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Why the teams felt unfair — Session 11 audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #F5F4EF;
+    --ink: #0A0A0A;
+    --ink-2: #5A5A55;
+    --paper: #FFFFFF;
+    --rule: rgba(10,10,10,0.10);
+    --rule-2: rgba(10,10,10,0.18);
+    --line: rgba(10,10,10,0.16);
+    --accent: #5856D6;
+    --indigo: #5856D6;
+    --mint: #0E9F6E;
+    --pink: #E8437F;
+    --orange: #D97706;
+    --danger: #E8437F;
+    --display: "Instrument Serif", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+    --shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px -12px rgba(10,10,10,0.10);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0F1014; --ink: #ECECEC; --ink-2: #9B9B9B; --paper: #181920;
+      --rule: rgba(255,255,255,0.10); --rule-2: rgba(255,255,255,0.18);
+      --line: rgba(255,255,255,0.22);
+      --mint: #34D399; --orange: #FBBF24;
+      --shadow: 0 1px 0 rgba(0,0,0,0.4), 0 8px 24px -12px rgba(0,0,0,0.6);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { overflow-x: hidden; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); font-size: 16px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  .container { width: min(760px, 100% - 2rem); margin-inline: auto; padding: 2.5rem 0 5rem; }
+
+  h1 { font-family: var(--display); font-size: clamp(2rem, 7vw, 3.1rem); line-height: 1.08; font-weight: 400; letter-spacing: -0.01em; }
+  h2 { font-family: var(--display); font-size: clamp(1.4rem, 4.4vw, 1.9rem); font-weight: 400; line-height: 1.2; margin-top: 3rem; padding-top: 1.4rem; border-top: 1px solid var(--rule-2); }
+  h3 { font-size: 1rem; font-weight: 650; margin-top: 1.6rem; letter-spacing: -0.005em; }
+  p { margin-top: 0.85rem; }
+  ul, ol { margin-top: 0.85rem; padding-left: 1.15rem; }
+  li { margin-top: 0.4rem; }
+  code, .mono { font-family: var(--mono); font-size: 0.855em; }
+  code { background: var(--rule); padding: 0.1em 0.36em; border-radius: 4px; }
+  strong { font-weight: 650; }
+  .lede { font-size: 1.09rem; color: var(--ink-2); margin-top: 1rem; }
+  .meta { font-family: var(--mono); font-size: 0.74rem; color: var(--ink-2); text-transform: uppercase; letter-spacing: 0.09em; }
+
+  .card { background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 1.35rem; box-shadow: var(--shadow); margin-top: 1.4rem; }
+  .verdict { border-left: 4px solid var(--pink); }
+  .verdict.ok { border-left-color: var(--mint); }
+
+  .pill { display: inline-block; font-family: var(--mono); font-size: 0.7rem; font-weight: 500; padding: 0.22em 0.6em; border-radius: 100px; border: 1px solid var(--rule-2); color: var(--ink-2); letter-spacing: 0.04em; }
+  .pill.bug { color: var(--pink); border-color: var(--pink); }
+  .pill.cfg { color: var(--orange); border-color: var(--orange); }
+  .pill.ok { color: var(--mint); border-color: var(--mint); }
+
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1rem; margin-top: 1.4rem; }
+  .stat { background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 1.1rem; }
+  .stat .n { font-family: var(--display); font-size: 2.3rem; line-height: 1; }
+  .stat .n.bad { color: var(--pink); }
+  .stat .k { font-size: 0.82rem; color: var(--ink-2); margin-top: 0.45rem; }
+
+  .tw { overflow-x: auto; -webkit-overflow-scrolling: touch; margin-top: 1.1rem; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.87rem; }
+  th, td { text-align: left; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-2); font-weight: 600; white-space: nowrap; }
+  td.num { font-family: var(--mono); white-space: nowrap; }
+
+  pre.tg { background: var(--paper); border: 1px solid var(--rule); border-radius: 12px; padding: 1rem 1.1rem; font-family: var(--mono); font-size: 0.83rem; line-height: 1.85; overflow-x: auto; margin-top: 1.1rem; direction: rtl; }
+
+  .chart { display: block; width: 100%; max-width: 460px; margin: 0 auto; height: auto; overflow: hidden; }
+  .chart text { font-family: var(--mono); font-size: 11px; fill: var(--ink-2); }
+  .chart .chart-title { font-family: var(--sans); font-size: 12px; fill: var(--ink); font-weight: 600; }
+  .chart .grid { stroke: var(--line); stroke-width: 1; }
+  .chart .axis { stroke: var(--ink-2); stroke-width: 1; }
+  .chart .target { stroke: var(--danger); stroke-width: 1.5; stroke-dasharray: 4 3; }
+  .c-indigo { fill: var(--indigo); }
+  .c-mint   { fill: var(--mint); }
+  .c-pink   { fill: var(--pink); }
+  .c-orange { fill: var(--orange); }
+  .c-muted  { fill: var(--line); }
+  .chart text.lbl-on-fill { fill: var(--paper); }
+  figcaption { font-size: 0.8rem; color: var(--ink-2); text-align: center; margin-top: 0.7rem; }
+
+/* comment-layer:installed */
+/* Comment layer token aliases: the layer expects the scaffold section 1 names. */
+:root {
+  --mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --line: var(--rule);
+}
+
+  /* Block that can receive a comment */
+  .annotatable { position: relative; }
+  .annotate-btn {
+    position: absolute;
+    top: 2px;
+    inset-inline-end: 4px;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    border: 1px solid var(--rule-2, rgba(10,10,10,0.18));
+    background: var(--paper, #fff);
+    color: var(--ink-2, #5A5A55);
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 5;
+  }
+  .annotatable:hover > .annotate-btn,
+  .annotatable:focus-within > .annotate-btn,
+  .annotate-btn:focus { display: inline-flex; }
+  /* Touch has no hover, keep the affordance reachable. */
+  @media (hover: none) { .annotate-btn { display: inline-flex; } }
+  .annotatable.has-comment > .annotate-btn {
+    display: inline-flex;
+    background: var(--accent, #5856D6);
+    color: var(--paper, #fff);
+    border-color: var(--accent, #5856D6);
+  }
+  .annotatable.has-comment { box-shadow: inset 3px 0 0 var(--accent, #5856D6); }
+
+  /* Text highlight (select-to-comment). Reads as "highlighted with a note attached". */
+  mark.hl {
+    background: var(--hl, rgba(84,150,255,0.28));
+    color: inherit;
+    border-radius: 2px;
+    padding: 0.05em 0;
+    cursor: pointer;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  mark.hl.has-note { box-shadow: inset 0 -0.14em 0 var(--accent, #5856D6); }
+  mark.hl.active { background: var(--hl-active, rgba(84,150,255,0.5)); }
+  @media (prefers-color-scheme: dark) {
+    mark.hl { background: var(--hl-dark, rgba(96,150,255,0.34)); }
+    mark.hl.active { background: var(--hl-active-dark, rgba(96,150,255,0.55)); }
+  }
+
+  /* Floating "comment on this selection" button, positioned at the selection. */
+  .sel-comment-btn {
+    position: absolute;
+    z-index: 950;
+    transform: translate(-50%, -100%);
+    min-height: 36px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: none;
+    background: var(--ink, #0A0A0A);
+    color: var(--paper, #fff);
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    box-shadow: var(--shadow, 0 8px 24px -12px rgba(10,10,10,0.3));
+    display: none;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .sel-comment-btn.show { display: inline-flex; }
+
+  .inline-comment {
+    margin: 8px 0 10px;
+    padding: 8px 12px;
+    border-left: 2px solid var(--accent, #5856D6);
+    background: color-mix(in srgb, var(--accent, #5856D6) 7%, transparent);
+    border-radius: 0 6px 6px 0;
+    display: none;
+  }
+  .inline-comment.open { display: block; }
+  .inline-comment .key {
+    display: block;
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2, #5A5A55);
+    margin-bottom: 4px;
+  }
+  .inline-comment .quote {
+    display: block;
+    font-family: var(--sans, system-ui, sans-serif);
+    font-size: 13px;
+    font-style: italic;
+    color: var(--ink, #0A0A0A);
+    border-left: 2px solid var(--hl, rgba(84,150,255,0.6));
+    padding-left: 8px;
+    margin-bottom: 6px;
+    opacity: 0.85;
+  }
+  .inline-comment textarea,
+  .notes-box textarea {
+    width: 100%;
+    border: 1px solid var(--rule, rgba(10,10,10,0.10));
+    background: var(--paper, #fff);
+    color: var(--ink, #0A0A0A);
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-family: var(--sans, system-ui, sans-serif);
+    font-size: 16px;   /* >=16px so iOS doesn't auto-zoom on focus */
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+  .inline-comment textarea:focus,
+  .notes-box textarea:focus { outline: none; border-color: var(--accent, #5856D6); }
+  .inline-comment .remove-hl {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    margin-top: 6px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--ink-2, #5A5A55);
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  /* Pasted or dropped image attachments on a comment. Thumbnail plus the filename the
+     browser saved it under, so Claude can find the file on disk and read it. */
+  .cl-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .cl-attach {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 1px solid var(--rule-2, rgba(10,10,10,0.18));
+    border-radius: 8px;
+    background: var(--paper, #fff);
+    max-width: 100%;
+  }
+  .cl-attach img {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--rule, rgba(10,10,10,0.10));
+    flex: none;
+    cursor: zoom-in;
+  }
+  .cl-attach .name {
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 11px;
+    color: var(--ink-2, #5A5A55);
+    word-break: break-all;
+    min-width: 0;
+  }
+  .cl-attach button {
+    min-height: 44px;
+    padding: 0 6px;
+    border: none;
+    background: none;
+    color: var(--ink-2, #5A5A55);
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 11px;
+    text-decoration: underline;
+    cursor: pointer;
+    flex: none;
+  }
+  /* Drop target feedback while an image file is dragged over a comment box. */
+  textarea.cl-dropping {
+    border-color: var(--accent, #5856D6);
+    background: color-mix(in srgb, var(--accent, #5856D6) 7%, transparent);
+  }
+  /* Tap or click a thumbnail to check the shot at full size before copying. */
+  .cl-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    background: rgba(10,10,10,0.82);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    cursor: zoom-out;
+  }
+  .cl-lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; }
+
+  /* General notes box */
+  .notes-box {
+    margin: 32px auto;
+    padding: 16px;
+    border: 1px dashed var(--rule-2, rgba(10,10,10,0.18));
+    border-radius: 10px;
+  }
+  .notes-box label {
+    display: block;
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-2, #5A5A55);
+    margin-bottom: 8px;
+  }
+
+  /* Floating action bar */
+  .actionbar {
+    position: fixed;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    right: calc(16px + env(safe-area-inset-right));
+    display: flex;
+    gap: 10px;
+    z-index: 900;
+    max-width: calc(100% - 32px);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .actionbar button {
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    min-height: 44px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--rule-2, rgba(10,10,10,0.18));
+    cursor: pointer;
+    background: var(--paper, #fff);
+    color: var(--ink, #0A0A0A);
+    box-shadow: var(--shadow, 0 8px 24px -12px rgba(10,10,10,0.3));
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .actionbar button.primary {
+    background: var(--ink, #0A0A0A);
+    color: var(--paper, #fff);
+    border-color: var(--ink, #0A0A0A);
+  }
+  .actionbar button[disabled] { opacity: 0.5; cursor: not-allowed; }
+  .actionbar button .count {
+    background: rgba(255,255,255,0.18);
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-left: 6px;
+    font-size: 11px;
+  }
+  .actionbar button:not(.primary) .count { background: var(--rule, rgba(10,10,10,0.1)); }
+  .actionbar button .kbd-hint {
+    margin-left: 8px;
+    font-size: 11px;
+    opacity: 0.65;
+    letter-spacing: 0;
+  }
+  /* Touch has no modifier keys, so the hint is noise there. */
+  @media (hover: none) { .actionbar button .kbd-hint { display: none; } }
+
+  /* Claude's written-back answer to a comment. Claude appends these when it processes the
+     exported JSON, so a re-read of the artifact carries the answers, not just the chat. */
+  .claude-response {
+    margin: 8px 0 14px;
+    padding: 10px 12px;
+    border-left: 2px solid var(--ink-2, #5A5A55);
+    background: color-mix(in srgb, var(--ink-2, #5A5A55) 6%, transparent);
+    border-radius: 0 6px 6px 0;
+  }
+  .claude-response .key {
+    display: block;
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2, #5A5A55);
+    margin-bottom: 4px;
+  }
+  .claude-response p { margin: 0 0 6px; font-size: 14px; line-height: 1.55; }
+  .claude-response p:last-child { margin-bottom: 0; }
+
+  /* Manual-copy fallback panel (used only if both clipboard paths fail). */
+  .copy-fallback {
+    position: fixed;
+    left: 50%;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    width: min(560px, calc(100% - 32px));
+    background: var(--paper, #fff);
+    border: 1px solid var(--rule-2, rgba(10,10,10,0.18));
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: var(--shadow, 0 8px 24px -12px rgba(10,10,10,0.3));
+    z-index: 1100;
+  }
+  .copy-fallback label {
+    display: block;
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 11px;
+    color: var(--ink-2, #5A5A55);
+    margin-bottom: 6px;
+  }
+  .copy-fallback textarea {
+    width: 100%;
+    min-height: 120px;
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 12px;
+    border: 1px solid var(--rule, rgba(10,10,10,0.10));
+    border-radius: 6px;
+    padding: 8px;
+    box-sizing: border-box;
+    background: var(--paper, #fff);
+    color: var(--ink, #0A0A0A);
+  }
+  .copy-fallback button {
+    margin-top: 8px;
+    min-height: 44px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--rule-2, rgba(10,10,10,0.18));
+    background: var(--paper, #fff);
+    color: var(--ink, #0A0A0A);
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--ink, #0A0A0A);
+    color: var(--paper, #fff);
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 12px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 1000;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* Keep the action bar from covering the last rows of content. */
+  body { padding-bottom: calc(2rem + 64px); }
+</style>
+</head>
+<body>
+<main class="container">
+
+  <p class="meta">توپ · balance audit · session 11 · 2026-08-24</p>
+  <h1>The group is right, and the bot told them so in a colour they were trained to ignore.</h1>
+  <p class="lede">Monday's split was the <em>mathematically optimal</em> answer to the question the bot asks. The problem is that the question lets one skill absorb every ounce of imbalance, and on Monday that skill was blocking.</p>
+
+  <div class="grid2">
+    <div class="stat"><div class="n bad">0.73</div><div class="k">block gap between the teams, in rating units</div></div>
+    <div class="stat"><div class="n bad">53%</div><div class="k">of all imbalance sat in that one skill</div></div>
+    <div class="stat"><div class="n">0.20</div><div class="k">what block could have been, swapping 2 players</div></div>
+  </div>
+
+  <h2>What the group actually saw</h2>
+  <p>This is the exact message the bot posted on Monday:</p>
+  <pre class="tg">⁦🟩🟩🟩🟩🟩⁩  حمله  (0.03)
+⁦🟩🟩🟩🟩⬜⁩  دریافت  (0.16)
+⁦🟨🟨🟨⬜⬜⁩  دفاع  (0.73)
+⁦🟩🟩🟩🟩🟩⁩  پاسور  (0.10)
+⁦🟩🟩🟩🟩🟩⁩  سرویس  (0.10)
+⁦🟩🟩🟩🟩⬜⁩  جاگیری  (0.25)
+
+A 1.76 · B 1.52 · Δ 0.24 · confidence: low</pre>
+  <p>Five green rows, one amber, and a headline delta of 0.24 that reads as "basically even". But the amber row is <strong>4.5x worse than the next-worst skill</strong>, and the composite delta hides it entirely: the composite is a weighted sum, so a big block gap in one direction gets cancelled by small gaps in the other five. The one number the group anchors on is the one number that structurally cannot show this problem.</p>
+
+  <figure class="card">
+    <svg class="chart" viewBox="0 0 330 220" role="img" aria-label="Per-skill gap between the two teams for session 11. As published: attack 0.03, receive 0.16, block 0.73, setting 0.10, serve 0.10, positioning 0.25. With a squared-penalty objective: attack 0.18, receive 0.43, block 0.20, setting 0.28, serve 0.54, positioning 0.13.">
+      <text x="0" y="13" class="chart-title">Team gap per skill, session 11</text>
+      <rect class="c-pink" x="0" y="24" width="10" height="10" />
+      <text x="15" y="33">as published</text>
+      <rect class="c-indigo" x="106" y="24" width="10" height="10" />
+      <text x="121" y="33">with the fix</text>
+
+      <text x="76" y="59" text-anchor="end">attack</text>
+      <rect class="c-pink"   x="84" y="48" width="8"  height="10" rx="2" />
+      <rect class="c-indigo" x="84" y="60" width="45" height="10" rx="2" />
+      <text x="97" y="57">0.03</text>
+      <text x="134" y="69">0.18</text>
+
+      <text x="76" y="87" text-anchor="end">receive</text>
+      <rect class="c-pink"   x="84" y="76" width="40"  height="10" rx="2" />
+      <rect class="c-indigo" x="84" y="88" width="108" height="10" rx="2" />
+      <text x="129" y="85">0.16</text>
+      <text x="197" y="97">0.43</text>
+
+      <text x="76" y="115" text-anchor="end">block</text>
+      <rect class="c-pink"   x="84" y="104" width="183" height="10" rx="2" />
+      <rect class="c-indigo" x="84" y="116" width="50"  height="10" rx="2" />
+      <text x="272" y="113">0.73</text>
+      <text x="139" y="125">0.20</text>
+
+      <text x="76" y="143" text-anchor="end">setting</text>
+      <rect class="c-pink"   x="84" y="132" width="25" height="10" rx="2" />
+      <rect class="c-indigo" x="84" y="144" width="70" height="10" rx="2" />
+      <text x="114" y="141">0.10</text>
+      <text x="159" y="153">0.28</text>
+
+      <text x="76" y="171" text-anchor="end">serve</text>
+      <rect class="c-pink"   x="84" y="160" width="25"  height="10" rx="2" />
+      <rect class="c-indigo" x="84" y="172" width="135" height="10" rx="2" />
+      <text x="114" y="169">0.10</text>
+      <text x="224" y="181">0.54</text>
+
+      <text x="76" y="199" text-anchor="end">position</text>
+      <rect class="c-pink"   x="84" y="188" width="63" height="10" rx="2" />
+      <rect class="c-indigo" x="84" y="200" width="33" height="10" rx="2" />
+      <text x="152" y="197">0.25</text>
+      <text x="122" y="209">0.13</text>
+    </svg>
+    <figcaption>The published split is a spike, not a profile. The fix spreads the same total imbalance across all six skills instead of dumping it on one.</figcaption>
+  </figure>
+
+  <h2>Root cause 1 — the objective rewards hiding imbalance in one skill <span class="pill bug">real bug</span></h2>
+  <p><code>_optimal_assign</code> in <code>src/toop/balance.py</code> searches every possible split and minimises:</p>
+  <p style="text-align:center; font-family: var(--mono); font-size: 0.92rem; margin-top: 1rem;">Σ<sub>skill</sub> weight · |gap<sub>skill</sub>|</p>
+  <p>A <strong>sum of absolute gaps has no opinion about how the imbalance is distributed.</strong> A split with six 0.23 gaps and a split with one 0.73 gap plus five near-zeros score almost identically, and the optimiser will pick whichever is a hair lower. On Monday it picked the spike: it shaved attack to 0.03 and serve to 0.10 by handing Team A both of the group's top-3 blockers.</p>
+
+  <p>Here is why blocking was the sacrifice. Sorted by block rating, with the published team in brackets:</p>
+  <div class="tw"><table>
+    <thead><tr><th>Player</th><th>Team</th><th>Block</th><th></th></tr></thead>
+    <tbody>
+      <tr><td>Ali I</td><td>A</td><td class="num">+1.06</td><td>top blocker</td></tr>
+      <tr><td>Hamzeh Hosseini</td><td>B</td><td class="num">+0.87</td><td></td></tr>
+      <tr><td>EM</td><td>A</td><td class="num">+0.52</td><td>3rd blocker also on A</td></tr>
+      <tr><td>Meysam Bz</td><td>B</td><td class="num">+0.28</td><td></td></tr>
+      <tr><td>Esmaeil, Alireza, Naji, Mohammad, Taherifar</td><td>mixed</td><td class="num">≈ 0.00</td><td>the flat middle</td></tr>
+      <tr><td>Homayoun Soltani</td><td>B</td><td class="num">−0.16</td><td></td></tr>
+      <tr><td>Hessam</td><td>B</td><td class="num">−0.46</td><td></td></tr>
+      <tr><td>Ali Sh</td><td>A</td><td class="num">−0.49</td><td></td></tr>
+      <tr><td>Saeed Hosseini</td><td>A</td><td class="num">−0.51</td><td></td></tr>
+      <tr><td>Morteza</td><td>B</td><td class="num">−0.75</td><td>weakest blocker also on B</td></tr>
+    </tbody>
+  </table></div>
+  <p>Team B got three of the four weakest blockers <em>and</em> only one of the top three. That is a visible, physical thing on a volleyball court. Every stuffed block is a highlight; nobody in the group is tracking "positioning differential".</p>
+
+  <div class="card verdict">
+    <p><strong>It was fixable.</strong> Swapping <strong>Ali Sh ↔ Morteza</strong> drops the block gap from 0.73 to 0.20. The cost is receive going to 0.43 and serve to 0.54, and the total across all skills rising from 1.38 to 1.77. The current objective refuses that trade because it only reads the total. A human captain would take it in a second.</p>
+  </div>
+
+  <h3>This is not a one-off</h3>
+  <p>Re-running every past session's roster through both objectives (using today's ratings, so these are not the exact splits that were published then, but the same roster shapes):</p>
+
+  <figure class="card">
+    <svg class="chart" viewBox="0 0 320 280" role="img" aria-label="Worst single-skill gap per session under the current objective versus a squared-penalty objective. Session 4: 0.96 versus 0.72. Session 8: 1.79 versus 0.69. Session 10: 0.99 versus 0.47. Session 11: 0.73 versus 0.54. Sessions 3, 6, 7, 9 unchanged. Session 5 marginally worse.">
+      <text x="0" y="13" class="chart-title">Worst single-skill gap, by session</text>
+      <rect class="c-pink" x="0" y="24" width="10" height="10" />
+      <text x="15" y="33">now</text>
+      <rect class="c-indigo" x="62" y="24" width="10" height="10" />
+      <text x="77" y="33">squared penalty</text>
+
+      <line class="target" x1="101" y1="42" x2="101" y2="262" />
+
+      <text x="26" y="55" text-anchor="end">s3</text>
+      <rect class="c-pink"   x="34" y="46" width="53" height="8" rx="2" />
+      <rect class="c-indigo" x="34" y="56" width="53" height="8" rx="2" />
+      <text x="92" y="58">0.40</text>
+
+      <text x="26" y="79" text-anchor="end">s4</text>
+      <rect class="c-pink"   x="34" y="70" width="128" height="8" rx="2" />
+      <rect class="c-indigo" x="34" y="80" width="97"  height="8" rx="2" />
+      <text x="167" y="78">0.96</text>
+      <text x="136" y="88">0.72</text>
+
+      <text x="26" y="103" text-anchor="end">s5</text>
+      <rect class="c-pink"   x="34" y="94"  width="111" height="8" rx="2" />
+      <rect class="c-indigo" x="34" y="104" width="112" height="8" rx="2" />
+      <text x="151" y="106">0.83</text>
+
+      <text x="26" y="127" text-anchor="end">s6</text>
+      <rect class="c-pink"   x="34" y="118" width="96" height="8" rx="2" />
+      <rect class="c-indigo" x="34" y="128" width="96" height="8" rx="2" />
+      <text x="135" y="130">0.72</text>
+
+      <text x="26" y="151" text-anchor="end">s7</text>
+      <rect class="c-pink"   x="34" y="142" width="47" height="8" rx="2" />
+      <rect class="c-indigo" x="34" y="152" width="47" height="8" rx="2" />
+      <text x="86" y="154">0.35</text>
+
+      <text x="26" y="175" text-anchor="end">s8</text>
+      <rect class="c-pink"   x="34" y="166" width="239" height="8" rx="2" />
+      <rect class="c-indigo" x="34" y="176" width="92"  height="8" rx="2" />
+      <text x="278" y="174">1.79</text>
+      <text x="131" y="184">0.69</text>
+
+      <text x="26" y="199" text-anchor="end">s9</text>
+      <rect class="c-pink"   x="34" y="190" width="61" height="8" rx="2" />
+      <rect class="c-indigo" x="34" y="200" width="61" height="8" rx="2" />
+      <text x="100" y="202">0.45</text>
+
+      <text x="26" y="223" text-anchor="end">s10</text>
+      <rect class="c-pink"   x="34" y="214" width="132" height="8" rx="2" />
+      <rect class="c-indigo" x="34" y="224" width="62"  height="8" rx="2" />
+      <text x="171" y="222">0.99</text>
+      <text x="101" y="232">0.47</text>
+
+      <text x="26" y="247" text-anchor="end">s11</text>
+      <rect class="c-pink"   x="34" y="238" width="98" height="8" rx="2" />
+      <rect class="c-indigo" x="34" y="248" width="72" height="8" rx="2" />
+      <text x="137" y="246">0.73</text>
+      <text x="111" y="256">0.54</text>
+
+      <text x="101" y="274" text-anchor="middle">0.50</text>
+    </svg>
+    <figcaption>Dashed line marks 0.50, roughly where a gap starts being felt on court. Four of nine sessions had a single skill blown past 0.7. Swapping the sum of absolute gaps for a sum of squared gaps fixes three of them outright and costs nothing in the six sessions that were already fine.</figcaption>
+  </figure>
+
+  <p><strong>The fix is one character.</strong> Change <code>abs(...)</code> to a square in <code>_optimal_assign</code>. Squaring makes a 0.73 gap cost 4.5x what four 0.2 gaps cost, so the optimiser stops treating one lopsided skill as free. No new thresholds to tune, no extra config, and the exhaustive search is unchanged.</p>
+
+  <h2>Root cause 2 — the live bot is running weights from a retired rating model <span class="pill cfg">config</span></h2>
+  <p>The bot moved to six indicators, but <code>/opt/toop/.env</code> on the VPS (and <code>.env.example</code> in the repo, which is where it came from) still holds the old three-axis weights:</p>
+  <div class="tw"><table>
+    <thead><tr><th>Indicator</th><th>Intended</th><th>Actually live</th><th>Source</th></tr></thead>
+    <tbody>
+      <tr><td>attack</td><td class="num">0.167</td><td class="num">0.400</td><td><code>WEIGHT_ATTACK</code></td></tr>
+      <tr><td>setting</td><td class="num">0.167</td><td class="num">0.200</td><td><code>WEIGHT_SETTING</code></td></tr>
+      <tr><td>receive</td><td class="num">0.167</td><td class="num">0.167</td><td>default</td></tr>
+      <tr><td>block</td><td class="num">0.167</td><td class="num">0.167</td><td>default</td></tr>
+      <tr><td>serve</td><td class="num">0.167</td><td class="num">0.167</td><td>default</td></tr>
+      <tr><td>positioning</td><td class="num">0.167</td><td class="num">0.167</td><td>default</td></tr>
+      <tr><td><strong>total</strong></td><td class="num"><strong>1.000</strong></td><td class="num"><strong>1.267</strong></td><td></td></tr>
+    </tbody>
+  </table></div>
+  <p><code>WEIGHT_DEFENSE=0.4</code> is still in the file too. That field no longer exists, and <code>Settings</code> is configured with <code>extra="ignore"</code>, so pydantic drops it in silence. The bot logs <em>"Composite weights sum to 1.2666, not 1.0"</em> on every startup and nobody is reading the logs.</p>
+  <p><strong>Honest scope:</strong> this did <em>not</em> cause Monday's split. I re-ran session 11 under both weight vectors and they select the identical teams. But attack is currently weighted 2.4x block in the objective, which is the precise bias that makes the optimiser willing to trade away block, and it also inflates every composite total the group sees. It is a live landmine even though it was not this week's trigger.</p>
+
+  <h2>Root cause 3 — "confidence: low" is permanent, and it is quietly true <span class="pill bug">real</span></h2>
+  <p><code>CALIBRATION_THRESHOLD=15</code>, but the most-rated player in the whole group has <strong>11</strong> ratings per skill. Nobody has ever been calibrated. Every snapshot since session 3 has printed <code>confidence: low</code>, so the group has been reading a fairness disclaimer on every single message and has learned to ignore it.</p>
+
+  <figure class="card">
+    <svg class="chart" viewBox="0 0 300 280" role="img" aria-label="Ratings per skill for each of the 14 session-11 attendees, against the calibration threshold of 15. Homayoun 2, Ali Sh 4, Morteza 5, EM 6, Hessam 6, and nine players at 11. Nobody reaches 15.">
+      <text x="0" y="13" class="chart-title">Ratings per skill, session 11 attendees</text>
+      <text x="150" y="30" text-anchor="middle">dashed line = 15, the calibration threshold</text>
+      <line class="target" x1="252" y1="38" x2="252" y2="272" />
+
+      <text x="64" y="50" text-anchor="end">Homayoun</text>
+      <rect class="c-pink" x="72" y="41" width="24" height="10" rx="2" /><text x="101" y="50">2</text>
+      <text x="64" y="67" text-anchor="end">Ali Sh</text>
+      <rect class="c-pink" x="72" y="58" width="48" height="10" rx="2" /><text x="125" y="67">4</text>
+      <text x="64" y="84" text-anchor="end">Morteza</text>
+      <rect class="c-pink" x="72" y="75" width="60" height="10" rx="2" /><text x="137" y="84">5</text>
+      <text x="64" y="101" text-anchor="end">EM</text>
+      <rect class="c-orange" x="72" y="92" width="72" height="10" rx="2" /><text x="149" y="101">6</text>
+      <text x="64" y="118" text-anchor="end">Hessam</text>
+      <rect class="c-orange" x="72" y="109" width="72" height="10" rx="2" /><text x="149" y="118">6</text>
+      <text x="64" y="135" text-anchor="end">Ali I</text>
+      <rect class="c-indigo" x="72" y="126" width="132" height="10" rx="2" /><text x="209" y="135">11</text>
+      <text x="64" y="152" text-anchor="end">Hamzeh</text>
+      <rect class="c-indigo" x="72" y="143" width="132" height="10" rx="2" /><text x="209" y="152">11</text>
+      <text x="64" y="169" text-anchor="end">Meysam</text>
+      <rect class="c-indigo" x="72" y="160" width="132" height="10" rx="2" /><text x="209" y="169">11</text>
+      <text x="64" y="186" text-anchor="end">Esmaeil</text>
+      <rect class="c-indigo" x="72" y="177" width="132" height="10" rx="2" /><text x="209" y="186">11</text>
+      <text x="64" y="203" text-anchor="end">Alireza</text>
+      <rect class="c-indigo" x="72" y="194" width="132" height="10" rx="2" /><text x="209" y="203">11</text>
+      <text x="64" y="220" text-anchor="end">Taherifar</text>
+      <rect class="c-indigo" x="72" y="211" width="132" height="10" rx="2" /><text x="209" y="220">11</text>
+      <text x="64" y="237" text-anchor="end">Saeed</text>
+      <rect class="c-indigo" x="72" y="228" width="132" height="10" rx="2" /><text x="209" y="237">11</text>
+      <text x="64" y="254" text-anchor="end">Naji</text>
+      <rect class="c-indigo" x="72" y="245" width="132" height="10" rx="2" /><text x="209" y="254">11</text>
+      <text x="64" y="271" text-anchor="end">Mohammad</text>
+      <rect class="c-indigo" x="72" y="262" width="132" height="10" rx="2" /><text x="209" y="271">11</text>
+
+    </svg>
+    <figcaption>A 5.5x spread in how much evidence the bot has about each attendee, and not one of them clears the bar it set for itself. Red and amber are the players the maths trusts least.</figcaption>
+  </figure>
+
+  <h2>Root cause 4 — thin-data players get flattened toward "average" <span class="pill bug">real</span></h2>
+  <p><code>refresh_ratings</code> shrinks each estimate by dividing by <code>(votes + SHRINKAGE_K)</code> with <code>K=3</code>. That is the right idea, but with this vote spread it bites unevenly:</p>
+  <div class="tw"><table>
+    <thead><tr><th>Player</th><th>Votes</th><th>Signal kept</th><th>Block: shown</th><th>Block: unshrunk</th></tr></thead>
+    <tbody>
+      <tr><td>Homayoun Soltani</td><td class="num">2</td><td class="num">40%</td><td class="num">−0.16</td><td class="num">−0.40</td></tr>
+      <tr><td>Ali Sh</td><td class="num">4</td><td class="num">57%</td><td class="num">−0.49</td><td class="num">−0.85</td></tr>
+      <tr><td>Morteza</td><td class="num">5</td><td class="num">63%</td><td class="num">−0.75</td><td class="num">−1.20</td></tr>
+      <tr><td>EM</td><td class="num">6</td><td class="num">67%</td><td class="num">+0.52</td><td class="num">+0.78</td></tr>
+      <tr><td>the other nine</td><td class="num">11</td><td class="num">79%</td><td class="num">—</td><td class="num">—</td></tr>
+    </tbody>
+  </table></div>
+  <p>Everyone the group has the strongest gut feelings about (the rare attendees, the new faces) is pulled toward the middle, while the regulars keep their edge. Homayoun's six skills are all within 0.21 of each other on two ratings, which is not a player profile, it is a placeholder. <strong>Turning shrinkage off moves 4 of the 14 players to the other team</strong>, so the split is genuinely sensitive to a knob nobody has validated against how the games actually go.</p>
+
+  <h3>And a smaller one hiding underneath it</h3>
+  <p><code>NORM_MIN_RATINGS=8</code> gates rater z-scoring on <em>score count</em>, not on <em>how many different people</em> the rater scored. Two raters clear the gate on a sample far too narrow to z-score against:</p>
+  <ul>
+    <li><strong>Morteza</strong> — 14 scores across only <strong>3</strong> players</li>
+    <li><strong>EM</strong> — 27 scores across only <strong>5</strong> players</li>
+  </ul>
+  <p>Z-scoring forces those handfuls of players to spread across the full range with mean 0 and sd 1, whether or not they are actually different from each other. It injects noise into exactly the low-coverage players who are already the shakiest.</p>
+
+  <h2>So: is the algorithm broken, or is it a communication problem?</h2>
+  <div class="card verdict">
+    <p><strong>Both, and in that order.</strong> There is a real defect (root cause 1) that produced a genuinely lopsided net on Monday and has done so in roughly half of all sessions. Fixing the message without fixing that would be gaslighting the group about something they correctly noticed.</p>
+  </div>
+  <p>But the presentation is also actively working against you:</p>
+  <ul>
+    <li><strong>The headline number cannot show the problem.</strong> <code>Δ 0.24</code> is a weighted sum, so opposite-sign skill gaps cancel. A team can be 0.73 ahead at the net and still post a tiny delta. Lead with the <em>worst</em> skill gap, not the composite.</li>
+    <li><strong>The amber threshold is too generous.</strong> <code>_FAIR_OK = 0.80</code> meant a 0.73 gap rendered as 🟨 "قابل‌قبول". Given that everything else lands under 0.30, anything past ~0.45 should be red.</li>
+    <li><strong>The units are meaningless to a volleyball group.</strong> "0.73" is a sum of shrunk z-scores. Nobody can sanity-check it, so they fall back to eyeballing the roster, which is where the mistrust comes from.</li>
+    <li><strong>The bars are decorative, not evidential.</strong> Five greens and an amber say "trust me". Naming the specific trade the bot made ("Team A is stronger at the net; Team B is stronger on serve") is a claim they can check against what they felt.</li>
+  </ul>
+
+  <h2>What I would do, in order</h2>
+  <div class="tw"><table>
+    <thead><tr><th>#</th><th>Change</th><th>Where</th><th>Effort</th><th>Payoff</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>Square the gap in the objective: <code>w·gap²</code> instead of <code>w·|gap|</code></td><td><code>balance.py</code> <span class="mono">_optimal_assign</span></td><td>1 line</td><td>Kills the spike. Fixes s8 (1.79→0.69), s10 (0.99→0.47), s11 (0.73→0.54)</td></tr>
+      <tr><td class="num">2</td><td>Fix the live weights: drop <code>WEIGHT_DEFENSE</code>, set all six to 0.1667</td><td>VPS <code>.env</code> + <code>.env.example</code></td><td>2 min</td><td>Removes the 2.4x attack bias and the 1.267 sum</td></tr>
+      <tr><td class="num">3</td><td>Tighten the bar thresholds to ~0.25 green / ~0.45 amber</td><td><code>balance.py</code> constants</td><td>2 lines</td><td>A real gap stops reading as "acceptable"</td></tr>
+      <tr><td class="num">4</td><td>Replace the composite delta headline with "worst skill: دفاع 0.42"</td><td><code>handlers/snapshot.py</code></td><td>small</td><td>The one number stops hiding the one problem</td></tr>
+      <tr><td class="num">5</td><td>Add one honest sentence naming the trade, e.g. <span dir="rtl">«تیم A روی تور قوی‌تره، تیم B روی سرویس»</span></td><td><code>i18n.py</code> + snapshot</td><td>small</td><td>Turns "trust me" into a checkable claim</td></tr>
+      <tr><td class="num">6</td><td>Drop <code>CALIBRATION_THRESHOLD</code> to 10, or drive voting up</td><td><code>.env</code> / admin nudges</td><td>1 min</td><td>Ends the permanent "low" that trains people to distrust</td></tr>
+      <tr><td class="num">7</td><td>Gate rater z-scoring on distinct players (≥8), not raw score count</td><td><code>rating.py</code> <span class="mono">_rater_stats</span></td><td>small</td><td>Stops 3-player raters from manufacturing spread</td></tr>
+      <tr><td class="num">8</td><td>Chase ratings for Homayoun (2), Ali Sh (4), Morteza (5), EM (6), Hessam (6)</td><td>admin, in person</td><td>ongoing</td><td>Biggest real-accuracy win available; no code can substitute</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>On adding a chart for the group</h3>
+  <p>Do not send them this page. A Telegram group does not want a dashboard, and a richer visual would make the current numbers <em>more</em> convincing rather than more correct. Items 3, 4 and 5 are the transparency fix: keep the emoji bars (they render fine on every phone and survive RTL), make the colours honest, and add one plain sentence naming the trade-off. That is the whole intervention.</p>
+  <p>The one thing genuinely worth adding once the objective is fixed: after the teams are published, a line like <span dir="rtl" class="mono">«۳۴۳۲ ترکیب بررسی شد، این متعادل‌ترینش بود»</span>. It is true (the search really is exhaustive over all C(14,7) splits), it is verifiable, and it answers the actual accusation, which is not "the numbers are off by 0.1" but "the bot is not really trying".</p>
+
+  <h2>Notes on method</h2>
+  <ul>
+    <li>Live SQLite pulled from <code>de-rarecloud:/opt/toop/data/toop.db</code> and WAL-checkpointed locally; the bot was not stopped and nothing was written back.</li>
+    <li>Session 11 figures come from the stored <code>snapshots.metrics_json</code>, so they are exactly what the group saw.</li>
+    <li>The cross-session comparison re-runs each historical roster against <em>today's</em> ratings, so those splits are not byte-identical to what was published at the time. The shape of the finding (one skill absorbing everything) holds either way, and the stored historical metrics show the same pattern: s5 had a 1.36 block gap, s6 a 0.65 positioning gap, s7 a 0.64 serve gap.</li>
+    <li>All 3432 possible 7v7 splits were enumerated for session 11, so "the published split is the optimum of the current objective" is exhaustive, not sampled.</li>
+  </ul>
+
+</main>
+
+<section class="notes-box">
+  <label for="general-notes">Notes for Claude</label>
+  <textarea id="general-notes" rows="3"
+    placeholder="Overall comments, questions, or context that doesn't belong to one section..."></textarea>
+</section>
+
+<div class="actionbar" role="region" aria-label="Comments export">
+  <button type="button" id="reset-btn" title="Clear all comments and highlights">Clear</button>
+  <button type="button" id="copy-btn" class="primary" disabled
+    aria-label="Copy all comments as JSON to clipboard">Copy comments<span class="count" id="copy-count">0</span></button>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+
+(function () {
+  // Blocks worth a whole-block comment in THIS artifact. Block-level only.
+  // Avoid making every <p>/<li> annotatable if the page is huge, pick meaningful blocks.
+  const ANNOTATABLE = "h2, h3, .card p, .card li, li, tr, figcaption";
+  // Where text highlighting is allowed. Default: the main content, minus the comment UI.
+  // Narrow to a content container (e.g. "main, article") if the page has chrome you don't
+  // want highlightable.
+  const HIGHLIGHT_ROOT = ".container";
+
+  const notesInput = document.getElementById("general-notes");
+  const copyBtn = document.getElementById("copy-btn");
+  const resetBtn = document.getElementById("reset-btn");
+  const countEl = document.getElementById("copy-count");
+  const inlineComments = new Map();   // key -> comment text (block comments)
+  const highlights = new Map();       // hlId -> { id, quote, section, note, marks:[], panel }
+  const IS_UI = ".inline-comment, .notes-box, .actionbar, .sel-comment-btn, .cl-attachments";
+
+  function showToast(msg) {
+    const t = document.getElementById("toast");
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add("show");
+    setTimeout(() => t.classList.remove("show"), 1800);
+  }
+
+  // ---------- Pasted images ----------
+  // Paste (or drop) a screenshot into any comment box and it becomes an attachment on that
+  // comment. The blob is handed to the browser's download path so the file lands on disk
+  // (Chrome's default download folder, normally ~/Downloads) and the exported JSON carries
+  // the filename. Embedding a data: URI instead is not viable: one screenshot is hundreds of
+  // KB of base64, which would swamp the payload Ali pastes into chat.
+  const attachments = [];   // { file, anchor(), url, blob, chip }
+  let imgSeq = 0;
+  // Whether every current attachment has been written to disk. Chrome silently blocks a
+  // download that is not tied to a user gesture (verified 2026-08-21), so pasting cannot
+  // save the file itself: the Copy press or the Save images button does it.
+  let savedAll = false;
+  const DOC_SLUG = ((document.title || "artifact").trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)) || "artifact";
+
+  function extFor(type) {
+    if (type === "image/jpeg") return "jpg";
+    if (type === "image/gif") return "gif";
+    if (type === "image/webp") return "webp";
+    if (type === "image/svg+xml") return "svg";
+    return "png";
+  }
+
+  function saveBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  function openLightbox(src) {
+    const box = document.createElement("div");
+    box.className = "cl-lightbox";
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = "Attached image, full size";
+    box.appendChild(img);
+    box.addEventListener("click", () => box.remove());
+    document.body.appendChild(box);
+  }
+
+  // The thumbnail strip is inserted directly after its textarea, so it always reads as
+  // belonging to that box regardless of what else the panel appends later.
+  function attachmentsHost(ta) {
+    let strip = ta._clStrip;
+    if (!strip || !strip.parentNode) {
+      strip = document.createElement("div");
+      strip.className = "cl-attachments";
+      if (ta.parentNode) ta.parentNode.insertBefore(strip, ta.nextSibling);
+      ta._clStrip = strip;
+    }
+    return strip;
+  }
+
+  function addAttachment(blob, ta, anchorFn, onChange) {
+    const n = ++imgSeq;
+    const name = "comment-img-" + DOC_SLUG + "-" + n + "." + extFor(blob.type);
+    // Kept for the page lifetime: the thumbnail and the lightbox both read from it.
+    const url = URL.createObjectURL(blob);
+    const rec = { file: name, anchor: anchorFn, url: url, blob: blob, chip: null };
+
+    const strip = attachmentsHost(ta);
+    const chip = document.createElement("div");
+    chip.className = "cl-attach";
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = name;
+    img.addEventListener("click", () => openLightbox(url));
+    const label = document.createElement("span");
+    label.className = "name";
+    label.textContent = name;
+    const again = document.createElement("button");
+    again.type = "button";
+    again.textContent = "Save again";
+    again.title = "Download this image again";
+    again.addEventListener("click", () => saveBlob(blob, name));
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.textContent = "Remove";
+    drop.addEventListener("click", () => {
+      const i = attachments.indexOf(rec);
+      if (i > -1) attachments.splice(i, 1);
+      chip.remove();
+      if (!strip.children.length) strip.remove();
+      if (onChange) onChange();
+      refreshSaveAllBtn();
+      updateCopyState();
+    });
+    chip.appendChild(img);
+    chip.appendChild(label);
+    chip.appendChild(again);
+    chip.appendChild(drop);
+    strip.appendChild(chip);
+    rec.chip = chip;
+
+    attachments.push(rec);
+    savedAll = false;
+    if (onChange) onChange();
+    refreshSaveAllBtn();
+    updateCopyState();
+    showToast("Attached " + name + ". Copy writes it out; allow downloads if Chrome asks.");
+    return rec;
+  }
+
+  // Wire paste and drop on one comment textarea. `anchorFn` reports which comment the image
+  // belongs to, evaluated at export time so a highlight's quote is always current.
+  function enableImagePaste(ta, anchorFn, onChange) {
+    ta.addEventListener("paste", (e) => {
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      let found = false;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (it.kind === "file" && /^image\//.test(it.type || "")) {
+          const blob = it.getAsFile();
+          if (blob) { addAttachment(blob, ta, anchorFn, onChange); found = true; }
+        }
+      }
+      // Only swallow the paste when it really was an image, so pasting text still works.
+      if (found) e.preventDefault();
+    });
+    ta.addEventListener("dragover", (e) => {
+      const types = (e.dataTransfer && e.dataTransfer.types) || [];
+      if ([].indexOf.call(types, "Files") > -1) {
+        e.preventDefault();
+        ta.classList.add("cl-dropping");
+      }
+    });
+    ta.addEventListener("dragleave", () => ta.classList.remove("cl-dropping"));
+    ta.addEventListener("drop", (e) => {
+      const files = (e.dataTransfer && e.dataTransfer.files) || [];
+      const imgs = [].filter.call(files, (f) => /^image\//.test(f.type || ""));
+      ta.classList.remove("cl-dropping");
+      if (!imgs.length) return;
+      e.preventDefault();
+      imgs.forEach((f) => addAttachment(f, ta, anchorFn, onChange));
+    });
+    // Discoverability lives in the placeholder rather than a permanent hint line on every
+    // panel, which would be noise once the mechanic is known.
+    ta.placeholder = (ta.placeholder || "Comment") + " Paste a screenshot to attach it.";
+  }
+
+  function attachmentsFor(pred) { return attachments.filter((a) => pred(a.anchor())); }
+
+  // Chrome allows the first automatic download from an origin and can block later ones as
+  // "multiple automatic downloads" until the user permits them, so the auto-save on paste is
+  // best-effort, never a guarantee. This button re-saves every attachment from one real
+  // click, which is the path Chrome always honours. It only appears once an image exists.
+  let saveAllBtn = null;
+  function refreshSaveAllBtn() {
+    const bar = document.querySelector(".actionbar");
+    if (!bar) return;
+    if (!attachments.length) {
+      if (saveAllBtn) { saveAllBtn.remove(); saveAllBtn = null; }
+      return;
+    }
+    if (!saveAllBtn) {
+      saveAllBtn = document.createElement("button");
+      saveAllBtn.type = "button";
+      saveAllBtn.id = "save-images-btn";
+      saveAllBtn.title = "Write every attached image to your downloads folder now";
+      saveAllBtn.addEventListener("click", () => {
+        attachments.forEach((a) => saveBlob(a.blob, a.file));
+        savedAll = true;
+        showToast("Saving " + attachments.length + " image" +
+          (attachments.length === 1 ? "" : "s") + " to your downloads folder");
+      });
+      bar.insertBefore(saveAllBtn, bar.firstChild);
+    }
+    saveAllBtn.textContent = "Save images (" + attachments.length + ")";
+  }
+
+
+  // Human-readable, stable-ish anchor key: section context + a text snippet.
+  const usedKeys = new Map();
+  // textContent minus our injected UI (the + button, inline comment panels), so anchor
+  // keys read "Approach", not "Approach+".
+  function textOf(el) {
+    let s = "";
+    el.childNodes.forEach((n) => {
+      if (n.nodeType === 3) { s += n.nodeValue; return; }
+      if (n.nodeType !== 1) return;
+      if (n.classList.contains("annotate-btn") || n.classList.contains("inline-comment") ||
+          n.classList.contains("cl-attachments")) return;
+      // A non-inline child is its own chunk, so it needs a separator: without this a heading
+      // built as <span class="badge">1</span><span>Wire the migration</span> yields the
+      // anchor key "1Wire the migration". True inline tags (em, strong, a) stay unspaced so
+      // mid-word emphasis is not broken.
+      let disp = "inline";
+      try { disp = getComputedStyle(n).display; } catch (e) { /* detached node */ }
+      if (disp !== "inline" && s && !/\s$/.test(s)) s += " ";
+      s += textOf(n);
+    });
+    return s;
+  }
+  function snippet(el) {
+    return textOf(el).trim().replace(/\s+/g, " ").slice(0, 60);
+  }
+  function nearestHeading(el) {
+    // Walk up to the closest container, then back through preceding headings.
+    let node = el;
+    while (node && node !== document.body) {
+      let sib = node.previousElementSibling;
+      while (sib) {
+        if (/^H[1-6]$/.test(sib.tagName)) return textOf(sib).trim();
+        const h = sib.querySelector && sib.querySelector("h1,h2,h3,h4,h5,h6");
+        if (h) return textOf(h).trim();
+        sib = sib.previousElementSibling;
+      }
+      node = node.parentElement;
+    }
+    return (document.title || "").trim();
+  }
+  function baseKey(el) {
+    const tag = el.tagName;
+    const text = snippet(el);
+    if (/^H[1-6]$/.test(tag)) return "§ " + (text || "(heading)");
+    const ctx = nearestHeading(el);
+    const body = text || "(" + tag.toLowerCase() + ")";
+    return ctx ? ctx + " › " + body : body;
+  }
+  function uniqueKey(el) {
+    const k = baseKey(el);
+    const n = (usedKeys.get(k) || 0) + 1;
+    usedKeys.set(k, n);
+    return n > 1 ? k + " #" + n : k;
+  }
+
+  function insertAfter(el, node) {
+    if (el.tagName === "TR") {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = el.children.length || 1;
+      td.style.padding = "0";
+      td.appendChild(node);
+      el.parentNode.insertBefore(tr, el.nextSibling);
+    } else {
+      el.parentNode.insertBefore(node, el.nextSibling);
+    }
+  }
+
+  // ---------- Block comments ----------
+  function ensurePanel(el, key) {
+    if (el._commentPanel) return el._commentPanel;
+    const panel = document.createElement("div");
+    panel.className = "inline-comment";
+    const keySpan = document.createElement("span");
+    keySpan.className = "key";
+    keySpan.textContent = key;
+    const ta = document.createElement("textarea");
+    ta.rows = 2;
+    ta.placeholder = "Comment on this...";
+    ta.addEventListener("input", () => {
+      const v = ta.value.trim();
+      if (v) { inlineComments.set(key, v); el.classList.add("has-comment"); }
+      else { inlineComments.delete(key); el.classList.remove("has-comment"); }
+      updateCopyState();
+    });
+    panel.appendChild(keySpan);
+    panel.appendChild(ta);
+    enableImagePaste(ta, () => ({ scope: "block", anchor: key }), () => {
+      const live = ta.value.trim() ||
+        attachmentsFor((a) => a.scope === "block" && a.anchor === key).length;
+      el.classList.toggle("has-comment", !!live);
+    });
+    insertAfter(el, panel);
+    el._commentPanel = panel;
+    return panel;
+  }
+
+  document.querySelectorAll(ANNOTATABLE).forEach((el) => {
+    if (el.classList.contains("annotatable") || el.closest(IS_UI)) return;
+    // Skip blocks that are just wrappers of other annotatable blocks (avoid double buttons).
+    if (el.matches("li") && el.querySelector("ul, ol")) return;
+    el.classList.add("annotatable");
+    const key = uniqueKey(el);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "annotate-btn";
+    btn.title = "Add a comment";
+    btn.setAttribute("aria-label", "Add a comment");
+    btn.textContent = "+";
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      const panel = ensurePanel(el, key);
+      panel.classList.toggle("open");
+      if (panel.classList.contains("open")) panel.querySelector("textarea").focus();
+    });
+    el.appendChild(btn);
+  });
+
+  // ---------- Text highlights (select-to-comment) ----------
+  const highlightRoot = document.querySelector(HIGHLIGHT_ROOT) || document.body;
+  let hlSeq = 0;
+
+  const selBtn = document.createElement("button");
+  selBtn.type = "button";
+  selBtn.className = "sel-comment-btn";
+  selBtn.textContent = "💬 Comment";
+  document.body.appendChild(selBtn);
+
+  function hideSelBtn() { selBtn.classList.remove("show"); }
+
+  function selectionInsideContent(sel) {
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return false;
+    const r = sel.getRangeAt(0);
+    if (!r.toString().trim()) return false;
+    const anc = r.commonAncestorContainer;
+    const el = anc.nodeType === 1 ? anc : anc.parentElement;
+    if (!el) return false;
+    if (!highlightRoot.contains(el)) return false;
+    if (el.closest(IS_UI)) return false;                 // don't highlight the UI itself
+    if (el.closest("mark.hl")) return false;             // already inside a highlight
+    return true;
+  }
+
+  function positionSelBtn(range) {
+    const rect = range.getBoundingClientRect();
+    selBtn.style.left = (rect.left + rect.width / 2 + window.scrollX) + "px";
+    selBtn.style.top = (rect.top + window.scrollY - 8) + "px";
+    selBtn.classList.add("show");
+  }
+
+  function onSelectionChange() {
+    const sel = window.getSelection();
+    if (selectionInsideContent(sel)) positionSelBtn(sel.getRangeAt(0));
+    else hideSelBtn();
+  }
+  // Only react after the gesture ends so the button doesn't chase a live drag.
+  document.addEventListener("mouseup", () => setTimeout(onSelectionChange, 0));
+  document.addEventListener("touchend", () => setTimeout(onSelectionChange, 0));
+  document.addEventListener("selectionchange", () => {
+    const sel = window.getSelection();
+    if (!selectionInsideContent(sel)) hideSelBtn();
+  });
+  window.addEventListener("scroll", hideSelBtn, { passive: true });
+
+  // Wrap every text node the range covers in its own <mark class="hl"> sharing one id.
+  // Per-node ranges stay inside a single text node so surroundContents never throws.
+  function wrapRange(range, hlId) {
+    const root = range.commonAncestorContainer;
+    const scope = root.nodeType === 1 ? root : root.parentNode;
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null);
+    const nodes = [];
+    let n;
+    while ((n = walker.nextNode())) {
+      if (range.intersectsNode(n) && n.textContent.trim()) nodes.push(n);
+    }
+    const marks = [];
+    nodes.forEach((node) => {
+      let start = 0, end = node.textContent.length;
+      if (node === range.startContainer) start = range.startOffset;
+      if (node === range.endContainer) end = range.endOffset;
+      if (start >= end) return;
+      const r = document.createRange();
+      r.setStart(node, start);
+      r.setEnd(node, end);
+      const mark = document.createElement("mark");
+      mark.className = "hl";
+      mark.dataset.hlId = hlId;
+      try { r.surroundContents(mark); marks.push(mark); } catch (e) { /* skip odd node */ }
+    });
+    return marks;
+  }
+
+  function ensureHighlightPanel(hl) {
+    if (hl.panel) return hl.panel;
+    const firstMark = hl.marks[0];
+    // Anchor the note after the block that contains the highlight.
+    let block = firstMark.parentElement;
+    while (block && block !== document.body &&
+           getComputedStyle(block).display.indexOf("inline") === 0) {
+      block = block.parentElement;
+    }
+    block = block || firstMark.parentElement;
+
+    const panel = document.createElement("div");
+    panel.className = "inline-comment open";
+    const keySpan = document.createElement("span");
+    keySpan.className = "key";
+    keySpan.textContent = "✎ highlighted text" + (hl.section ? " · " + hl.section : "");
+    const quote = document.createElement("span");
+    quote.className = "quote";
+    quote.textContent = hl.quote.length > 180 ? hl.quote.slice(0, 180) + "…" : hl.quote;
+    const ta = document.createElement("textarea");
+    ta.rows = 2;
+    ta.placeholder = "Comment on the highlighted text...";
+    ta.value = hl.note || "";
+    ta.addEventListener("input", () => {
+      hl.note = ta.value.trim();
+      hl.marks.forEach((m) => m.classList.toggle("has-note", !!hl.note));
+      updateCopyState();
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove-hl";
+    remove.textContent = "Remove highlight";
+    remove.addEventListener("click", () => removeHighlight(hl.id));
+
+    panel.appendChild(keySpan);
+    panel.appendChild(quote);
+    panel.appendChild(ta);
+    enableImagePaste(ta, () => ({ scope: "highlight", anchor: hl.quote }));
+    panel.appendChild(remove);
+    insertAfter(block, panel);
+    hl.panel = panel;
+    return panel;
+  }
+
+  function openHighlightPanel(hl) {
+    const panel = ensureHighlightPanel(hl);
+    panel.classList.add("open");
+    panel.querySelector("textarea").focus();
+    if (panel.scrollIntoView) panel.scrollIntoView({ block: "nearest" });
+  }
+  // Clicking a highlight toggles its note box open/closed. Hiding it does NOT drop the
+  // highlight or its note — the span stays marked and is still exported.
+  function toggleHighlightPanel(hl) {
+    const wasOpen = hl.panel && hl.panel.classList.contains("open");
+    if (wasOpen) hl.panel.classList.remove("open");
+    else openHighlightPanel(hl);
+  }
+
+  function unwrapMark(mark) {
+    const parent = mark.parentNode;
+    if (!parent) return;
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+    parent.removeChild(mark);
+    parent.normalize();
+  }
+  function removeHighlight(hlId) {
+    const hl = highlights.get(hlId);
+    if (!hl) return;
+    hl.marks.forEach(unwrapMark);
+    if (hl.panel && hl.panel.parentNode) hl.panel.parentNode.removeChild(hl.panel);
+    highlights.delete(hlId);
+    updateCopyState();
+  }
+
+  selBtn.addEventListener("mousedown", (e) => e.preventDefault()); // keep the selection alive
+  selBtn.addEventListener("click", () => {
+    const sel = window.getSelection();
+    if (!selectionInsideContent(sel)) { hideSelBtn(); return; }
+    const range = sel.getRangeAt(0);
+    const quote = sel.toString().trim().replace(/\s+/g, " ");
+    const hlId = "hl-" + (++hlSeq);
+    const marks = wrapRange(range, hlId);
+    if (!marks.length) { hideSelBtn(); return; }
+    const hl = { id: hlId, quote, section: nearestHeading(marks[0]), note: "", marks, panel: null };
+    highlights.set(hlId, hl);
+    sel.removeAllRanges();
+    hideSelBtn();
+    openHighlightPanel(hl);
+    updateCopyState();
+  });
+
+  // Click an existing highlight to show/hide its note box (the highlight itself stays).
+  document.addEventListener("click", (e) => {
+    const mark = e.target.closest && e.target.closest("mark.hl");
+    if (!mark) return;
+    const hl = highlights.get(mark.dataset.hlId);
+    if (hl) toggleHighlightPanel(hl);
+  });
+
+  // ---------- Export ----------
+  function countNonEmpty() {
+    let n = inlineComments.size + highlights.size + attachments.length;
+    if (notesInput && notesInput.value.trim()) n += 1;
+    return n;
+  }
+  function updateCopyState() {
+    const n = countNonEmpty();
+    if (countEl) countEl.textContent = String(n);
+    if (copyBtn) copyBtn.disabled = n === 0;
+  }
+  // Tells Claude the round-trip is not "answer in chat", it is "patch this file and diff it".
+  const CLAUDE_INSTRUCTIONS =
+    "Answer every comment, question and highlight in this payload, and write each answer " +
+    "BACK INTO the source HTML file (see `source`) as a visible response block anchored to " +
+    "the block or quote it replies to: " +
+    "<div class=\"claude-response\"><span class=\"key\">Response</span><p>...</p></div>. " +
+    "Then show me the diff of that edit and re-open the artifact (cc-open <path>). " +
+    "Replying only in the Claude Code chat is not enough: the artifact must carry the answers. " +
+    "If a comment asks for a change to the content itself, make the change and note it in the " +
+    "response block instead of describing it in chat. " +
+    "Every entry in `images` is a screenshot attached to the comment named by its " +
+    "`attached_to` field, saved by the browser into the downloads folder (normally " +
+    "~/Downloads/<file>): read that file before answering the comment it belongs to. " +
+    "If a listed file is not there, Chrome blocked its download: say which file is missing " +
+    "and ask me to paste that screenshot straight into the chat, rather than guessing.";
+
+  function buildResult() {
+    const comments = {};
+    inlineComments.forEach((v, k) => { if (v.trim()) comments[k] = v.trim(); });
+    return {
+      instructions: CLAUDE_INSTRUCTIONS,
+      title: (document.title || "").trim(),
+      source: decodeURIComponent(location.pathname || "") || location.href,
+      generated_at: new Date().toISOString(),
+      general_notes: (notesInput && notesInput.value.trim()) || null,
+      comments,
+      highlights: [...highlights.values()].map((h) => ({
+        quote: h.quote,
+        section: h.section || null,
+        note: h.note || null,
+      })),
+      images: attachments.map((a) => {
+        const an = a.anchor();
+        return { file: a.file, scope: an.scope, attached_to: an.anchor };
+      }),
+    };
+  }
+
+  notesInput && notesInput.addEventListener("input", updateCopyState);
+  if (notesInput) enableImagePaste(notesInput, () => ({ scope: "general", anchor: null }));
+
+  // Clipboard, gesture-safe. The async Clipboard API is NOT reliable here: on a local
+  // file:// artifact writeText can hang forever (never resolves, never rejects), so a
+  // .catch() fallback never runs and the copy dies silently. execCommand("copy") is
+  // deprecated but synchronous, works on file://, and cannot hang, so it goes first.
+  function copySync(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:-9999px;opacity:0";
+    document.body.appendChild(ta);
+    const sel = document.getSelection();
+    const prev = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    if (prev && sel) { sel.removeAllRanges(); sel.addRange(prev); }
+    return ok;
+  }
+
+  // Manual fallback, in page. Never window.prompt(): Chrome silently blocks dialogs raised
+  // without user activation, and a dialog left pending freezes the whole page.
+  function manualCopyFallback(text) {
+    let box = document.getElementById("copy-fallback");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "copy-fallback";
+      box.className = "copy-fallback";
+      const label = document.createElement("label");
+      label.textContent = "Automatic copy was blocked. Select all below, then copy:";
+      const ta = document.createElement("textarea");
+      ta.readOnly = true;
+      const close = document.createElement("button");
+      close.type = "button";
+      close.textContent = "Close";
+      close.addEventListener("click", () => box.remove());
+      box.appendChild(label);
+      box.appendChild(ta);
+      box.appendChild(close);
+      document.body.appendChild(box);
+    }
+    const ta = box.querySelector("textarea");
+    ta.value = text;
+    ta.focus();
+    ta.select();
+  }
+
+  function doCopy() {
+    const n = countNonEmpty();
+    if (!n) return;
+    // Copy is a genuine user gesture, the only download path Chrome reliably allows, so this
+    // is where attached images reach the disk. Guarded so a second Copy press does not write
+    // "name (1).png" duplicates that no longer match the filenames in the payload.
+    if (attachments.length && !savedAll) {
+      attachments.forEach((a) => saveBlob(a.blob, a.file));
+      savedAll = true;
+    }
+    const text = JSON.stringify(buildResult(), null, 2);
+    const ok = () => showToast("Copied " + n + " annotation" + (n === 1 ? "" : "s") + ". Paste into Claude.");
+    if (copySync(text)) { ok(); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      let settled = false;
+      // Hard timeout: a hung writeText must still surface a manual fallback.
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        manualCopyFallback(text);
+      }, 1200);
+      navigator.clipboard.writeText(text).then(
+        () => { if (!settled) { settled = true; clearTimeout(timer); ok(); } },
+        () => { if (!settled) { settled = true; clearTimeout(timer); manualCopyFallback(text); } }
+      );
+      return;
+    }
+    manualCopyFallback(text);
+  }
+
+  copyBtn && copyBtn.addEventListener("click", doCopy);
+
+  // Keyboard shortcut: Cmd+Enter (Mac) / Ctrl+Enter (Win/Linux) copies all comments.
+  // Fires even while a comment textarea has focus. doCopy() runs inline in the keydown,
+  // NOT via copyBtn.click(): a synthetic click loses the user gesture in some browsers,
+  // which is what killed the clipboard write.
+  const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || "");
+  const hint = isMac ? "\u2318\u21B5" : "Ctrl+\u21B5";
+  if (copyBtn) {
+    copyBtn.title = "Copy all comments as JSON (" + hint + ")";
+    copyBtn.setAttribute("aria-keyshortcuts", isMac ? "Meta+Enter" : "Control+Enter");
+    // Advertise it in the label, not just the tooltip, so it is discoverable.
+    const kbd = document.createElement("span");
+    kbd.className = "kbd-hint";
+    kbd.textContent = hint;
+    copyBtn.appendChild(kbd);
+  }
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === "Enter") {
+      if (copyBtn && !copyBtn.disabled) {
+        e.preventDefault();
+        doCopy();
+      }
+    }
+  });
+
+  resetBtn && resetBtn.addEventListener("click", () => {
+    inlineComments.clear();
+    if (notesInput) notesInput.value = "";
+    document.querySelectorAll(".inline-comment textarea").forEach((ta) => { ta.value = ""; });
+    document.querySelectorAll(".inline-comment.open").forEach((p) => p.classList.remove("open"));
+    document.querySelectorAll(".annotatable.has-comment").forEach((el) => el.classList.remove("has-comment"));
+    [...highlights.keys()].forEach(removeHighlight);
+    attachments.splice(0).forEach((a) => { if (a.chip) a.chip.remove(); });
+    document.querySelectorAll(".cl-attachments").forEach((s) => s.remove());
+    hideSelBtn();
+    updateCopyState();
+    showToast("Cleared all comments, highlights and images");
+  });
+
+  updateCopyState();
+})();
+</script>
+</body>
+</html>

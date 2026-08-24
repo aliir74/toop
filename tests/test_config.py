@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import pytest
 from pydantic import ValidationError
 
-from toop.config import Settings
+from toop.config import KNOWN_WEIGHT_KEYS, Settings, unknown_weight_keys
 from toop.rating import INDICATORS
 
 
@@ -124,3 +125,45 @@ def test_skip_cooldown_env_override() -> None:
 def test_skip_cooldown_rejects_zero() -> None:
     with pytest.raises(ValidationError):
         Settings(_env_file=None, SKIP_COOLDOWN_DAYS=0)
+
+
+def test_unknown_weight_keys_flags_retired_indicator(tmp_path, monkeypatch) -> None:
+    """WEIGHT_DEFENSE sat in the production .env for months after the six-indicator
+    migration; pydantic's extra="ignore" dropped it silently and left attack at 0.4.
+    """
+    monkeypatch.delenv("WEIGHT_DEFENSE", raising=False)
+    env = tmp_path / ".env"
+    env.write_text(
+        "# a comment\nWEIGHT_ATTACK=0.1667\nWEIGHT_DEFENSE=0.4\nBOT_TOKEN=x\n",
+        encoding="utf-8",
+    )
+    assert unknown_weight_keys(str(env)) == ["WEIGHT_DEFENSE"]
+
+
+def test_unknown_weight_keys_clean_env_returns_nothing(tmp_path, monkeypatch) -> None:
+    for key in list(os.environ):
+        if key.upper().startswith("WEIGHT_"):
+            monkeypatch.delenv(key, raising=False)
+    env = tmp_path / ".env"
+    env.write_text(
+        "\n".join(f"{k}=0.1667" for k in sorted(KNOWN_WEIGHT_KEYS)) + "\n", encoding="utf-8"
+    )
+    assert unknown_weight_keys(str(env)) == []
+
+
+def test_unknown_weight_keys_reads_the_environment_too(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("WEIGHT_SPIKE", "0.9")
+    assert "WEIGHT_SPIKE" in unknown_weight_keys(str(tmp_path / "missing.env"))
+
+
+def test_retired_weight_key_warns_at_startup(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The silent drop is the whole bug: surface it loudly instead."""
+    monkeypatch.setenv("WEIGHT_DEFENSE", "0.4")
+    with caplog.at_level(logging.WARNING, logger="toop.config"):
+        Settings(_env_file=None)
+    assert any(
+        "WEIGHT_DEFENSE is set but is not a known indicator weight" in r.message
+        for r in caplog.records
+    )

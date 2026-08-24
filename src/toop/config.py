@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 import math
+import os
+from pathlib import Path
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -10,6 +12,32 @@ logger = logging.getLogger(__name__)
 
 VALID_WEEKDAYS = {"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
 VALID_LANGS = {"fa", "en"}
+
+# The six indicators that actually have a WEIGHT_ setting. Anything else matching
+# WEIGHT_* in the environment or .env is a leftover from an older rating model.
+_WEIGHT_INDICATORS = ("attack", "receive", "block", "setting", "serve", "positioning")
+KNOWN_WEIGHT_KEYS = frozenset(f"WEIGHT_{ind.upper()}" for ind in _WEIGHT_INDICATORS)
+
+
+def unknown_weight_keys(env_file: str = ".env") -> list[str]:
+    """WEIGHT_* keys present in the environment or .env that no longer map to an
+    indicator. `Settings` is configured with extra="ignore", so pydantic drops these
+    without a word: WEIGHT_DEFENSE=0.4 sat in the production .env for months after the
+    move to six indicators, silently leaving attack at 0.4 (2.4x every other skill)
+    while receive/block/serve/positioning fell back to their defaults. Surfacing them
+    at startup is what stops that recurring.
+    """
+    names = {k for k in os.environ if k.upper().startswith("WEIGHT_")}
+    path = Path(env_file)
+    if path.is_file():
+        for raw in path.read_text(encoding="utf-8").splitlines():
+            line = raw.strip()
+            if line.startswith("#") or "=" not in line:
+                continue
+            key = line.split("=", 1)[0].strip().upper()
+            if key.startswith("WEIGHT_"):
+                names.add(key)
+    return sorted(n for n in names if n.upper() not in KNOWN_WEIGHT_KEYS)
 
 
 class Settings(BaseSettings):
@@ -96,6 +124,13 @@ class Settings(BaseSettings):
         if not math.isclose(total, 1.0, abs_tol=1e-6):
             logger.warning(
                 "Composite weights sum to %.4f, not 1.0 — ratings will be scaled accordingly", total
+            )
+        for name in unknown_weight_keys():
+            logger.warning(
+                "%s is set but is not a known indicator weight — it is being IGNORED. "
+                "Valid keys: %s",
+                name,
+                ", ".join(sorted(KNOWN_WEIGHT_KEYS)),
             )
         return self
 
