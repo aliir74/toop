@@ -134,10 +134,13 @@ def record_skip(
     indicator: str,
     session_id: int | None = None,
 ) -> None:
-    """Voter declined to rate this target (🤷 ندیدمش). Records a dedupe row so it
-    isn't re-asked within the same session. The session_id is updated on conflict
-    so a skip carries the current session — if the voter skips again next session
-    the row is refreshed and the filter picks up the new session_id.
+    """Voter declined to rate this target (🤷 ندیدمش): they haven't seen this
+    player play. The row hides that player from this voter across ALL indicators
+    until it ages past SKIP_COOLDOWN_DAYS; skipped_at is refreshed on conflict so
+    a repeat skip restarts the window.
+
+    session_id is still recorded, but only as an audit trail of which session the
+    voter was in — it no longer gates what the queue offers.
     """
     if indicator not in _VALID_INDICATORS:
         raise ValueError(f"unknown indicator {indicator!r}")
