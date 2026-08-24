@@ -15,6 +15,7 @@ from toop.handlers.health import (
 )
 from toop.players import add_player
 from toop.rating import INDICATORS
+from toop.voting_queue import record_skip
 
 
 @pytest.fixture(autouse=True)
@@ -173,3 +174,26 @@ async def test_coverage_returns_without_message(conn: sqlite3.Connection) -> Non
     u.effective_user = MagicMock(id=42)
     u.effective_message = None
     await handle_coverage(u, _ctx(conn))
+
+
+def test_health_pending_excludes_whole_skipped_player(conn: sqlite3.Connection) -> None:
+    """pending must mirror the queue: a ندیدمش skip removes all six of that
+    player's indicators, not just the one that was on screen."""
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    add_player(conn, 3, "Carol", "carol")
+    record_skip(conn, 1, 2, "attack")
+    rows = build_health_rows(conn)
+    alice = next(r for r in rows if r["display_name"] == "Alice")
+    assert alice["pending"] == len(INDICATORS)
+
+
+def test_health_pending_counts_expired_skip_again(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    record_skip(conn, 1, 2, "attack")
+    conn.execute("UPDATE score_skips SET skipped_at = datetime('now', '-8 days')")
+    conn.commit()
+    rows = build_health_rows(conn)
+    alice = next(r for r in rows if r["display_name"] == "Alice")
+    assert alice["pending"] == len(INDICATORS)
