@@ -111,3 +111,16 @@ def test_require_runtime_passes_when_set() -> None:
         GROUP_CHAT_ID=-100,
     )
     s.require_runtime()  # should not raise
+
+
+def test_skip_cooldown_default() -> None:
+    assert Settings(_env_file=None).SKIP_COOLDOWN_DAYS == 7
+
+
+def test_skip_cooldown_env_override() -> None:
+    assert Settings(_env_file=None, SKIP_COOLDOWN_DAYS=14).SKIP_COOLDOWN_DAYS == 14
+
+
+def test_skip_cooldown_rejects_zero() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, SKIP_COOLDOWN_DAYS=0)

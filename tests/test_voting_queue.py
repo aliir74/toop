@@ -43,19 +43,25 @@ def test_selector_never_targets_self(conn: sqlite3.Connection) -> None:
 
 
 def test_selector_excludes_scored_and_skipped(conn: sqlite3.Connection) -> None:
-    _seed_players(conn, 2)
-    # Create a session so the session-scoped skip filter can match.
+    """A scored indicator drops out for that indicator only; a skipped player
+    drops out entirely. Three players so the loop still has work to do after
+    player 2 is hidden — with two it would go vacuous and assert nothing."""
     conn.execute("INSERT INTO sessions (session_date, status) VALUES ('2099-01-01', 'open')")
     conn.commit()
     sid = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
-    record_score(conn, 1, 2, "attack", 4)
+    _seed_players(conn, 3)
+    record_score(conn, 1, 3, "attack", 4)
     record_skip(conn, 1, 2, "receive", session_id=sid)
-    remaining = set()
-    while (t := select_next_score_target(conn, voter_id=1, session_id=sid)) is not None:
-        remaining.add(t.indicator)
-        record_score(conn, 1, 2, t.indicator, 3)
-    assert "attack" not in remaining
-    assert "receive" not in remaining
+    seen: set[tuple[int, str]] = set()
+    while (t := select_next_score_target(conn, voter_id=1)) is not None:
+        seen.add((t.player_id, t.indicator))
+        record_score(conn, 1, t.player_id, t.indicator, 3)
+    # Player 3 already scored on attack — never re-offered.
+    assert (3, "attack") not in seen
+    # Player 2 was skipped — hidden on every indicator, not just 'receive'.
+    assert not any(pid == 2 for pid, _ in seen)
+    # The other five of player 3's indicators are still offered.
+    assert len(seen) == len(INDICATORS) - 1
 
 
 def test_selector_returns_none_when_exhausted(conn: sqlite3.Connection) -> None:
@@ -201,3 +207,51 @@ def test_record_skip_rejects_self(conn: sqlite3.Connection) -> None:
     _seed_players(conn, 2)
     with pytest.raises(ValueError):
         record_skip(conn, 1, 1, "attack")
+
+
+def test_skip_hides_player_across_all_indicators(conn: sqlite3.Connection) -> None:
+    """ندیدمش means "I haven't seen this person play" — it hides the whole
+    player, not just the one skill that happened to be on screen."""
+    _seed_players(conn, 3)
+    record_skip(conn, 1, 2, "attack")
+    seen: set[int] = set()
+    while (t := select_next_score_target(conn, voter_id=1)) is not None:
+        seen.add(t.player_id)
+        record_score(conn, 1, t.player_id, t.indicator, 3)
+    assert seen == {3}, f"skipped player 2 resurfaced on another indicator; saw {seen}"
+
+
+def test_skip_still_active_within_cooldown(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 3)
+    record_skip(conn, 1, 2, "attack")
+    conn.execute("UPDATE score_skips SET skipped_at = datetime('now', '-6 days')")
+    conn.commit()
+    seen: set[int] = set()
+    while (t := select_next_score_target(conn, voter_id=1)) is not None:
+        seen.add(t.player_id)
+        record_score(conn, 1, t.player_id, t.indicator, 3)
+    assert 2 not in seen
+
+
+def test_skip_expires_after_cooldown(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 3)
+    record_skip(conn, 1, 2, "attack")
+    conn.execute("UPDATE score_skips SET skipped_at = datetime('now', '-8 days')")
+    conn.commit()
+    seen: set[int] = set()
+    while (t := select_next_score_target(conn, voter_id=1)) is not None:
+        seen.add(t.player_id)
+        record_score(conn, 1, t.player_id, t.indicator, 3)
+    assert 2 in seen
+
+
+def test_record_score_clears_all_skips_for_player(conn: sqlite3.Connection) -> None:
+    """Scoring a player on ANY skill retracts the "I haven't seen them" claim,
+    so every skip row for that pair goes — not just the matching indicator."""
+    _seed_players(conn, 2)
+    record_skip(conn, 1, 2, "attack")
+    record_score(conn, 1, 2, "serve", 4)
+    n = conn.execute(
+        "SELECT COUNT(*) AS n FROM score_skips WHERE voter_id=1 AND player_id=2"
+    ).fetchone()["n"]
+    assert n == 0

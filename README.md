@@ -145,7 +145,7 @@ The more you rate, the more accurate our teams get. Takes 30 seconds.
 
 The rating model is **voter-linked by design** (the `scores` table carries `voter_id` plus the raw 1–5 score). This is a deliberate trade vs the retired pairwise model: storing each rater's scores is what lets the refit normalize out per-rater leniency/severity (a generous or harsh rater no longer skews a player's standing). Scores are never surfaced to the group, but the admin can see them in the database. Only the admin has DB access.
 
-"🤷 ندیدمش" (don't know) taps are recorded in `score_skips` with no score. A daily job DMs the admin a `/pause_voting` suggestion for players whom voters most often can't rate (skip rate crossing `DK_ALERT_MIN_PROMPTS` + `DK_ALERT_RATE`); it reports only counts.
+"🤷 ندیدمش" (don't know) taps are recorded in `score_skips` with no score. The tap means "I haven't seen this person play", so it retires that **whole player** for that voter (all six indicators, not just the one on screen) for `SKIP_COOLDOWN_DAYS` (default 7). They come back into the voter's queue once the skip ages out, or immediately if the voter scores them on any indicator. A daily job DMs the admin a `/pause_voting` suggestion for players whom voters most often can't rate (skip rate crossing `DK_ALERT_MIN_PROMPTS` + `DK_ALERT_RATE`); it reports only counts.
 
 **Profile photos** (`/set_photo`) store a player's face in the bot DB (`players.photo_file_id`) and show it to every voter on that player's rating card. For a friend group that's fine, but be aware it's PII visible to all raters. This does **not** affect the voter-linking trade above: a photo is only a display asset on the prompt, never joined to scores.
 

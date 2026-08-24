@@ -3,6 +3,7 @@ from __future__ import annotations
 import sqlite3
 from dataclasses import dataclass
 
+from toop.config import settings
 from toop.rating import INDICATORS
 
 _VALID_INDICATORS = frozenset(INDICATORS)
@@ -19,8 +20,10 @@ class ScoreTarget:
 # Pick the next unscored (player, indicator) for a voter. Under-sampled players
 # (fewest existing scores on that indicator) surface first so coverage evens out.
 # A player is rateable iff active=1 AND in_pool=1 AND not currently paused, and
-# is never the voter themselves. Already-scored and already-skipped targets are
-# excluded. :exclude_player (the player just rated) sorts last so a DIFFERENT
+# is never the voter themselves. Already-scored targets are excluded per
+# indicator; a ندیدمش skip excludes the player WHOLESALE for SKIP_COOLDOWN_DAYS,
+# because it is a claim about the person, not about one skill.
+# :exclude_player (the player just rated) sorts last so a DIFFERENT
 # player surfaces next when one exists, instead of cycling one name across all
 # six indicators back-to-back.
 _NEXT_TARGET_SQL = """
@@ -48,8 +51,8 @@ WHERE NOT EXISTS (
     )
   AND NOT EXISTS (
         SELECT 1 FROM score_skips sk
-        WHERE sk.voter_id = :voter AND sk.player_id = r.telegram_id AND sk.indicator = i.indicator
-          AND sk.session_id = :session_id
+        WHERE sk.voter_id = :voter AND sk.player_id = r.telegram_id
+          AND sk.skipped_at > datetime('now', '-' || :cooldown_days || ' days')
     )
 ORDER BY
     (r.telegram_id = :exclude_player),
@@ -64,18 +67,23 @@ def select_next_score_target(
     conn: sqlite3.Connection,
     voter_id: int,
     exclude_player: int | None = None,
-    session_id: int | None = None,
 ) -> ScoreTarget | None:
     """Return the next (player, indicator) the voter should rate, or None when
     they've covered everyone.
 
-    session_id scopes the ندیدمش skips: only skips recorded for the current
-    session are excluded. NULL session_id never matches (SQL NULL != NULL), so
-    skips from a prior session are transparently ignored without any cleanup.
+    A ندیدمش skip hides the WHOLE player from this voter — every indicator, not
+    just the one that was on screen — until the row ages past
+    SKIP_COOLDOWN_DAYS. The window is bound as an integer and concatenated into
+    the date modifier; binding a pre-formatted string risks a NULL modifier,
+    which would make the comparison silently false and ignore every skip.
     """
     row = conn.execute(
         _NEXT_TARGET_SQL,
-        {"voter": voter_id, "exclude_player": exclude_player, "session_id": session_id},
+        {
+            "voter": voter_id,
+            "exclude_player": exclude_player,
+            "cooldown_days": settings.SKIP_COOLDOWN_DAYS,
+        },
     ).fetchone()
     if row is None:
         return None
@@ -92,7 +100,9 @@ def record_score(
     """Record (or update) a voter's 1-5 score for a player on one indicator.
 
     UPSERT on the (voter, player, indicator) key makes re-tapping edit the prior
-    score. Any earlier skip of the same target is cleared.
+    score. Every skip of that PLAYER is cleared, not just the matching
+    indicator: a score proves the voter can rate them, which retracts the
+    "I haven't seen them play" claim the skip stood for.
     """
     if indicator not in _VALID_INDICATORS:
         raise ValueError(f"unknown indicator {indicator!r}")
@@ -111,8 +121,8 @@ def record_score(
         (voter_id, player_id, indicator, score),
     )
     conn.execute(
-        "DELETE FROM score_skips WHERE voter_id=? AND player_id=? AND indicator=?",
-        (voter_id, player_id, indicator),
+        "DELETE FROM score_skips WHERE voter_id=? AND player_id=?",
+        (voter_id, player_id),
     )
     conn.commit()
 
@@ -124,10 +134,13 @@ def record_skip(
     indicator: str,
     session_id: int | None = None,
 ) -> None:
-    """Voter declined to rate this target (🤷 ندیدمش). Records a dedupe row so it
-    isn't re-asked within the same session. The session_id is updated on conflict
-    so a skip carries the current session — if the voter skips again next session
-    the row is refreshed and the filter picks up the new session_id.
+    """Voter declined to rate this target (🤷 ندیدمش): they haven't seen this
+    player play. The row hides that player from this voter across ALL indicators
+    until it ages past SKIP_COOLDOWN_DAYS; skipped_at is refreshed on conflict so
+    a repeat skip restarts the window.
+
+    session_id is still recorded, but only as an audit trail of which session the
+    voter was in — it no longer gates what the queue offers.
     """
     if indicator not in _VALID_INDICATORS:
         raise ValueError(f"unknown indicator {indicator!r}")

@@ -9,6 +9,7 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
+from toop.config import settings
 from toop.i18n import indicator_label, t
 
 logger = logging.getLogger(__name__)
@@ -47,7 +48,9 @@ def _calibration_marker(is_calibrating: bool, lifetime: int) -> str:
 
 
 # `pending` is the exact count of (rateable player, indicator) targets this voter
-# hasn't scored or skipped — mirrors voting_queue.select_next_score_target.
+# hasn't scored — mirrors voting_queue.select_next_score_target, including the
+# ندیدمش rule that one skip retires the WHOLE player until it ages out of the
+# SKIP_COOLDOWN_DAYS window.
 HEALTH_SQL = """
 WITH indicators(indicator) AS (
     VALUES ('attack'), ('receive'), ('block'), ('setting'), ('serve'), ('positioning')
@@ -72,7 +75,7 @@ SELECT
               AND s.indicator = i.indicator)
        AND NOT EXISTS (SELECT 1 FROM score_skips sk
             WHERE sk.voter_id = p.telegram_id AND sk.player_id = rp.telegram_id
-              AND sk.indicator = i.indicator))
+              AND sk.skipped_at > datetime('now', '-' || :cooldown_days || ' days')))
         AS pending
 FROM players p
 WHERE p.active = 1
@@ -80,7 +83,7 @@ WHERE p.active = 1
 
 
 def build_health_rows(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute(HEALTH_SQL).fetchall()
+    rows = conn.execute(HEALTH_SQL, {"cooldown_days": settings.SKIP_COOLDOWN_DAYS}).fetchall()
     out = []
     for r in rows:
         out.append(

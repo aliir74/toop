@@ -363,3 +363,23 @@ def test_link_ghost_creates_real_player_if_missing(conn: sqlite3.Connection) -> 
     # real_id 10 does not exist yet → link must create it.
     link_ghost_player(conn, ghost_id=g, real_id=10, username="ten", display_name="Ten")
     assert conn.execute("SELECT 1 FROM players WHERE telegram_id=10").fetchone() is not None
+
+
+def test_link_ghost_preserves_skipped_at(conn: sqlite3.Connection) -> None:
+    """A merge must carry skipped_at across. Re-stamping it with a fresh
+    CURRENT_TIMESTAMP would re-arm every migrated skip and hide the merged-into
+    player from those voters for a whole fresh cooldown window."""
+    add_player(conn, 5, "Five", "five")
+    add_player(conn, 10, "Ten", "ten")
+    ghost = add_ghost_player(conn, "Ghost")
+    g = ghost.telegram_id
+    _skip(conn, 5, g, "attack")
+    conn.execute("UPDATE score_skips SET skipped_at = datetime('now', '-30 days')")
+    conn.commit()
+    link_ghost_player(conn, ghost_id=g, real_id=10, username=None, display_name="Ten")
+    row = conn.execute(
+        "SELECT skipped_at < datetime('now', '-29 days') AS still_old "
+        "FROM score_skips WHERE voter_id=5 AND player_id=10"
+    ).fetchone()
+    assert row is not None
+    assert row["still_old"] == 1, "merge re-stamped skipped_at instead of carrying it over"

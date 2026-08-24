@@ -134,7 +134,8 @@ def link_ghost_player(
         score_rows += 1
 
     for row in conn.execute(
-        "SELECT voter_id, player_id, indicator FROM score_skips WHERE voter_id=? OR player_id=?",
+        "SELECT voter_id, player_id, indicator, skipped_at FROM score_skips "
+        "WHERE voter_id=? OR player_id=?",
         (ghost_id, ghost_id),
     ).fetchall():
         new_voter = _remap_endpoint(ghost_id, real_id, row["voter_id"])
@@ -142,8 +143,11 @@ def link_ghost_player(
         if new_voter == new_player:
             continue
         conn.execute(
-            "INSERT OR IGNORE INTO score_skips (voter_id, player_id, indicator) VALUES (?, ?, ?)",
-            (new_voter, new_player, row["indicator"]),
+            # skipped_at rides along: letting it default to CURRENT_TIMESTAMP
+            # would re-arm every migrated skip for a fresh cooldown window.
+            "INSERT OR IGNORE INTO score_skips (voter_id, player_id, indicator, skipped_at) "
+            "VALUES (?, ?, ?, ?)",
+            (new_voter, new_player, row["indicator"], row["skipped_at"]),
         )
 
     def _count(table: str) -> int:

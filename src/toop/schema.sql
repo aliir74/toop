@@ -105,11 +105,16 @@ CREATE TABLE IF NOT EXISTS scores (
     CHECK (voter_id != player_id)
 );
 
--- Voter-side "skip / 🤷 don't know" dedupe. Carries no score; prevents the
--- (voter, player, indicator) target from being re-asked within the same session.
--- session_id ties the skip to the active session so it resets automatically
--- when a new session opens — the query filters by current session_id, so a skip
--- from session N is invisible to session N+1 without any cleanup job.
+-- Voter-side "skip / 🤷 don't know" cooldown. Carries no score. ندیدمش is a
+-- claim about the PERSON ("I haven't seen them play"), not about one skill, so
+-- a row here hides that player from that voter on ALL SIX indicators until
+-- skipped_at ages past SKIP_COOLDOWN_DAYS (default 7). The queue compares
+-- skipped_at to a rolling window, so skips expire on their own with no cleanup
+-- job. The indicator column records which prompt was on screen (it feeds the
+-- don't-know alert stats) and keeps the primary key from collapsing repeat
+-- skips of the same player into one row.
+-- session_id is an audit trail of the session the voter was in. It no longer
+-- gates the queue; retained because deployed databases already carry it.
 CREATE TABLE IF NOT EXISTS score_skips (
     voter_id        INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
     player_id       INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
