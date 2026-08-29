@@ -1778,7 +1778,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="3.4" data-task-status="pending">
+  <article class="task" data-task-id="3.4" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">3.4</span><span class="task-name">The weekly nudge job and /revote_ping</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1790,48 +1790,48 @@
             <span class="label">Files</span> Create: src/toop/handlers/revote.py · Create: tests/test_revote_handler.py · Reference: src/toop/handlers/alerts.py · Reference: tests/test_health.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests in <code>tests/test_revote_handler.py</code>. Take the context fixture from <code>tests/test_alerts.py</code> (a <code>MagicMock</code> carrying <code>bot_data={&#x27;conn&#x27;: conn}</code> and an <code>AsyncMock</code> <code>send_message</code>), but take the **admin fixture from <code>tests/test_health.py</code>**: <code>require_admin</code> reads <code>toop.admin.settings</code>, so the <code>/revote_ping</code> tests need <code>monkeypatch.setattr(&#x27;toop.admin.settings&#x27;, MagicMock(ADMIN_TELEGRAM_ID=42))</code>. <code>dk_alert_job</code> is undecorated, so test_alerts.py never patches it and copying that file alone leaves the gate untested.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**Patch <code>toop.handlers.revote.settings</code>, not <code>toop.config.settings</code>**, for the cooldown and min-pending tunables — the module reads them off its own imported name, exactly as <code>handlers/alerts.py</code> does, so patching the config module has no effect.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Test list: the job DMs each due voter and calls <code>record_nudge</code> for them; a voter whose DM raises <code>telegram.error.Forbidden</code> is NOT recorded (so next week retries) and does not abort the loop for the voters after them; <code>events_are_paused</code> short-circuits the whole job with no DMs; <code>/revote_ping</code> from a non-admin is rejected; <code>/revote_ping force</code> bypasses the cooldown while a bare <code>/revote_ping</code> honours it; with no targets the admin gets <code>revote.ping_none</code>; plus the two guard tests every handler module here has — <code>test_revote_ping_returns_without_message</code> (a None <code>effective_message</code>) and a missing-connection test on <code>_conn</code>, both of which are otherwise uncovered lines under the 100% gate.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_revote_handler.py -q</code> and confirm they fail.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write <code>_run_nudges(conn, context, *, ignore_cooldown) -&gt; tuple[list[NudgeTarget], int]</code> returning (sent targets, failed count), shared by both entry points: fetch targets, DM <code>t(&#x27;revote.dm_nudge&#x27;, ...)</code> per voter, <code>record_nudge</code> only on a successful send, catch <code>Forbidden</code> and <code>BadRequest</code> per voter and log at info level.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text"><code>revote.dm_nudge</code> takes a <code>first</code> kwarg but <code>NudgeTarget</code> carries only <code>display_name</code>. Derive it the way <code>_build_nudge_templates</code> already does (<code>display_name.split()[0]</code>), or add a <code>first_name</code> field to the dataclass — pick one and be consistent.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Neither entry point may touch <code>REVOTE_AFTER_DAYS</code> or write to <code>scores</code>. <code>ignore_cooldown</code> waives only the per-voter nudge cooldown, so <code>/revote_ping force</code> can push twice in a week but still never asks anyone to re-rate a score that is inside the window. Put that sentence in the module docstring: it is the single most likely thing for a future reader to get wrong.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>revote_nudge_job(context)</code>: return early when <code>pause.events_are_paused(conn, datetime.now(UTC))</code> is true (the group is on a break, so do not chase votes), otherwise run <code>_run_nudges</code> with <code>ignore_cooldown=False</code> and log a one-line summary.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>handle_revote_ping(update, context)</code> decorated with <code>@require_admin</code>: run <code>_run_nudges</code> with <code>ignore_cooldown=True</code> only when <code>context.args and context.args[0] == &#x27;force&#x27;</code>, then reply with <code>revote.ping_none</code> when nothing was sent, otherwise <code>revote.ping_header</code> followed by one <code>revote.ping_row</code> per voter DMed and a closing <code>revote.ping_sent</code> carrying the sent/failed counts. This mirrors the existing <code>/nudge</code> shape (<code>vote.nudge_header</code> plus per-voter templates) and is what makes the 3.3 keys load-bearing rather than dead.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_revote_handler.py -q</code> exits 0 and the full-suite run still reports 100% statement coverage.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(revote): weekly nudge job and /revote_ping</span>
         </li>
           </ol>
