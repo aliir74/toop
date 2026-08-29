@@ -1,0 +1,2444 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Player-wide weekly cooldown for ندیدمش skips — Plan</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #F5F4EF;
+    --ink: #0A0A0A;
+    --ink-2: #5A5A55;
+    --paper: #FFFFFF;
+    --accent: #5856D6;
+    --accent-2: #00C7BE;
+    --accent-3: #FF6392;
+    --success: #00C781;
+    --warn: #FFB020;
+    --rule: rgba(10,10,10,0.10);
+    --rule-2: rgba(10,10,10,0.18);
+    --shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px -12px rgba(10,10,10,0.10);
+    --display: "Instrument Serif", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0F1014;
+      --ink: #ECECEC;
+      --ink-2: #9B9B9B;
+      --paper: #181920;
+      --rule: rgba(255,255,255,0.10);
+      --rule-2: rgba(255,255,255,0.18);
+      --shadow: 0 1px 0 rgba(0,0,0,0.4), 0 8px 24px -12px rgba(0,0,0,0.6);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; overflow-x: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  input, select, textarea { font-size: 16px; }
+  .container {
+    width: min(1280px, 100% - 2rem);
+    margin-inline: auto;
+    padding: 56px 0 120px;
+  }
+  @media (min-width: 721px) {
+    .container { width: min(1280px, 100% - 6rem); }
+  }
+
+  /* HERO */
+  .hero {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 40px;
+    align-items: end;
+    margin-bottom: 48px;
+    padding-bottom: 28px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .hero h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(38px, 9vw, 84px);
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    margin: 0 0 18px;
+    overflow-wrap: anywhere;
+  }
+  .hero .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 18px;
+  }
+  .meta { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pill {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    background: var(--paper);
+    padding: 5px 12px;
+    border: 1px solid var(--rule-2);
+    border-radius: 999px;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .pill.status-planning { background: #FFE8A3; color: #5A4500; border-color: #E8C766; }
+  .pill.status-in_progress { background: var(--accent); color: white; border-color: transparent; }
+  .pill.status-done { background: var(--success); color: white; border-color: transparent; }
+
+  .progress-ring {
+    width: 132px; height: 132px; flex-shrink: 0;
+  }
+  .progress-ring circle { fill: none; stroke-width: 10; }
+  .progress-ring .bg { stroke: var(--rule-2); }
+  .progress-ring .fg { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 0.5s ease; }
+  .progress-ring text {
+    font-family: var(--display);
+    font-size: 38px;
+    fill: var(--ink);
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+
+  /* ARCHITECTURE */
+  .architecture {
+    background: var(--paper);
+    border-left: 4px solid var(--accent);
+    padding: 22px 28px;
+    margin-bottom: 56px;
+    box-shadow: var(--shadow);
+    border-radius: 0 8px 8px 0;
+  }
+  .architecture h2 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .architecture p {
+    margin: 0;
+    font-size: 19px;
+    line-height: 1.6;
+    font-family: var(--sans);
+    font-weight: 500;
+    letter-spacing: -0.005em;
+  }
+
+  /* PHASE */
+  .phase { margin-bottom: 56px; }
+  .phase-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 14px;
+  }
+  .phase-header h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(30px, 6vw, 44px);
+    line-height: 1.05;
+    margin: 0;
+    letter-spacing: -0.012em;
+    overflow-wrap: anywhere;
+  }
+  .phase-header h2 .num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-2);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    vertical-align: middle;
+    margin-right: 14px;
+    background: var(--paper);
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--rule-2);
+  }
+  .phase-progress {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-2);
+    letter-spacing: 0.06em;
+  }
+  .phase-bar {
+    height: 4px;
+    background: var(--rule);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 22px;
+  }
+  .phase-bar .fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  /* TASK */
+  .task {
+    background: var(--paper);
+    border: 1px solid var(--rule-2);
+    border-radius: 12px;
+    margin-bottom: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    transition: opacity 0.2s ease;
+  }
+  .task[data-task-status="done"] { opacity: 0.55; }
+  .task[data-task-status="done"] .task-header h3 .task-name { text-decoration: line-through; }
+
+  .task-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 24px;
+    min-height: 44px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .task-header h3 {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 19px;
+    margin: 0;
+    line-height: 1.3;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .task-header h3 .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+  .task-header .right {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+    letter-spacing: 0.04em;
+  }
+  .task-header .chevron {
+    transition: transform 0.2s ease;
+    color: var(--ink-2);
+    font-size: 14px;
+  }
+  .task[data-open="true"] .chevron { transform: rotate(180deg); }
+  .task-body {
+    display: none;
+    padding: 18px 24px 22px;
+    border-top: 1px solid var(--rule);
+  }
+  .task[data-open="true"] .task-body { display: block; }
+
+  .files {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.7;
+  }
+  .files .label {
+    font-weight: 600;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 11px;
+    margin-right: 10px;
+  }
+
+  /* TASK GRID — main column + optional notes rail */
+  .task-grid { display: block; }
+  .task-grid.with-notes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 720px) {
+    .task-grid.with-notes { grid-template-columns: minmax(0, 1fr); }
+  }
+  .task-main { min-width: 0; }
+  .notes {
+    background: linear-gradient(180deg, var(--bg) 0%, transparent 100%);
+    border-left: 2px solid var(--accent-2);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 18px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+  .notes .notes-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .notes .notes-label + p,
+  .notes .notes-label + ul { margin: 0 0 12px; }
+  .notes .notes-label + p:last-child,
+  .notes .notes-label + ul:last-child { margin-bottom: 0; }
+  .notes p { color: var(--ink); }
+  .notes ul {
+    padding-left: 16px;
+    margin: 0;
+  }
+  .notes li { margin-bottom: 4px; color: var(--ink); }
+  .notes a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--accent);
+  }
+  .notes a:hover { border-bottom-style: solid; }
+  .notes code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    background: var(--paper);
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--rule);
+  }
+
+  /* DIFF — unified git-style diff for before/after code */
+  .diff-card {
+    margin-top: 18px;
+    background: var(--paper);
+    border: 1px solid var(--rule-2);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .diff-card-header {
+    padding: 9px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+  .diff-card-header .diff-file {
+    color: var(--ink);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+  .diff {
+    margin: 0;
+    padding: 12px 0;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  .diff code { font-family: inherit; display: block; }
+  .diff .line {
+    display: block;
+    padding: 0 16px 0 36px;
+    position: relative;
+    white-space: pre;
+    min-height: 1.2em;
+  }
+  .diff .line::before {
+    position: absolute;
+    left: 12px;
+    width: 16px;
+    text-align: center;
+    font-weight: 600;
+    content: " ";
+    color: var(--ink-2);
+    opacity: 0.4;
+  }
+  .diff .add { background: rgba(0, 199, 129, 0.10); }
+  .diff .add::before { content: "+"; color: #008859; opacity: 1; }
+  .diff .del { background: rgba(232, 67, 127, 0.10); }
+  .diff .del::before { content: "-"; color: #B0264A; opacity: 1; }
+  @media (prefers-color-scheme: dark) {
+    .diff .add { background: rgba(0, 199, 129, 0.16); }
+    .diff .add::before { color: #6FE2A6; }
+    .diff .del { background: rgba(232, 67, 127, 0.16); }
+    .diff .del::before { color: #FF95B4; }
+  }
+
+  /* COMPARE — before / after side-by-side */
+  .compare {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 720px) {
+    .compare { grid-template-columns: 1fr; }
+  }
+  .compare-col {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 14px 16px;
+    border: 1px solid var(--rule);
+    overflow: hidden;
+  }
+  .compare-col.before { border-left: 3px solid var(--warn); }
+  .compare-col.after { border-left: 3px solid var(--success); }
+  .compare-col .compare-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .compare-col.before .compare-label { color: #B07A00; }
+  .compare-col.after .compare-label { color: #008859; }
+  .compare-col pre {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--ink);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* ARCHITECTURE DIAGRAM — sits under the architecture callout */
+  .architecture-diagram {
+    background: var(--paper);
+    border-radius: 12px;
+    padding: 24px;
+    margin: -32px 0 56px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--rule);
+    overflow-x: auto;
+  }
+  .architecture-diagram svg { display: block; width: 100%; height: auto; }
+
+  /* PLAN NOTES — free-form top-level notes box */
+  .plan-notes {
+    margin: -32px 0 56px;
+    padding: 16px 20px;
+    background: var(--paper);
+    border-radius: 12px;
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow);
+  }
+  .plan-notes label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .plan-notes textarea {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 60px;
+  }
+  .plan-notes textarea:focus { outline: none; }
+  .plan-notes textarea::placeholder { color: var(--ink-2); font-style: italic; }
+
+  /* TASK COMMENT — per-task annotation injected by JS into each task body */
+  .task-comment {
+    width: 100%;
+    margin-top: 16px;
+    padding: 10px 12px;
+    border: 1px dashed var(--rule-2);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    resize: vertical;
+    min-height: 44px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .task-comment::placeholder { color: var(--ink-2); font-style: italic; }
+  .task-comment:focus {
+    outline: none;
+    border-style: solid;
+    border-color: var(--accent);
+    background: var(--paper);
+  }
+  .task-comment.has-content {
+    border-style: solid;
+    border-color: var(--accent-2);
+    background: var(--paper);
+  }
+
+  /* INLINE ANNOTATIONS — click any element to attach a note */
+  .annotatable { position: relative; }
+  .annotate-btn {
+    position: absolute;
+    top: 4px;
+    inset-inline-end: 6px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--rule-2);
+    background: var(--paper);
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 5;
+  }
+  .annotatable:hover > .annotate-btn,
+  .annotatable:focus-within > .annotate-btn,
+  .annotate-btn:focus { display: flex; }
+  @media (hover: none) {
+    .annotate-btn { display: flex; }
+  }
+  .annotatable.has-comment > .annotate-btn {
+    display: flex;
+    background: var(--accent-2);
+    color: var(--paper);
+    border-color: var(--accent-2);
+  }
+  .annotatable.has-comment { box-shadow: inset 3px 0 0 var(--accent-2); }
+  .diff .line.annotatable.has-comment { box-shadow: inset 2px 0 0 var(--accent-2); }
+  .inline-comment {
+    margin: 6px 0 8px;
+    padding: 8px 12px;
+    border-left: 2px solid var(--accent-2);
+    background: linear-gradient(180deg, rgba(0, 199, 190, 0.06) 0%, transparent 100%);
+    border-radius: 0 6px 6px 0;
+    display: none;
+  }
+  .inline-comment.open { display: block; }
+  .inline-comment .key {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 4px;
+  }
+  .inline-comment textarea {
+    width: 100%;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 38px;
+  }
+  .inline-comment textarea:focus { outline: none; border-color: var(--accent); }
+
+  /* COPY RESULT — sticky action bar */
+  .actionbar {
+    position: fixed;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    right: calc(16px + env(safe-area-inset-right));
+    left: auto;
+    display: flex;
+    gap: 10px;
+    z-index: 900;
+    max-width: calc(100% - 32px);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .actionbar button {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    min-height: 44px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--rule-2);
+    cursor: pointer;
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: var(--shadow);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .actionbar button:hover { transform: translateY(-1px); }
+  .actionbar button.primary {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  .actionbar button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .actionbar button .count {
+    background: rgba(255,255,255,0.18);
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-left: 6px;
+    font-size: 11px;
+  }
+  .actionbar button:not(.primary) .count { background: var(--rule); }
+  .actionbar button .kbd-hint {
+    margin-left: 8px;
+    font-size: 11px;
+    opacity: 0.65;
+    letter-spacing: 0;
+  }
+  @media (hover: none) { .actionbar button .kbd-hint { display: none; } }
+  /* Claude's written-back answer to a comment (added when it processes the copied JSON). */
+  .claude-response {
+    margin: 6px 0 12px;
+    padding: 10px 12px;
+    border-left: 2px solid var(--ink-2);
+    background: color-mix(in srgb, var(--ink-2) 6%, transparent);
+    border-radius: 0 6px 6px 0;
+  }
+  .claude-response .key {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 4px;
+  }
+  .claude-response p { margin: 0 0 6px; font-size: 14px; line-height: 1.55; }
+  .claude-response p:last-child { margin-bottom: 0; }
+  /* Manual-copy fallback panel (only if both clipboard paths fail). */
+  .copy-fallback {
+    position: fixed;
+    left: 50%;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    width: min(560px, calc(100% - 32px));
+    background: var(--paper);
+    border: 1px solid var(--rule-2);
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: var(--shadow, 0 8px 24px -12px rgba(10,10,10,0.3));
+    z-index: 1100;
+  }
+  .copy-fallback label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-2);
+    margin-bottom: 6px;
+  }
+  .copy-fallback textarea {
+    width: 100%;
+    min-height: 120px;
+    font-family: var(--mono);
+    font-size: 12px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 8px;
+    box-sizing: border-box;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .copy-fallback button {
+    margin-top: 8px;
+    min-height: 44px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--rule-2);
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+  }
+    /* Text highlight (select-to-comment). Reads as "highlighted with a note attached". */
+  mark.hl {
+    background: var(--hl, rgba(84,150,255,0.28));
+    color: inherit;
+    border-radius: 2px;
+    padding: 0.05em 0;
+    cursor: pointer;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  mark.hl.has-note { box-shadow: inset 0 -0.14em 0 var(--accent, #5856D6); }
+  mark.hl.active { background: var(--hl-active, rgba(84,150,255,0.5)); }
+  @media (prefers-color-scheme: dark) {
+    mark.hl { background: var(--hl-dark, rgba(96,150,255,0.34)); }
+    mark.hl.active { background: var(--hl-active-dark, rgba(96,150,255,0.55)); }
+  }
+
+  /* Floating "comment on this selection" button, positioned at the selection. */
+  .sel-comment-btn {
+    position: absolute;
+    z-index: 950;
+    transform: translate(-50%, -100%);
+    min-height: 36px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: none;
+    background: var(--ink, #0A0A0A);
+    color: var(--paper, #fff);
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    box-shadow: var(--shadow, 0 8px 24px -12px rgba(10,10,10,0.3));
+    display: none;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .sel-comment-btn.show { display: inline-flex; }
+
+  .inline-comment .quote {
+    display: block;
+    font-family: var(--sans, system-ui, sans-serif);
+    font-size: 13px;
+    font-style: italic;
+    color: var(--ink, #0A0A0A);
+    border-left: 2px solid var(--hl, rgba(84,150,255,0.6));
+    padding-left: 8px;
+    margin-bottom: 6px;
+    opacity: 0.85;
+  }
+  .inline-comment .remove-hl {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    margin-top: 6px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--ink-2, #5A5A55);
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+
+  /* Pasted or dropped image attachments on a comment. Thumbnail plus the filename the
+     browser saved it under, so Claude can find the file on disk and read it. */
+  .cl-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .cl-attach {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 1px solid var(--rule-2, rgba(10,10,10,0.18));
+    border-radius: 8px;
+    background: var(--paper, #fff);
+    max-width: 100%;
+  }
+  .cl-attach img {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--rule, rgba(10,10,10,0.10));
+    flex: none;
+    cursor: zoom-in;
+  }
+  .cl-attach .name {
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 11px;
+    color: var(--ink-2, #5A5A55);
+    word-break: break-all;
+    min-width: 0;
+  }
+  .cl-attach button {
+    min-height: 44px;
+    padding: 0 6px;
+    border: none;
+    background: none;
+    color: var(--ink-2, #5A5A55);
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 11px;
+    text-decoration: underline;
+    cursor: pointer;
+    flex: none;
+  }
+  /* Drop target feedback while an image file is dragged over a comment box. */
+  textarea.cl-dropping {
+    border-color: var(--accent, #5856D6);
+    background: color-mix(in srgb, var(--accent, #5856D6) 7%, transparent);
+  }
+  /* Tap or click a thumbnail to check the shot at full size before copying. */
+  .cl-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    background: rgba(10,10,10,0.82);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    cursor: zoom-out;
+  }
+  .cl-lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; }
+
+.toast {
+    position: fixed;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 1000;
+    box-shadow: var(--shadow);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .steps { list-style: none; padding: 0; margin: 0; }
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 0;
+    border-top: 1px dashed var(--rule);
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  .step:first-child { border-top: none; padding-top: 4px; }
+  .step input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 24px; height: 24px;
+    min-width: 24px; min-height: 24px;
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    background: var(--paper);
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 1px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    position: relative;
+  }
+  .step input[type="checkbox"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .step input[type="checkbox"]:checked::after {
+    content: "✓";
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    line-height: 1;
+  }
+  .step[data-status="done"] .step-text {
+    text-decoration: line-through;
+    color: var(--ink-2);
+  }
+  .step-text { flex: 1; }
+  .step-text code {
+    font-family: var(--mono);
+    font-size: 0.93em;
+    background: var(--bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+  }
+
+  /* SECTION (Decisions / Errors) */
+  .section { margin-top: 56px; }
+  .section h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(26px, 5vw, 36px);
+    margin: 0 0 18px;
+    letter-spacing: -0.01em;
+  }
+  .section .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+  }
+  .section table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--paper);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .section th, .section td {
+    padding: 13px 18px;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+    font-size: 15px;
+    vertical-align: top;
+  }
+  .section th {
+    background: var(--bg);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  .section tr:last-child td { border-bottom: none; }
+
+  /* DIAGRAMS */
+  .diagrams { margin-top: 56px; }
+  .diagrams .caption {
+    font-style: italic;
+    color: var(--ink-2);
+    margin: 8px 0 12px;
+    font-family: var(--display);
+    font-size: 18px;
+  }
+  .diagrams svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: var(--paper);
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+
+  /* FOOTER */
+  .footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-2);
+    letter-spacing: 0.04em;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .footer code {
+    background: var(--paper);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+    color: var(--ink);
+  }
+
+  /* MOBILE: collapse multi-column layouts and tighten chrome under ~640px */
+  @media (max-width: 640px) {
+    .hero {
+      grid-template-columns: 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    .progress-ring { width: 104px; height: 104px; }
+    .phase-header {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .architecture { padding: 18px 20px; }
+    .architecture p { font-size: 17px; }
+    .task-header { padding: 16px 18px; }
+    .task-body { padding: 16px 18px 20px; }
+    .container { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
+  }
+
+  /* PRINT */
+  @media print {
+    body { background: white; }
+    .task-body { display: block !important; }
+    .chevron { display: none; }
+    .container { max-width: none; padding: 24px; }
+    .task { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
+    .architecture, .architecture-diagram { box-shadow: none; }
+    .task-grid.with-notes { grid-template-columns: minmax(0, 1fr) 200px; }
+    .notes { break-inside: avoid; }
+    .compare { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="hero" data-status="done" data-slug="2026-08-23-dk-skip-player-cooldown" data-feature="Player-wide weekly cooldown for ندیدمش skips" data-tdd="true">
+    <div>
+      <div class="eyebrow">Implementation Plan · 2026-08-23</div>
+      <h1>Player-wide weekly cooldown for ندیدمش skips</h1>
+      <div class="meta">
+        <span class="pill status-planning" data-status-pill>Planning</span>
+        <span class="pill" data-task-count>0 / 0 tasks</span>
+        <span class="pill" data-step-count>0 / 0 steps</span>
+        <span class="pill">TDD</span>
+      </div>
+    </div>
+    <svg class="progress-ring" viewBox="0 0 132 132">
+      <circle class="bg" cx="66" cy="66" r="56" />
+      <circle class="fg" cx="66" cy="66" r="56" stroke-dasharray="351.86" stroke-dashoffset="351.86" transform="rotate(-90 66 66)" />
+      <text x="66" y="68" data-progress-label>0%</text>
+    </svg>
+  </header>
+
+  <section class="architecture">
+    <h2>Architecture</h2>
+    <p data-architecture>The 🤷 ندیدمش tap means &quot;I have not seen this person play&quot;, but the queue treats it as a per-indicator dedupe scoped to the active session, so the same player immediately comes back under a different skill. This plan makes a skip suppress the whole player for that voter for a rolling cooldown window (SKIP_COOLDOWN_DAYS, default 7) instead of one (player, indicator) pair for one session. The row shape in score_skips is unchanged, so dont_know_stats and the DK alert keep working; the exclusion predicate changes in voting_queue.select_next_score_target, its mirror in handlers/health.py, and the ghost-merge copy in players.py that would otherwise re-arm every migrated skip.</p>
+  </section>
+
+  <section class="architecture-diagram"><svg viewBox="0 0 800 300" role="img" aria-label="Before: a skip hides one player-indicator pair for the current session. After: a skip hides the whole player for seven days." xmlns="http://www.w3.org/2000/svg"><style>.box{fill:#FFFFFF;stroke:#D8D5CC;stroke-width:1.5}.box-bad{fill:#FDEEF2;stroke:#E4A2B8;stroke-width:1.5}.box-good{fill:#E9F7F0;stroke:#8CC9AC;stroke-width:1.5}.box-key{fill:#EEEDFB;stroke:#A7A2E8;stroke-width:1.5}.lbl{fill:#181818;font-family:Inter,system-ui,-apple-system,sans-serif;font-size:13px}.lbl-t{fill:#181818;font-family:Inter,system-ui,-apple-system,sans-serif;font-size:14px;font-weight:600}.lbl-m{fill:#6B6860;font-family:ui-monospace,monospace;font-size:11px}.ln{stroke:#8A857A;stroke-width:1.5;fill:none}@media (prefers-color-scheme: dark){.box{fill:#232228;stroke:#413E48}.box-bad{fill:#3A2029;stroke:#8A4B62}.box-good{fill:#17332A;stroke:#3F7C63}.box-key{fill:#26243F;stroke:#5A54A8}.lbl,.lbl-t{fill:#EDEBE6}.lbl-m{fill:#9C978C}.ln{stroke:#7D7889}}</style><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="#8A857A"/></marker></defs><text x="16" y="28" class="lbl-t">Before</text><rect x="16" y="44" width="160" height="56" rx="8" class="box-key"/><text x="32" y="68" class="lbl">tap ندیدمش</text><text x="32" y="88" class="lbl-m">Sara / attack</text><path d="M 176 72 L 240 72" class="ln" marker-end="url(#arrow)"/><rect x="248" y="44" width="216" height="56" rx="8" class="box"/><text x="264" y="68" class="lbl">hide (voter, Sara, attack)</text><text x="264" y="88" class="lbl-m">only while session_id matches</text><path d="M 464 72 L 528 72" class="ln" marker-end="url(#arrow)"/><rect x="536" y="44" width="248" height="56" rx="8" class="box-bad"/><text x="552" y="68" class="lbl">next card: Sara / receive</text><text x="552" y="88" class="lbl-m">same person, 5 skills to go</text><text x="16" y="176" class="lbl-t">After</text><rect x="16" y="192" width="160" height="56" rx="8" class="box-key"/><text x="32" y="216" class="lbl">tap ندیدمش</text><text x="32" y="236" class="lbl-m">Sara / attack</text><path d="M 176 220 L 240 220" class="ln" marker-end="url(#arrow)"/><rect x="248" y="192" width="216" height="56" rx="8" class="box"/><text x="264" y="216" class="lbl">hide (voter, Sara) entirely</text><text x="264" y="236" class="lbl-m">skipped_at &gt; now - 7 days</text><path d="M 464 220 L 528 220" class="ln" marker-end="url(#arrow)"/><rect x="536" y="192" width="248" height="56" rx="8" class="box-good"/><text x="552" y="216" class="lbl">next card: a different player</text><text x="552" y="236" class="lbl-m">Sara returns after the window</text></svg></section>
+
+  <section class="plan-notes">
+    <label for="plan-notes-input">Plan-wide notes</label>
+    <textarea id="plan-notes-input" placeholder="General comments, blockers, scope changes, or context for Claude that doesn't belong to a single element..."></textarea>
+  </section>
+
+  <section class="phase" data-phase-id="1">
+  <div class="phase-header">
+    <h2><span class="num">Phase 1</span>Cooldown window in the voting queue</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="1.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.1</span><span class="task-name">Add SKIP_COOLDOWN_DAYS setting</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/config.py · Modify: .env.example · Modify: tests/test_config.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing test: in <code>tests/test_config.py</code>, assert <code>Settings(_env_file=None).SKIP_COOLDOWN_DAYS == 7</code>, that <code>Settings(_env_file=None, SKIP_COOLDOWN_DAYS=0)</code> raises a pydantic <code>ValidationError</code>, and add an env-override test mirroring the existing <code>test_dk_alert_env_overrides</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: add <code>SKIP_COOLDOWN_DAYS: int = Field(default=7, gt=0)</code> to <code>Settings</code> next to <code>DEFAULT_PAUSE_DAYS</code>, with a short comment saying a 🤷 ندیدمش hides that whole player from that voter for this many days.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: add <code>SKIP_COOLDOWN_DAYS=7</code> to <code>.env.example</code> on the line immediately after <code>DEFAULT_PAUSE_DAYS=14</code>, before the <code>VPS_SSH</code> block.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>uv run pytest tests/test_config.py -v</code> passes, and <code>uv run python -c &quot;from toop.config import Settings; print(Settings(_env_file=None).SKIP_COOLDOWN_DAYS)&quot;</code> prints <code>7</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(config): add SKIP_COOLDOWN_DAYS for ندیدمش cooldown</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>The cooldown length is a group-behaviour knob, not a constant — Ali may want 14 days once the roster is well covered. Env-tunable matches how DK_ALERT_* and DEFAULT_PAUSE_DAYS are already handled.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>Must use `Settings(_env_file=None)` like every other test in this file — a bare `Settings()` reads the developer&#x27;s real `.env` and the assertion breaks on any machine that overrides the value.</li>
+            <li>`gt=0` rather than `ge=0`: a zero-day cooldown would silently restore the old re-ask-immediately behaviour, so reject it at config load.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="1.2" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.2</span><span class="task-name">Make the queue filter player-wide and time-windowed</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing test: <code>test_skip_hides_player_across_all_indicators</code> — <code>_seed_players(conn, 3)</code>, <code>record_skip(conn, 1, 2, &quot;attack&quot;)</code>, then drain the queue with <code>while (t := select_next_score_target(conn, 1)) is not None: record_score(conn, 1, t.player_id, t.indicator, 3)</code> collecting every <code>t.player_id</code>, and assert the collected set is exactly <code>{3}</code> — player 2 never appears on any of the six skills.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing test: <code>test_skip_expires_after_cooldown</code> — <code>record_skip</code>, then <code>UPDATE score_skips SET skipped_at = datetime(&#x27;now&#x27;, &#x27;-8 days&#x27;)</code>, and assert player 2 is offered again.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing test: <code>test_skip_still_active_within_cooldown</code> — same but backdate to <code>-6 days</code>, and assert player 2 is still hidden. This is the test that catches a NULL date modifier.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: in <code>_NEXT_TARGET_SQL</code>, replace the <code>score_skips</code> NOT EXISTS clause with a player-level, time-windowed one — drop <code>AND sk.indicator = i.indicator</code> and <code>AND sk.session_id = :session_id</code>, and add <code>AND sk.skipped_at &gt; datetime(&#x27;now&#x27;, &#x27;-&#x27; || :cooldown_days || &#x27; days&#x27;)</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: change <code>select_next_score_target</code> to drop the now-unused <code>session_id</code> parameter and bind <code>&quot;cooldown_days&quot;: settings.SKIP_COOLDOWN_DAYS</code> (an int) instead; import <code>settings</code> from <code>toop.config</code>. Update the docstring to describe the player-wide cooldown, not session scoping.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: rewrite the existing <code>test_selector_excludes_scored_and_skipped</code> (tests/test_voting_queue.py:44) — it calls both <code>record_skip(..., session_id=sid)</code> and <code>select_next_score_target(..., session_id=sid)</code>, so it <code>TypeError</code>s on the new signature, and with only 2 players it also goes vacuous (skipping player 2 empties the queue, so the while loop never runs and both asserts pass trivially). Seed 3 players and assert on the skipped player&#x27;s exclusion directly.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>uv run pytest tests/test_voting_queue.py -v</code> passes, including the three new tests and the rewritten one.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: fix(voting): ندیدمش hides the whole player for a cooldown window</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>This is the actual bug. `ندیدمش` is a statement about the person (&quot;I have not seen them play&quot;), so scoping the suppression to one indicator guarantees the voter is asked about the same person five more times.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>Use the `&#x27;-&#x27; || :cooldown_days || &#x27; days&#x27;` concatenation form with an int bind, NOT `datetime(&#x27;now&#x27;, :cooldown)` with a pre-formatted string. If the latter is ever fed an int, `datetime()` returns NULL, `skipped_at &gt; NULL` is never true, and every skip is silently ignored — the bug returns with no error and no failing test.</li>
+            <li>`skipped_at` is written with `CURRENT_TIMESTAMP`, which SQLite stores in UTC; `datetime(&#x27;now&#x27;, ...)` is also UTC, so the comparison is consistent. Do NOT switch either side to `localtime`.</li>
+            <li>Removing the `session_id` parameter is a signature change — tests/test_voting_queue.py:54 and handlers/voting.py must be updated or the suite fails on unexpected-kwarg errors.</li>
+          </ul>
+        </aside>
+      </div>
+      <div class="diff-card">
+        <div class="diff-card-header">
+          <span class="diff-file">Diff</span>
+          <span>unified diff</span>
+        </div>
+        <pre class="diff"><code><span class="line">AND NOT EXISTS (</span><span class="line">    SELECT 1 FROM score_skips sk</span><span class="line del">    WHERE sk.voter_id = :voter AND sk.player_id = r.telegram_id AND sk.indicator = i.indicator</span><span class="line add">    WHERE sk.voter_id = :voter AND sk.player_id = r.telegram_id</span><span class="line del">      AND sk.session_id = :session_id</span><span class="line add">      AND sk.skipped_at &gt; datetime(&#x27;now&#x27;, &#x27;-&#x27; || :cooldown_days || &#x27; days&#x27;)</span><span class="line">)</span></code></pre>
+      </div>
+    </div>
+  </article>
+
+  <article class="task" data-task-id="1.3" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.3</span><span class="task-name">Clear skips player-wide when a score lands</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing test: <code>test_record_score_clears_all_skips_for_player</code> — <code>record_skip(conn, 1, 2, &quot;attack&quot;)</code>, then <code>record_score(conn, 1, 2, &quot;serve&quot;, 4)</code>, then assert <code>SELECT COUNT(*) FROM score_skips WHERE voter_id=1 AND player_id=2</code> is 0.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: in <code>record_score</code>, widen the cleanup <code>DELETE FROM score_skips WHERE voter_id=? AND player_id=? AND indicator=?</code> to <code>WHERE voter_id=? AND player_id=?</code> and drop the indicator bind.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: update the <code>record_skip</code> docstring — it now records a player-level cooldown marker; note that <code>session_id</code> is still stored for audit but no longer gates the queue.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>uv run pytest tests/test_voting_queue.py -v</code> passes; confirm the pre-existing <code>test_record_score_clears_prior_skip</code> (tests/test_voting_queue.py:157) still passes unchanged.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: fix(voting): clear a player&#x27;s skip rows when any score for them lands</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>If the voter proves they can rate the person on any skill, the &quot;I have not seen them&quot; claim is stale — leaving other indicator rows behind would keep the player hidden for the rest of the window for no reason.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>Widening the DELETE also removes rows that feed `dont_know_stats`, very slightly lowering a player&#x27;s historical dk_count. That is correct: those skips were retracted by an actual score.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="1.4" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.4</span><span class="task-name">Stop the ghost merge re-arming migrated skips</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/players.py · Modify: tests/test_players.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing test: in <code>tests/test_players.py</code>, insert a <code>score_skips</code> row for the ghost with <code>skipped_at = datetime(&#x27;now&#x27;, &#x27;-30 days&#x27;)</code>, run the ghost merge, and assert the surviving row&#x27;s <code>skipped_at</code> is still ~30 days old (not within the last minute).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: in <code>players.py</code> (around line 137), widen the SELECT to <code>SELECT voter_id, player_id, indicator, skipped_at FROM score_skips WHERE voter_id=? OR player_id=?</code> and carry <code>skipped_at</code> into the <code>INSERT OR IGNORE INTO score_skips (voter_id, player_id, indicator, skipped_at) VALUES (?, ?, ?, ?)</code> at line 145.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>uv run pytest tests/test_players.py -v</code> passes, including the pre-existing merge tests around line 311.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: fix(players): preserve skipped_at when merging a ghost account</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>The merge currently re-inserts skip rows without `skipped_at`, so they get a fresh CURRENT_TIMESTAMP. That is harmless today (session_id becomes NULL, which never matched), but under a time-window filter a single /merge would hide every merged-into player from those voters for the full cooldown.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>This task must land before or with 1.2 conceptually, but it is only observable once the window filter exists — keep it in phase 1 so the two ship together.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="1.V" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.V</span><span class="task-name">Phase 1 verification</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Reference: tests/test_voting_queue.py · Reference: tests/test_config.py · Reference: tests/test_players.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>uv run pytest tests/test_voting_queue.py tests/test_config.py tests/test_players.py -v</code> exits 0 with no failures.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>grep -n &quot;session_id&quot; src/toop/voting_queue.py</code> shows session_id only inside <code>record_skip</code> — never in <code>_NEXT_TARGET_SQL</code> or <code>select_next_score_target</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>grep -n &quot;cooldown_days&quot; src/toop/voting_queue.py</code> returns exactly two hits (the SQL clause and the params dict).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>uv run python -c &quot;import toop.db as d, toop.players as p, toop.voting_queue as q; c=d.get_connection(&#x27;:memory:&#x27;); d.init_db(c); [p.add_player(c,i,f&#x27;P{i}&#x27;,f&#x27;p{i}&#x27;) for i in (1,2,3)]; q.record_skip(c,1,2,&#x27;attack&#x27;); print(sorted({q.select_next_score_target(c,1).player_id for _ in range(5)}))&quot;</code> prints <code>[3]</code>.</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="2">
+  <div class="phase-header">
+    <h2><span class="num">Phase 2</span>Callers: handler, admin health view, and test fixtures</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="2.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.1</span><span class="task-name">Update the voting handler to the new signature</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/voting.py · Modify: tests/test_voting_handler.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing test: in <code>tests/test_voting_handler.py</code> (its local <code>_seed</code> puts 4 players on the roster: 1, 2, 3, 4), tap <code>v:dk:2:atk</code> as voter 1, then keep tapping the score button on whatever card comes back until the queue is exhausted, collecting the <code>player_id</code> out of each prompt&#x27;s callback_data. Assert <code>2</code> never appears. A next-card-only assertion is NOT enough — the <code>dk</code> branch already passes <code>exclude_player</code>, so a single-advance test is green before the fix and proves nothing.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: remove the <code>session_id</code> parameter from <code>_send_next_prompt</code> and stop passing it from all four call sites (<code>_try_dm_voter</code> at ~:238, <code>handle_vote_command</code> at ~:290, the <code>sk</code> branch at ~:322, the <code>s</code>/<code>dk</code> branch at ~:363). Remove it from <code>_try_dm_voter</code>&#x27;s own signature too.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: delete the now-dead <code>active = get_active_session(conn)</code> / <code>session_id = ...</code> pair from <code>handle_vote_command</code> (~:276) — both its consumers lose the argument, so ruff flags F841. Keep the equivalent lookup in <code>handle_vote_callback</code> (~:309), where <code>record_skip(..., session_id=session_id)</code> still needs it.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>uv run pytest tests/test_voting_handler.py tests/test_voting_photo.py -v</code> passes.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>grep -n &quot;session_id\|get_active_session&quot; src/toop/handlers/voting.py</code> shows hits only in <code>handle_vote_callback</code> around the <code>record_skip</code> call.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: fix(voting): stop threading session_id into the prompt queue</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>`_send_next_prompt` takes session_id only to hand to the queue. Once the queue no longer scopes by session, leaving the parameter in place is dead weight that invites re-introducing session scoping later.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>`handle_vote_command` in a group chat calls `_try_dm_voter`, which also passes session_id — miss that one and the suite fails with a TypeError at runtime, not import time.</li>
+            <li>`tests/test_voting_photo.py` monkeypatches `select_next_score_target` with `lambda *a, **k: target`, so it tolerates either signature — it will NOT catch a missed call site. Rely on test_voting_handler.py for that.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="2.2" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.2</span><span class="task-name">Mirror the filter in the /health pending count</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/health.py · Modify: tests/test_health.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing test: in <code>tests/test_health.py</code>, seed players 1, 2, 3 with <code>add_player</code> (this file has no shared seeding helper), import <code>record_skip</code> from <code>toop.voting_queue</code> (not currently imported), <code>record_skip(conn, 1, 2, &quot;attack&quot;)</code>, and assert voter 1&#x27;s <code>pending</code> is 6 — all of player 3&#x27;s indicators — rather than 11.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: in <code>HEALTH_SQL</code>, change the <code>score_skips</code> NOT EXISTS clause to match the queue exactly — drop <code>AND sk.indicator = i.indicator</code> and add <code>AND sk.skipped_at &gt; datetime(&#x27;now&#x27;, &#x27;-&#x27; || :cooldown_days || &#x27; days&#x27;)</code>, using the same concatenation form as 1.2.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: <code>build_health_rows</code> currently calls <code>conn.execute(HEALTH_SQL)</code> with no params — pass <code>{&quot;cooldown_days&quot;: settings.SKIP_COOLDOWN_DAYS}</code> or it raises <code>sqlite3.ProgrammingError</code>. Import <code>settings</code> if not already imported.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: update the comment above <code>HEALTH_SQL</code> so it accurately describes the mirrored filter. Note it never had a session_id clause, so health and the queue were already subtly out of sync — this change actually makes the comment true.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>uv run pytest tests/test_health.py -v</code> passes and the new assertion holds.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: fix(health): mirror the player-wide skip cooldown in pending counts</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>The comment above HEALTH_SQL promises it mirrors the queue. If only the queue changes, the admin&#x27;s `pending` column overstates work that will never be offered, and the admin chases people for prompts the bot will not show.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>Adding a named bind to a query previously executed bare is the easy miss — `conn.execute(HEALTH_SQL)` must become `conn.execute(HEALTH_SQL, {...})`.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="2.3" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.3</span><span class="task-name">Audit tests that insert score_skips directly</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: tests/test_roster_handlers.py · Modify: tests/test_alerts.py · Modify: tests/test_players.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: run <code>uv run pytest tests/test_roster_handlers.py tests/test_alerts.py tests/test_players.py -v</code> and read every failure before changing anything — these files insert into <code>score_skips</code> with no <code>skipped_at</code>, relying on the CURRENT_TIMESTAMP default, so their rows are now always inside the cooldown window.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: for each genuine failure, decide whether the test&#x27;s intent was &quot;a skip exists&quot; (leave it, fix the assertion) or &quot;a stale skip exists&quot; (backdate the row with an explicit <code>skipped_at</code>). Do not weaken an assertion to make it pass.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: those three files pass, and <code>git diff --stat tests/</code> shows only assertion/fixture edits, no production-code changes in this task.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: test: adjust direct score_skips inserts for the cooldown window</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Under the old filter a skip row with a NULL session_id was invisible to the queue, so these direct inserts were inert. Under a time window they are live. Auditing them here rather than at the end of phase 3 means the failures are expected rather than a surprise during the close-out run.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>If none of the three files actually fail, this task is a no-op — record that in the plan&#x27;s Decisions table and skip the commit rather than inventing a change.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="2.V" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.V</span><span class="task-name">Phase 2 verification</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Reference: src/toop/handlers/voting.py · Reference: src/toop/handlers/health.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>uv run pytest -v</code> exits 0 across the whole suite — no caller was left on the old signature.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>grep -c &quot;session_id&quot; src/toop/handlers/voting.py</code> returns 3 or fewer, and every remaining hit sits in <code>handle_vote_callback</code> next to <code>record_skip</code>. A <code>grep | grep session_id</code> over <code>select_next_score_target</code> alone is NOT sufficient — the handler&#x27;s call is split across lines and would slip through.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>grep -n &quot;cooldown_days&quot; src/toop/handlers/health.py</code> returns two hits (SQL clause and params dict).</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="3">
+  <div class="phase-header">
+    <h2><span class="num">Phase 3</span>Docs, lint, and close-out</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="3.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">3.1</span><span class="task-name">Update schema comments and README</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/schema.sql · Modify: README.md · Reference: src/toop/db.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: rewrite the <code>score_skips</code> comment block in <code>schema.sql</code> (~lines 108-113) — it currently says the row prevents the <code>(voter, player, indicator)</code> target from being re-asked within the same session, and that session_id resets it. Replace with: a skip hides the whole player from that voter until <code>skipped_at</code> ages past <code>SKIP_COOLDOWN_DAYS</code>; <code>session_id</code> is retained for audit only.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Implement: update the ندیدمش paragraph in <code>README.md</code> (~line 148) to state the player-wide weekly cooldown and name the <code>SKIP_COOLDOWN_DAYS</code> env var.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>grep -n &quot;same session&quot; src/toop/schema.sql</code> returns nothing (exit 1) — that is the exact phrase in the stale comment. A bare <code>grep session</code> matches the whole <code>sessions</code> table and is useless here.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>grep -ln &quot;SKIP_COOLDOWN_DAYS&quot; README.md .env.example src/toop/config.py</code> lists all three files.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: docs: describe the player-wide ندیدمش cooldown</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>The schema comment is the first thing a future reader trusts. Leaving it describing session scoping would send the next debugging session down the wrong path.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>Do not drop the `score_skips.session_id` column or its entry in `db._MIGRATIONS` — deployed databases already have it, and the column is still written for audit.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="3.2" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">3.2</span><span class="task-name">Lint, typecheck, and full suite</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Reference: Makefile
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>make lint</code> exits 0 (ruff check + ruff format --check on src/ and tests/). Run <code>make format</code> first if it reports drift, then re-run <code>make lint</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>make typecheck</code> exits 0.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>make test</code> exits 0 with the full suite green — paste the final pytest summary line into the plan&#x27;s Decisions table.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: chore: lint and format pass for the skip-cooldown change</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="3.V" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">3.V</span><span class="task-name">Phase 3 verification</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Reference: Makefile
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>make check</code> (lint + typecheck + test) exits 0 in one run.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: end-to-end smoke — <code>uv run python -c &quot;import toop.db as d, toop.players as p, toop.voting_queue as q; c=d.get_connection(&#x27;:memory:&#x27;); d.init_db(c); [p.add_player(c,i,f&#x27;P{i}&#x27;,f&#x27;p{i}&#x27;) for i in (1,2,3)]; q.record_skip(c,1,2,&#x27;attack&#x27;); print(&#x27;hidden:&#x27;, sorted({q.select_next_score_target(c,1).player_id for _ in range(6)})); c.execute(\&quot;UPDATE score_skips SET skipped_at=datetime(&#x27;now&#x27;,&#x27;-8 days&#x27;)\&quot;); c.commit(); print(&#x27;after 8d:&#x27;, q.select_next_score_target(c,1,exclude_player=3).player_id)&quot;</code> prints <code>hidden: [3]</code> then <code>after 8d: 2</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>git status</code> is clean and <code>git log --oneline</code> shows one commit per task in this plan.</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+  <section class="section">
+    <h2>Decisions Made</h2>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>Decision</th><th>Rationale</th></tr></thead>
+      <tbody data-decisions>
+        <tr data-empty><td colspan="2"><em>(add as you go)</em></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Errors Encountered</h2>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>Error</th><th>Attempt</th><th>Resolution</th></tr></thead>
+      <tbody data-errors>
+        <tr data-empty><td colspan="3"><em>(none yet)</em></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  
+
+  <footer class="footer">
+    <span>2026-08-23-dk-skip-player-cooldown.html</span>
+    <span>Run <code>/execute-plan &lt;path&gt;</code> to start</span>
+  </footer>
+
+</div>
+
+<div class="actionbar" role="region" aria-label="Comments export">
+  <button type="button" id="reset-btn" title="Clear all comments">Clear comments</button>
+  <button type="button" id="copy-btn" class="primary" disabled aria-label="Copy all comments as JSON to clipboard">Copy comments<span class="count" id="copy-count">0</span></button>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  function recomputeProgress() {
+    const allSteps = document.querySelectorAll('.step');
+    const doneSteps = document.querySelectorAll('.step[data-status="done"]');
+    const pct = allSteps.length ? Math.round(doneSteps.length / allSteps.length * 100) : 0;
+
+    const ring = document.querySelector('.progress-ring .fg');
+    if (ring) {
+      const dash = 2 * Math.PI * 56;
+      ring.setAttribute('stroke-dasharray', dash.toFixed(2));
+      ring.setAttribute('stroke-dashoffset', (dash - (dash * pct / 100)).toFixed(2));
+    }
+    const ringLabel = document.querySelector('[data-progress-label]');
+    if (ringLabel) ringLabel.textContent = pct + '%';
+
+    const taskCount = document.querySelector('[data-task-count]');
+    const allTasks = document.querySelectorAll('.task');
+    const doneTasks = document.querySelectorAll('.task[data-task-status="done"]');
+    if (taskCount) taskCount.textContent = doneTasks.length + ' / ' + allTasks.length + ' tasks';
+
+    const stepCount = document.querySelector('[data-step-count]');
+    if (stepCount) stepCount.textContent = doneSteps.length + ' / ' + allSteps.length + ' steps';
+
+    document.querySelectorAll('.phase').forEach(phase => {
+      const ps = phase.querySelectorAll('.step');
+      const pd = phase.querySelectorAll('.step[data-status="done"]');
+      const ppct = ps.length ? pd.length / ps.length * 100 : 0;
+      const fill = phase.querySelector('.phase-bar .fill');
+      if (fill) fill.style.width = ppct + '%';
+      const label = phase.querySelector('.phase-progress');
+      if (label) label.textContent = pd.length + ' / ' + ps.length;
+    });
+
+    const hero = document.querySelector('.hero');
+    const pill = document.querySelector('[data-status-pill]');
+    if (hero && pill) {
+      const s = hero.dataset.status || 'planning';
+      pill.className = 'pill status-' + s;
+      pill.textContent = ({ planning: 'Planning', in_progress: 'In Progress', done: 'Done' })[s] || s;
+    }
+  }
+
+  document.querySelectorAll('.task-header').forEach(h => {
+    h.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      const task = h.closest('.task');
+      task.dataset.open = task.dataset.open === 'true' ? 'false' : 'true';
+    });
+  });
+
+  document.querySelectorAll('.step input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const step = cb.closest('.step');
+      step.dataset.status = cb.checked ? 'done' : 'pending';
+      const task = step.closest('.task');
+      const stepsInTask = task.querySelectorAll('.step');
+      const doneInTask = task.querySelectorAll('.step[data-status="done"]');
+      task.dataset.taskStatus = (stepsInTask.length > 0 && stepsInTask.length === doneInTask.length) ? 'done' : 'pending';
+      recomputeProgress();
+    });
+  });
+
+  const tasks = document.querySelectorAll('.task');
+  tasks.forEach(t => t.dataset.open = (tasks.length <= 3) ? 'true' : 'false');
+
+  document.querySelectorAll('.step input[type="checkbox"]').forEach(cb => {
+    const step = cb.closest('.step');
+    if (step && step.dataset.status === 'done') cb.checked = true;
+  });
+
+  recomputeProgress();
+
+  // ---- Round-trip comments ----
+  const planNotesInput = document.getElementById('plan-notes-input');
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  // Where text highlighting is allowed, and the comment UI to never highlight or annotate.
+  const HIGHLIGHT_ROOT = "body";
+  const IS_UI = ".inline-comment, .actionbar, .sel-comment-btn, .plan-notes, .task-comment, .cl-attachments";
+  const highlights = new Map();   // hlId -> { id, quote, section, note, marks:[], panel }
+
+  function textOf(el) {
+    let s = "";
+    el.childNodes.forEach((n) => {
+      if (n.nodeType === 3) { s += n.nodeValue; return; }
+      if (n.nodeType !== 1) return;
+      if (n.classList.contains("annotate-btn") || n.classList.contains("inline-comment") ||
+          n.classList.contains("cl-attachments")) return;
+      // A non-inline child is its own chunk, so it needs a separator: without this a heading
+      // built as <span class="badge">1</span><span>Wire the migration</span> yields the
+      // anchor key "1Wire the migration". True inline tags (em, strong, a) stay unspaced so
+      // mid-word emphasis is not broken.
+      let disp = "inline";
+      try { disp = getComputedStyle(n).display; } catch (e) { /* detached node */ }
+      if (disp !== "inline" && s && !/\s$/.test(s)) s += " ";
+      s += textOf(n);
+    });
+    return s;
+  }
+  function nearestHeading(el) {
+    // Walk up to the closest container, then back through preceding headings.
+    let node = el;
+    while (node && node !== document.body) {
+      let sib = node.previousElementSibling;
+      while (sib) {
+        if (/^H[1-6]$/.test(sib.tagName)) return textOf(sib).trim();
+        const h = sib.querySelector && sib.querySelector("h1,h2,h3,h4,h5,h6");
+        if (h) return textOf(h).trim();
+        sib = sib.previousElementSibling;
+      }
+      node = node.parentElement;
+    }
+    return (document.title || "").trim();
+  }
+  function insertAfter(el, node) {
+    if (el.tagName === "TR") {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = el.children.length || 1;
+      td.style.padding = "0";
+      td.appendChild(node);
+      el.parentNode.insertBefore(tr, el.nextSibling);
+    } else {
+      el.parentNode.insertBefore(node, el.nextSibling);
+    }
+  }
+
+  // ---------- Pasted images ----------
+  // Paste (or drop) a screenshot into any comment box and it becomes an attachment on that
+  // comment. The blob is handed to the browser's download path so the file lands on disk
+  // (Chrome's default download folder, normally ~/Downloads) and the exported JSON carries
+  // the filename. Embedding a data: URI instead is not viable: one screenshot is hundreds of
+  // KB of base64, which would swamp the payload Ali pastes into chat.
+  const attachments = [];   // { file, anchor(), url, blob, chip }
+  let imgSeq = 0;
+  // Whether every current attachment has been written to disk. Chrome silently blocks a
+  // download that is not tied to a user gesture (verified 2026-08-21), so pasting cannot
+  // save the file itself: the Copy press or the Save images button does it.
+  let savedAll = false;
+  const DOC_SLUG = ((document.title || "artifact").trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)) || "artifact";
+
+  function extFor(type) {
+    if (type === "image/jpeg") return "jpg";
+    if (type === "image/gif") return "gif";
+    if (type === "image/webp") return "webp";
+    if (type === "image/svg+xml") return "svg";
+    return "png";
+  }
+
+  function saveBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  function openLightbox(src) {
+    const box = document.createElement("div");
+    box.className = "cl-lightbox";
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = "Attached image, full size";
+    box.appendChild(img);
+    box.addEventListener("click", () => box.remove());
+    document.body.appendChild(box);
+  }
+
+  // The thumbnail strip is inserted directly after its textarea, so it always reads as
+  // belonging to that box regardless of what else the panel appends later.
+  function attachmentsHost(ta) {
+    let strip = ta._clStrip;
+    if (!strip || !strip.parentNode) {
+      strip = document.createElement("div");
+      strip.className = "cl-attachments";
+      if (ta.parentNode) ta.parentNode.insertBefore(strip, ta.nextSibling);
+      ta._clStrip = strip;
+    }
+    return strip;
+  }
+
+  function addAttachment(blob, ta, anchorFn, onChange) {
+    const n = ++imgSeq;
+    const name = "comment-img-" + DOC_SLUG + "-" + n + "." + extFor(blob.type);
+    // Kept for the page lifetime: the thumbnail and the lightbox both read from it.
+    const url = URL.createObjectURL(blob);
+    const rec = { file: name, anchor: anchorFn, url: url, blob: blob, chip: null };
+
+    const strip = attachmentsHost(ta);
+    const chip = document.createElement("div");
+    chip.className = "cl-attach";
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = name;
+    img.addEventListener("click", () => openLightbox(url));
+    const label = document.createElement("span");
+    label.className = "name";
+    label.textContent = name;
+    const again = document.createElement("button");
+    again.type = "button";
+    again.textContent = "Save again";
+    again.title = "Download this image again";
+    again.addEventListener("click", () => saveBlob(blob, name));
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.textContent = "Remove";
+    drop.addEventListener("click", () => {
+      const i = attachments.indexOf(rec);
+      if (i > -1) attachments.splice(i, 1);
+      chip.remove();
+      if (!strip.children.length) strip.remove();
+      if (onChange) onChange();
+      refreshSaveAllBtn();
+      updateCopyButton();
+    });
+    chip.appendChild(img);
+    chip.appendChild(label);
+    chip.appendChild(again);
+    chip.appendChild(drop);
+    strip.appendChild(chip);
+    rec.chip = chip;
+
+    attachments.push(rec);
+    savedAll = false;
+    if (onChange) onChange();
+    refreshSaveAllBtn();
+    updateCopyButton();
+    showToast("Attached " + name + ". Copy writes it out; allow downloads if Chrome asks.");
+    return rec;
+  }
+
+  // Wire paste and drop on one comment textarea. `anchorFn` reports which comment the image
+  // belongs to, evaluated at export time so a highlight's quote is always current.
+  function enableImagePaste(ta, anchorFn, onChange) {
+    ta.addEventListener("paste", (e) => {
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      let found = false;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (it.kind === "file" && /^image\//.test(it.type || "")) {
+          const blob = it.getAsFile();
+          if (blob) { addAttachment(blob, ta, anchorFn, onChange); found = true; }
+        }
+      }
+      // Only swallow the paste when it really was an image, so pasting text still works.
+      if (found) e.preventDefault();
+    });
+    ta.addEventListener("dragover", (e) => {
+      const types = (e.dataTransfer && e.dataTransfer.types) || [];
+      if ([].indexOf.call(types, "Files") > -1) {
+        e.preventDefault();
+        ta.classList.add("cl-dropping");
+      }
+    });
+    ta.addEventListener("dragleave", () => ta.classList.remove("cl-dropping"));
+    ta.addEventListener("drop", (e) => {
+      const files = (e.dataTransfer && e.dataTransfer.files) || [];
+      const imgs = [].filter.call(files, (f) => /^image\//.test(f.type || ""));
+      ta.classList.remove("cl-dropping");
+      if (!imgs.length) return;
+      e.preventDefault();
+      imgs.forEach((f) => addAttachment(f, ta, anchorFn, onChange));
+    });
+    // Discoverability lives in the placeholder rather than a permanent hint line on every
+    // panel, which would be noise once the mechanic is known.
+    ta.placeholder = (ta.placeholder || "Comment") + " Paste a screenshot to attach it.";
+  }
+
+  function attachmentsFor(pred) { return attachments.filter((a) => pred(a.anchor())); }
+
+  // Chrome allows the first automatic download from an origin and can block later ones as
+  // "multiple automatic downloads" until the user permits them, so the auto-save on paste is
+  // best-effort, never a guarantee. This button re-saves every attachment from one real
+  // click, which is the path Chrome always honours. It only appears once an image exists.
+  let saveAllBtn = null;
+  function refreshSaveAllBtn() {
+    const bar = document.querySelector(".actionbar");
+    if (!bar) return;
+    if (!attachments.length) {
+      if (saveAllBtn) { saveAllBtn.remove(); saveAllBtn = null; }
+      return;
+    }
+    if (!saveAllBtn) {
+      saveAllBtn = document.createElement("button");
+      saveAllBtn.type = "button";
+      saveAllBtn.id = "save-images-btn";
+      saveAllBtn.title = "Write every attached image to your downloads folder now";
+      saveAllBtn.addEventListener("click", () => {
+        attachments.forEach((a) => saveBlob(a.blob, a.file));
+        savedAll = true;
+        showToast("Saving " + attachments.length + " image" +
+          (attachments.length === 1 ? "" : "s") + " to your downloads folder");
+      });
+      bar.insertBefore(saveAllBtn, bar.firstChild);
+    }
+    saveAllBtn.textContent = "Save images (" + attachments.length + ")";
+  }
+
+  // Inject one comment textarea per task
+  document.querySelectorAll('.task').forEach(task => {
+    const body = task.querySelector('.task-body');
+    if (!body || body.querySelector('.task-comment')) return;
+    const id = task.dataset.taskId || '';
+    const ta = document.createElement('textarea');
+    ta.className = 'task-comment';
+    ta.dataset.commentFor = 'task ' + id;
+    ta.placeholder = 'Comment on task ' + id + '... (questions, scope tweaks, references, anything)';
+    ta.rows = 2;
+    ta.addEventListener('input', () => {
+      ta.classList.toggle('has-content', ta.value.trim().length > 0);
+      updateCopyButton();
+    });
+    body.appendChild(ta);
+    enableImagePaste(ta, () => ({ scope: 'task', anchor: 'task ' + id }));
+  });
+  planNotesInput?.addEventListener('input', updateCopyButton);
+  if (planNotesInput) enableImagePaste(planNotesInput, () => ({ scope: 'general', anchor: null }));
+
+  // Inline annotations: click any annotatable element to leave a note
+  const ANNOTATABLE_SELECTORS = [
+    '.step',
+    '.diff .line',
+    '.architecture p',
+    '.phase-header h2',
+    '.task-header h3',
+    '.notes p',
+    '.notes ul li',
+    '[data-decisions] tr',
+  ];
+  const inlineComments = new Map();
+
+  function anchorKey(el) {
+    if (el.matches('.step')) {
+      const task = el.closest('.task');
+      const tid = task?.dataset.taskId || '?';
+      const steps = [...task.querySelectorAll('.step')];
+      return 'step ' + tid + '.' + (steps.indexOf(el) + 1);
+    }
+    if (el.matches('.diff .line')) {
+      const card = el.closest('.diff-card');
+      const file = (card?.querySelector('.diff-file')?.textContent || 'diff').trim();
+      const lines = [...card.querySelectorAll('.line')];
+      return file + ' L' + (lines.indexOf(el) + 1);
+    }
+    if (el.matches('.phase-header h2')) {
+      const p = el.closest('.phase');
+      return 'phase ' + (p?.dataset.phaseId || '?');
+    }
+    if (el.matches('.task-header h3')) {
+      const t = el.closest('.task');
+      return 'task ' + (t?.dataset.taskId || '?') + ' (heading)';
+    }
+    if (el.matches('.architecture p')) return 'architecture';
+    const ctx = el.closest('.notes')
+      ? 'notes'
+      : (el.closest('[data-decisions]') ? 'decision' : 'note');
+    const txt = (el.textContent || '').trim().slice(0, 60).replace(/\s+/g, ' ');
+    return ctx + ': ' + txt;
+  }
+
+  function ensureCommentPanel(el) {
+    const next = el.nextElementSibling;
+    if (next && next.classList.contains('inline-comment')) return next;
+    const key = anchorKey(el);
+    const panel = document.createElement('div');
+    panel.className = 'inline-comment';
+    const keySpan = document.createElement('span');
+    keySpan.className = 'key';
+    keySpan.textContent = key;
+    const ta = document.createElement('textarea');
+    ta.rows = 2;
+    ta.placeholder = 'Comment on this...';
+    panel.appendChild(keySpan);
+    panel.appendChild(ta);
+    el.parentNode.insertBefore(panel, el.nextSibling);
+    enableImagePaste(ta, () => ({ scope: 'block', anchor: key }), () => {
+      const live = ta.value.trim() ||
+        attachmentsFor((a) => a.scope === 'block' && a.anchor === key).length;
+      el.classList.toggle('has-comment', !!live);
+    });
+    ta.addEventListener('input', () => {
+      const v = ta.value.trim();
+      if (v) {
+        inlineComments.set(key, v);
+        el.classList.add('has-comment');
+      } else {
+        inlineComments.delete(key);
+        el.classList.remove('has-comment');
+      }
+      updateCopyButton();
+    });
+    return panel;
+  }
+
+  document.querySelectorAll(ANNOTATABLE_SELECTORS.join(', ')).forEach(el => {
+    if (el.classList.contains('annotatable')) return;
+    el.classList.add('annotatable');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'annotate-btn';
+    btn.title = 'Add a comment';
+    btn.setAttribute('aria-label', 'Add a comment');
+    btn.textContent = '+';
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const panel = ensureCommentPanel(el);
+      panel.classList.toggle('open');
+      if (panel.classList.contains('open')) {
+        panel.querySelector('textarea').focus();
+      }
+    });
+    el.appendChild(btn);
+  });
+
+  // ---------- Text highlights (select-to-comment) ----------
+  const highlightRoot = document.querySelector(HIGHLIGHT_ROOT) || document.body;
+  let hlSeq = 0;
+
+  const selBtn = document.createElement("button");
+  selBtn.type = "button";
+  selBtn.className = "sel-comment-btn";
+  selBtn.textContent = "💬 Comment";
+  document.body.appendChild(selBtn);
+
+  function hideSelBtn() { selBtn.classList.remove("show"); }
+
+  function selectionInsideContent(sel) {
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return false;
+    const r = sel.getRangeAt(0);
+    if (!r.toString().trim()) return false;
+    const anc = r.commonAncestorContainer;
+    const el = anc.nodeType === 1 ? anc : anc.parentElement;
+    if (!el) return false;
+    if (!highlightRoot.contains(el)) return false;
+    if (el.closest(IS_UI)) return false;                 // don't highlight the UI itself
+    if (el.closest("mark.hl")) return false;             // already inside a highlight
+    return true;
+  }
+
+  function positionSelBtn(range) {
+    const rect = range.getBoundingClientRect();
+    selBtn.style.left = (rect.left + rect.width / 2 + window.scrollX) + "px";
+    selBtn.style.top = (rect.top + window.scrollY - 8) + "px";
+    selBtn.classList.add("show");
+  }
+
+  function onSelectionChange() {
+    const sel = window.getSelection();
+    if (selectionInsideContent(sel)) positionSelBtn(sel.getRangeAt(0));
+    else hideSelBtn();
+  }
+  // Only react after the gesture ends so the button doesn't chase a live drag.
+  document.addEventListener("mouseup", () => setTimeout(onSelectionChange, 0));
+  document.addEventListener("touchend", () => setTimeout(onSelectionChange, 0));
+  document.addEventListener("selectionchange", () => {
+    const sel = window.getSelection();
+    if (!selectionInsideContent(sel)) hideSelBtn();
+  });
+  window.addEventListener("scroll", hideSelBtn, { passive: true });
+
+  // Wrap every text node the range covers in its own <mark class="hl"> sharing one id.
+  // Per-node ranges stay inside a single text node so surroundContents never throws.
+  function wrapRange(range, hlId) {
+    const root = range.commonAncestorContainer;
+    const scope = root.nodeType === 1 ? root : root.parentNode;
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null);
+    const nodes = [];
+    let n;
+    while ((n = walker.nextNode())) {
+      if (range.intersectsNode(n) && n.textContent.trim()) nodes.push(n);
+    }
+    const marks = [];
+    nodes.forEach((node) => {
+      let start = 0, end = node.textContent.length;
+      if (node === range.startContainer) start = range.startOffset;
+      if (node === range.endContainer) end = range.endOffset;
+      if (start >= end) return;
+      const r = document.createRange();
+      r.setStart(node, start);
+      r.setEnd(node, end);
+      const mark = document.createElement("mark");
+      mark.className = "hl";
+      mark.dataset.hlId = hlId;
+      try { r.surroundContents(mark); marks.push(mark); } catch (e) { /* skip odd node */ }
+    });
+    return marks;
+  }
+
+  function ensureHighlightPanel(hl) {
+    if (hl.panel) return hl.panel;
+    const firstMark = hl.marks[0];
+    // Anchor the note after the block that contains the highlight.
+    let block = firstMark.parentElement;
+    while (block && block !== document.body &&
+           getComputedStyle(block).display.indexOf("inline") === 0) {
+      block = block.parentElement;
+    }
+    block = block || firstMark.parentElement;
+
+    const panel = document.createElement("div");
+    panel.className = "inline-comment open";
+    const keySpan = document.createElement("span");
+    keySpan.className = "key";
+    keySpan.textContent = "✎ highlighted text" + (hl.section ? " · " + hl.section : "");
+    const quote = document.createElement("span");
+    quote.className = "quote";
+    quote.textContent = hl.quote.length > 180 ? hl.quote.slice(0, 180) + "…" : hl.quote;
+    const ta = document.createElement("textarea");
+    ta.rows = 2;
+    ta.placeholder = "Comment on the highlighted text...";
+    ta.value = hl.note || "";
+    ta.addEventListener("input", () => {
+      hl.note = ta.value.trim();
+      hl.marks.forEach((m) => m.classList.toggle("has-note", !!hl.note));
+      updateCopyButton();
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove-hl";
+    remove.textContent = "Remove highlight";
+    remove.addEventListener("click", () => removeHighlight(hl.id));
+
+    panel.appendChild(keySpan);
+    panel.appendChild(quote);
+    panel.appendChild(ta);
+    enableImagePaste(ta, () => ({ scope: "highlight", anchor: hl.quote }));
+    panel.appendChild(remove);
+    insertAfter(block, panel);
+    hl.panel = panel;
+    return panel;
+  }
+
+  function openHighlightPanel(hl) {
+    const panel = ensureHighlightPanel(hl);
+    panel.classList.add("open");
+    panel.querySelector("textarea").focus();
+    if (panel.scrollIntoView) panel.scrollIntoView({ block: "nearest" });
+  }
+  // Clicking a highlight toggles its note box open/closed. Hiding it does NOT drop the
+  // highlight or its note — the span stays marked and is still exported.
+  function toggleHighlightPanel(hl) {
+    const wasOpen = hl.panel && hl.panel.classList.contains("open");
+    if (wasOpen) hl.panel.classList.remove("open");
+    else openHighlightPanel(hl);
+  }
+
+  function unwrapMark(mark) {
+    const parent = mark.parentNode;
+    if (!parent) return;
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+    parent.removeChild(mark);
+    parent.normalize();
+  }
+  function removeHighlight(hlId) {
+    const hl = highlights.get(hlId);
+    if (!hl) return;
+    hl.marks.forEach(unwrapMark);
+    if (hl.panel && hl.panel.parentNode) hl.panel.parentNode.removeChild(hl.panel);
+    highlights.delete(hlId);
+    updateCopyButton();
+  }
+
+  selBtn.addEventListener("mousedown", (e) => e.preventDefault()); // keep the selection alive
+  selBtn.addEventListener("click", () => {
+    const sel = window.getSelection();
+    if (!selectionInsideContent(sel)) { hideSelBtn(); return; }
+    const range = sel.getRangeAt(0);
+    const quote = sel.toString().trim().replace(/\s+/g, " ");
+    const hlId = "hl-" + (++hlSeq);
+    const marks = wrapRange(range, hlId);
+    if (!marks.length) { hideSelBtn(); return; }
+    const hl = { id: hlId, quote, section: nearestHeading(marks[0]), note: "", marks, panel: null };
+    highlights.set(hlId, hl);
+    sel.removeAllRanges();
+    hideSelBtn();
+    openHighlightPanel(hl);
+    updateCopyButton();
+  });
+
+  // Click an existing highlight to show/hide its note box (the highlight itself stays).
+  document.addEventListener("click", (e) => {
+    const mark = e.target.closest && e.target.closest("mark.hl");
+    if (!mark) return;
+    const hl = highlights.get(mark.dataset.hlId);
+    if (hl) toggleHighlightPanel(hl);
+  });
+
+  // Tells Claude the round-trip is not "answer in chat", it is "patch this plan and diff it".
+  const CLAUDE_INSTRUCTIONS =
+    "Answer every comment in this payload, and write each answer BACK INTO the plan file " +
+    "(see `source`) as a visible response block next to the task or block it replies to: " +
+    "<div class=\"claude-response\"><span class=\"key\">Response</span><p>...</p></div>. " +
+    "Then show me the diff of that edit and re-open the plan (cc-open <path>). " +
+    "Replying only in the Claude Code chat is not enough: the plan must carry the answers. " +
+    "If a comment asks for a change to the plan itself, change the plan and note it in the " +
+    "response block instead of describing it in chat. " +
+    "Every entry in `images` is a screenshot attached to the comment named by its " +
+    "`attached_to` field, saved by the browser into the downloads folder (normally " +
+    "~/Downloads/<file>): read that file before answering the comment it belongs to. " +
+    "If a listed file is not there, Chrome blocked its download: say which file is missing " +
+    "and ask me to paste that screenshot straight into the chat, rather than guessing.";
+
+  function buildResult() {
+    const hero = document.querySelector('.hero');
+    const slug = hero?.dataset.slug || '';
+    const feature = hero?.dataset.feature || '';
+    const planNotes = (planNotesInput?.value || '').trim();
+    const comments = {};
+    document.querySelectorAll('.task-comment').forEach(ta => {
+      const v = ta.value.trim();
+      if (v) comments[ta.dataset.commentFor] = v;
+    });
+    inlineComments.forEach((v, k) => {
+      if (v && v.trim()) comments[k] = v.trim();
+    });
+    return {
+      instructions: CLAUDE_INSTRUCTIONS,
+      slug,
+      feature,
+      source: decodeURIComponent(location.pathname || "") || location.href,
+      generated_at: new Date().toISOString(),
+      plan_notes: planNotes || null,
+      comments,
+      highlights: [...highlights.values()].map((h) => ({
+        quote: h.quote,
+        section: h.section || null,
+        note: h.note || null,
+      })),
+      images: attachments.map((a) => {
+        const an = a.anchor();
+        return { file: a.file, scope: an.scope, attached_to: an.anchor };
+      }),
+    };
+  }
+
+  function countNonEmpty() {
+    let n = 0;
+    document.querySelectorAll('.task-comment').forEach(ta => { if (ta.value.trim()) n += 1; });
+    inlineComments.forEach(v => { if (v && v.trim()) n += 1; });
+    if (planNotesInput?.value.trim()) n += 1;
+    n += highlights.size + attachments.length;
+    return n;
+  }
+
+  function updateCopyButton() {
+    const btn = document.getElementById('copy-btn');
+    const count = document.getElementById('copy-count');
+    if (!btn || !count) return;
+    const n = countNonEmpty();
+    count.textContent = String(n);
+    btn.disabled = n === 0;
+  }
+
+  // Clipboard, gesture-safe. navigator.clipboard.writeText can hang forever on a file://
+  // artifact (never resolving, never rejecting), so its .catch() fallback never runs and
+  // the copy dies silently. execCommand("copy") is synchronous and cannot hang, so it goes
+  // first, with the async API behind a 1200ms timeout.
+  function copySync(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    const sel = document.getSelection();
+    const prev = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    if (prev && sel) { sel.removeAllRanges(); sel.addRange(prev); }
+    return ok;
+  }
+
+  // Manual fallback, in page. Never window.prompt(): Chrome silently blocks dialogs raised
+  // without user activation, and a pending dialog freezes the whole page.
+  function manualCopyFallback(text) {
+    let box = document.getElementById('copy-fallback');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'copy-fallback';
+      box.className = 'copy-fallback';
+      const label = document.createElement('label');
+      label.textContent = 'Automatic copy was blocked. Select all below, then copy:';
+      const ta = document.createElement('textarea');
+      ta.readOnly = true;
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.textContent = 'Close';
+      close.addEventListener('click', () => box.remove());
+      box.appendChild(label);
+      box.appendChild(ta);
+      box.appendChild(close);
+      document.body.appendChild(box);
+    }
+    const ta = box.querySelector('textarea');
+    ta.value = text;
+    ta.focus();
+    ta.select();
+  }
+
+  function doCopy() {
+    const n = countNonEmpty();
+    if (!n) return;
+    // Copy is a genuine user gesture, the only download path Chrome reliably allows, so this
+    // is where attached images reach the disk. Guarded so a second Copy press does not write
+    // "name (1).png" duplicates that no longer match the filenames in the payload.
+    if (attachments.length && !savedAll) {
+      attachments.forEach((a) => saveBlob(a.blob, a.file));
+      savedAll = true;
+    }
+    const text = JSON.stringify(buildResult(), null, 2);
+    const ok = () => showToast('Copied ' + n + ' comment' + (n === 1 ? '' : 's') + '. Paste into Claude.');
+    if (copySync(text)) { ok(); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) { settled = true; manualCopyFallback(text); }
+      }, 1200);
+      navigator.clipboard.writeText(text).then(
+        () => { if (!settled) { settled = true; clearTimeout(timer); ok(); } },
+        () => { if (!settled) { settled = true; clearTimeout(timer); manualCopyFallback(text); } }
+      );
+      return;
+    }
+    manualCopyFallback(text);
+  }
+
+  document.getElementById('copy-btn')?.addEventListener('click', doCopy);
+
+  // Cmd+Enter (Mac) / Ctrl+Enter copies, even from inside a comment textarea. doCopy() runs
+  // inline in the keydown, never via copyBtn.click(): a synthetic click loses the gesture.
+  (function () {
+    const btn = document.getElementById('copy-btn');
+    const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
+    const hint = isMac ? '\u2318\u21B5' : 'Ctrl+\u21B5';
+    if (btn) {
+      btn.title = 'Copy all comments as JSON (' + hint + ')';
+      btn.setAttribute('aria-keyshortcuts', isMac ? 'Meta+Enter' : 'Control+Enter');
+      const kbd = document.createElement('span');
+      kbd.className = 'kbd-hint';
+      kbd.textContent = hint;
+      btn.appendChild(kbd);
+    }
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === 'Enter') {
+        if (btn && !btn.disabled) { e.preventDefault(); doCopy(); }
+      }
+    });
+  })();
+
+  document.getElementById('reset-btn')?.addEventListener('click', () => {
+    document.querySelectorAll('.task-comment').forEach(ta => {
+      ta.value = '';
+      ta.classList.remove('has-content');
+    });
+    if (planNotesInput) planNotesInput.value = '';
+    inlineComments.clear();
+    document.querySelectorAll('.inline-comment textarea').forEach(ta => { ta.value = ''; });
+    document.querySelectorAll('.inline-comment.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.annotatable.has-comment').forEach(el => el.classList.remove('has-comment'));
+    [...highlights.keys()].forEach(removeHighlight);
+    attachments.splice(0).forEach((a) => { if (a.chip) a.chip.remove(); });
+    document.querySelectorAll('.cl-attachments').forEach((s) => s.remove());
+    hideSelBtn();
+    updateCopyButton();
+    showToast('Cleared all comments, highlights and images');
+  });
+
+  updateCopyButton();
+</script>
+
+</body>
+</html>

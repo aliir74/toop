@@ -1024,7 +1024,7 @@
 <body>
 <div class="container">
 
-  <header class="hero" data-status="in_progress" data-slug="2026-08-28-revote-stale-scores" data-feature="Re-voting: stale scores age back into the queue, and the bot asks again" data-tdd="true">
+  <header class="hero" data-status="done" data-slug="2026-08-28-revote-stale-scores" data-feature="Re-voting: stale scores age back into the queue, and the bot asks again" data-tdd="true">
     <div>
       <div class="eyebrow">Implementation Plan · 2026-08-28</div>
       <h1>Re-voting: stale scores age back into the queue, and the bot asks again</h1>
@@ -1596,7 +1596,7 @@
     <span class="phase-progress">0 / 0</span>
   </div>
   <div class="phase-bar"><div class="fill"></div></div>
-  <article class="task" data-task-id="3.1" data-task-status="pending">
+  <article class="task" data-task-id="3.1" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">3.1</span><span class="task-name">Add the nudge schedule settings</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1624,8 +1624,8 @@
           <input type="checkbox" checked />
           <span class="step-text">Add <code>REVOTE_NUDGE_WEEKDAY</code> to the existing <code>@field_validator(&#x27;SESSION_WEEKDAY&#x27;, &#x27;SESSION_POLL_WEEKDAY&#x27;)</code> decorator&#x27;s argument list so it reuses <code>_weekday_valid</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Reuse <code>SESSION_POLL_TZ</code> for the nudge job&#x27;s timezone rather than adding a second tz setting, and say so in the field comment.</span>
         </li>
         <li class="step" data-status="done">
@@ -2065,7 +2065,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="4.V" data-task-status="pending">
+  <article class="task" data-task-id="4.V" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">4.V</span><span class="task-name">Phase 4 verification</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -2089,8 +2089,8 @@
           <input type="checkbox" checked />
           <span class="step-text">The dry-run numbers from 4.2 and the chosen live <code>REVOTE_AFTER_DAYS</code> are recorded in the ledger row.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Open a PR with the checkmark block required by CLAUDE.md, targeting <code>main</code>, on a <code>feat/</code> branch (this work has no ClickUp task).</span>
         </li>
           </ol>
