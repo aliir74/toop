@@ -1496,7 +1496,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="2.3" data-task-status="pending">
+  <article class="task" data-task-id="2.3" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">2.3</span><span class="task-name">Show the stale backlog in /health</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1512,8 +1512,8 @@
           <input type="checkbox" checked />
           <span class="step-text">Write failing tests in <code>tests/test_health.py</code>: <code>build_health_rows</code> returns both a <code>pending</code> key (never-scored targets) and a <code>stale</code> key (re-offerable ones) per voter, with the right numbers for a seeded fixture where one voter has aged scores; <code>format_health</code> output contains a <code>Stale</code> column header; **<code>test_health_includes_ghost_rows</code>** seeding <code>add_ghost_player</code> and asserting the ghost still gets a row with numeric <code>pending</code>/<code>stale</code> rather than raising.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_health.py -q</code> and confirm they fail.</span>
         </li>
         <li class="step" data-status="done">
@@ -1555,7 +1555,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="2.V" data-task-status="pending">
+  <article class="task" data-task-id="2.V" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">2.V</span><span class="task-name">Phase 2 verification</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1567,16 +1567,16 @@
             <span class="label">Files</span> <em>(none specified)</em>
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text"><code>GROUP_CHAT_ID=0 uv run pytest -q</code> exits 0 across the whole suite.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Coverage gate holds: the run reports <code>Required test coverage of 100% reached</code> (pyproject sets <code>fail_under = 100</code>). Note this is **statement** coverage only, since <code>[tool.coverage.run] branch = false</code>, so it proves every new line ran, not that every branch of the new <code>if</code> in <code>record_score</code> was taken. The three explicit tests in 2.2 are what cover the branches.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run a scripted end-to-end check as a one-liner (not an interactive REPL, which proves nothing reproducibly): <code>uv run python -c</code> that builds a tmp DB, calls <code>init_db</code>, adds two players, records two scores, ages one by 90 days with an UPDATE, and prints <code>pending_counts_by_voter(conn)</code> — expecting <code>stale=1</code> for that voter.</span>
         </li>
           </ol>
@@ -1608,36 +1608,36 @@
             <span class="label">Files</span> Modify: src/toop/config.py · Modify: .env.example · Modify: tests/test_config.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests: defaults are <code>REVOTE_NUDGE_WEEKDAY=&#x27;tuesday&#x27;</code>, <code>REVOTE_NUDGE_HOUR=19</code>, <code>REVOTE_NUDGE_COOLDOWN_DAYS=7</code>, <code>REVOTE_NUDGE_MIN_PENDING=3</code>; an invalid weekday raises <code>ValidationError</code>; <code>REVOTE_NUDGE_MIN_PENDING=0</code> raises; <code>REVOTE_NUDGE_HOUR=24</code> raises (mirroring the existing <code>test_snapshot_hour_out_of_range</code>).</span>
         </li>
         <li class="step" data-status="pending">
           <input type="checkbox" />
           <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_config.py -q</code> and confirm they fail.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add the four fields to <code>Settings</code> with the same constraint style as their neighbours: <code>REVOTE_NUDGE_WEEKDAY: str = &#x27;tuesday&#x27;</code>, <code>REVOTE_NUDGE_HOUR: int = Field(default=19, ge=0, le=23)</code> (matching <code>SNAPSHOT_HOUR</code> and <code>SESSION_POLL_HOUR</code>), <code>REVOTE_NUDGE_COOLDOWN_DAYS: int = Field(default=7, gt=0)</code>, <code>REVOTE_NUDGE_MIN_PENDING: int = Field(default=3, ge=1)</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>REVOTE_NUDGE_WEEKDAY</code> to the existing <code>@field_validator(&#x27;SESSION_WEEKDAY&#x27;, &#x27;SESSION_POLL_WEEKDAY&#x27;)</code> decorator&#x27;s argument list so it reuses <code>_weekday_valid</code>.</span>
         </li>
         <li class="step" data-status="pending">
           <input type="checkbox" />
           <span class="step-text">Reuse <code>SESSION_POLL_TZ</code> for the nudge job&#x27;s timezone rather than adding a second tz setting, and say so in the field comment.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add all four to <code>.env.example</code> with a comment explaining Tuesday 7pm: the day after the Monday session, when the voter has just played with these people and their memory is freshest.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_config.py -q</code> exits 0.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(config): add revote nudge schedule settings</span>
         </li>
           </ol>

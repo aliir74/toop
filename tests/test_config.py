@@ -182,3 +182,34 @@ def test_retired_weight_key_warns_at_startup(
         "WEIGHT_DEFENSE is set but is not a known indicator weight" in r.message
         for r in caplog.records
     )
+
+
+def test_revote_nudge_defaults() -> None:
+    s = Settings(_env_file=None)
+    # Tuesday: the day after the Monday session, when the voter has just played
+    # with these people. Deliberately not Thursday, which is the attendance poll.
+    assert s.REVOTE_NUDGE_WEEKDAY == "tuesday"
+    assert s.REVOTE_NUDGE_HOUR == 19
+    assert s.REVOTE_NUDGE_COOLDOWN_DAYS == 7
+    assert s.REVOTE_NUDGE_MIN_PENDING == 3
+
+
+def test_revote_nudge_weekday_validated() -> None:
+    assert Settings(_env_file=None, REVOTE_NUDGE_WEEKDAY="FRIDAY").REVOTE_NUDGE_WEEKDAY == "friday"
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, REVOTE_NUDGE_WEEKDAY="someday")
+
+
+def test_revote_nudge_hour_out_of_range() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, REVOTE_NUDGE_HOUR=24)
+
+
+def test_revote_nudge_min_pending_rejects_zero() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, REVOTE_NUDGE_MIN_PENDING=0)
+
+
+def test_revote_nudge_cooldown_rejects_zero() -> None:
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None, REVOTE_NUDGE_COOLDOWN_DAYS=0)

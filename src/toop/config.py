@@ -108,8 +108,19 @@ class Settings(BaseSettings):
     # that a season-old opinion does not survive a whole season. Must be > 0 —
     # a zero window would make every score permanently stale.
     REVOTE_AFTER_DAYS: int = Field(default=60, gt=0)
+    # Weekly re-vote nudge. Tuesday 7pm is the day after the Monday session, when
+    # the voter has just played with these people and their memory is freshest;
+    # it also stays clear of the Thursday attendance poll, so the group never
+    # gets two bot pushes in one evening. Shares SESSION_POLL_TZ rather than
+    # adding a second timezone knob. A voter is not DMed twice inside
+    # REVOTE_NUDGE_COOLDOWN_DAYS, nor at all until they owe at least
+    # REVOTE_NUDGE_MIN_PENDING targets — one lone prompt is not worth a DM.
+    REVOTE_NUDGE_WEEKDAY: str = "tuesday"
+    REVOTE_NUDGE_HOUR: int = Field(default=19, ge=0, le=23)
+    REVOTE_NUDGE_COOLDOWN_DAYS: int = Field(default=7, gt=0)
+    REVOTE_NUDGE_MIN_PENDING: int = Field(default=3, ge=1)
 
-    @field_validator("SESSION_WEEKDAY", "SESSION_POLL_WEEKDAY")
+    @field_validator("SESSION_WEEKDAY", "SESSION_POLL_WEEKDAY", "REVOTE_NUDGE_WEEKDAY")
     @classmethod
     def _weekday_valid(cls, v: str) -> str:
         lower = v.lower()
