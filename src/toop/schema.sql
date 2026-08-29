@@ -161,6 +161,17 @@ CREATE TABLE IF NOT EXISTS waitlist (
     PRIMARY KEY (session_id, telegram_id)
 );
 
+-- Per-voter clock for the weekly re-vote nudge, so nobody is DMed twice inside
+-- REVOTE_NUDGE_COOLDOWN_DAYS. Written only after a send actually succeeds: a
+-- Forbidden (blocked bot) must be retried next week, not silently retired.
+-- Unlike score_history this DOES cascade — a removed player's nudge clock is
+-- worthless. Carries no pending count: nothing would read it, and an unread
+-- column is how QUEUE_DEPTH got stranded in .env.example.
+CREATE TABLE IF NOT EXISTS revote_nudges (
+    telegram_id     INTEGER PRIMARY KEY REFERENCES players(telegram_id) ON DELETE CASCADE,
+    last_nudged_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Dedupe for post-snapshot attendance-drift DMs: stores the last drift
 -- signature the admin was notified about, so an unchanged drift state (or a
 -- vote that doesn't move the attendee set) never re-pings.

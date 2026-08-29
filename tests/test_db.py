@@ -17,6 +17,7 @@ EXPECTED_TABLES = {
     "player_ratings",
     "snapshots",
     "score_history",
+    "revote_nudges",
 }
 
 

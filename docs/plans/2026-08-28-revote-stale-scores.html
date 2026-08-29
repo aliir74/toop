@@ -1612,8 +1612,8 @@
           <input type="checkbox" checked />
           <span class="step-text">Write failing tests: defaults are <code>REVOTE_NUDGE_WEEKDAY=&#x27;tuesday&#x27;</code>, <code>REVOTE_NUDGE_HOUR=19</code>, <code>REVOTE_NUDGE_COOLDOWN_DAYS=7</code>, <code>REVOTE_NUDGE_MIN_PENDING=3</code>; an invalid weekday raises <code>ValidationError</code>; <code>REVOTE_NUDGE_MIN_PENDING=0</code> raises; <code>REVOTE_NUDGE_HOUR=24</code> raises (mirroring the existing <code>test_snapshot_hour_out_of_range</code>).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_config.py -q</code> and confirm they fail.</span>
         </li>
         <li class="step" data-status="done">
@@ -1651,7 +1651,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="3.2" data-task-status="pending">
+  <article class="task" data-task-id="3.2" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">3.2</span><span class="task-name">Nudge bookkeeping: revote_nudges table and target selection</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1663,36 +1663,36 @@
             <span class="label">Files</span> Create: src/toop/revote.py · Modify: src/toop/schema.sql · Create: tests/test_revote.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests in <code>tests/test_revote.py</code>: a voter under <code>min_pending</code> is excluded; a voter nudged 2 days ago is excluded at cooldown 7 but a voter nudged 8 days ago is included; a never-nudged voter is included; <code>active=0</code> players are excluded; **<code>is_ghost=1</code> players are excluded** (they have synthetic negative ids and have never DM&#x27;d the bot, so a send would always fail); **a player with no row in <code>contacts</code> is excluded**; <code>ignore_cooldown=True</code> returns a voter nudged yesterday; <code>record_nudge</code> upserts and moves <code>last_nudged_at</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_revote.py -q</code> and confirm it fails on ImportError.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>CREATE TABLE IF NOT EXISTS revote_nudges (telegram_id INTEGER PRIMARY KEY REFERENCES players(telegram_id) ON DELETE CASCADE, last_nudged_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)</code> to schema.sql, and add <code>revote_nudges</code> to <code>EXPECTED_TABLES</code> in tests/test_db.py alongside 2.1&#x27;s entry. The FK cascade is correct here, unlike score_history: a removed player&#x27;s nudge clock is worthless. **No <code>last_pending</code> column** — nothing would ever read it, and an unread column is how <code>QUEUE_DEPTH</code> got stranded in <code>.env.example</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write <code>src/toop/revote.py</code> with a frozen <code>NudgeTarget</code> dataclass (<code>telegram_id</code>, <code>display_name</code>, <code>unscored</code>, <code>stale</code>, <code>total</code>) and <code>nudge_targets(conn, *, cooldown_days, min_pending, ignore_cooldown=False) -&gt; list[NudgeTarget]</code>, built on <code>pending_counts_by_voter</code>, filtering active non-ghost players and joining <code>revote_nudges</code> for the cooldown.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**Filter on reachability, but as a disjunction, never an inner <code>JOIN contacts</code>.** <code>upsert_contact</code> has exactly one production call site (<code>handlers/voting.py</code>, inside <code>handle_start</code>&#x27;s private-chat branch), so <code>contacts</code> records &#x27;typed /start in a DM&#x27;, not &#x27;is reachable&#x27; — casting a vote or tapping a rating button writes nothing. The table also postdates the bot&#x27;s first two weeks, so every player who /start-ed before it existed and never re-/start-ed has no row despite voting today. An inner join would silently drop exactly the long-standing core of the roster. Use <code>AND (EXISTS (SELECT 1 FROM contacts c WHERE c.telegram_id = p.telegram_id) OR EXISTS (SELECT 1 FROM scores s WHERE s.voter_id = p.telegram_id))</code> — having cast any score is itself proof of an open DM, because the whole vote flow is DM-only.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>record_nudge(conn, telegram_id)</code> doing an UPSERT on the primary key that moves <code>last_nudged_at</code> to CURRENT_TIMESTAMP.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_revote.py -q</code> exits 0, and <code>uv run ty check src/</code> exits 0 (revote.py is a pure-logic module, so it is inside the type-checked set).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(revote): add nudge targeting and cooldown bookkeeping</span>
         </li>
           </ol>
