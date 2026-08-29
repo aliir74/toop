@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from toop.config import settings
 from toop.players import add_player
 from toop.rating import INDICATORS
 from toop.voting_queue import (
@@ -255,3 +256,93 @@ def test_record_score_clears_all_skips_for_player(conn: sqlite3.Connection) -> N
         "SELECT COUNT(*) AS n FROM score_skips WHERE voter_id=1 AND player_id=2"
     ).fetchone()["n"]
     assert n == 0
+
+
+# --- re-voting: stale scores age back into the queue -----------------------
+
+
+def _age_all_scores(conn: sqlite3.Connection, days: int) -> None:
+    conn.execute("UPDATE scores SET updated_at = datetime('now', ?)", (f"-{days} days",))
+    conn.commit()
+
+
+def test_stale_score_is_reoffered(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 2)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    assert select_next_score_target(conn, voter_id=1) is None
+    _age_all_scores(conn, 90)
+    target = select_next_score_target(conn, voter_id=1)
+    assert target is not None
+    assert target.player_id == 2
+
+
+def test_fresh_score_is_not_reoffered(conn: sqlite3.Connection) -> None:
+    """30 days is inside the 60-day default window, so nothing comes back."""
+    _seed_players(conn, 2)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    _age_all_scores(conn, 30)
+    assert select_next_score_target(conn, voter_id=1) is None
+
+
+def test_unscored_targets_come_before_stale_ones(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 3)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    _age_all_scores(conn, 90)
+    # Player 3 has never been rated by voter 1: coverage beats refreshing.
+    assert select_next_score_target(conn, voter_id=1).player_id == 3
+
+
+def test_oldest_stale_target_comes_first(conn: sqlite3.Connection) -> None:
+    """The fixture must leave ZERO unscored targets, otherwise is_revote ASC
+    decides the winner and the age ordering never gets a look in."""
+    _seed_players(conn, 3)
+    for pid in (2, 3):
+        for ind in INDICATORS:
+            record_score(conn, 1, pid, ind, 3)
+    conn.execute("UPDATE scores SET updated_at = datetime('now','-70 days') WHERE player_id=3")
+    conn.execute("UPDATE scores SET updated_at = datetime('now','-90 days') WHERE player_id=2")
+    conn.commit()
+    assert select_next_score_target(conn, voter_id=1).player_id == 2
+
+
+def test_rescoring_a_stale_target_refreshes_it(conn: sqlite3.Connection) -> None:
+    """Re-scoring resets updated_at, which is what stops the two while-loop
+    tests above from spinning forever once stale targets are re-offered."""
+    _seed_players(conn, 2)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    _age_all_scores(conn, 90)
+    first = select_next_score_target(conn, voter_id=1)
+    record_score(conn, 1, first.player_id, first.indicator, 5)
+    later = select_next_score_target(conn, voter_id=1)
+    assert (later.player_id, later.indicator) != (first.player_id, first.indicator)
+
+
+def test_revote_window_follows_settings(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed_players(conn, 2)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    _age_all_scores(conn, 2)
+    assert select_next_score_target(conn, voter_id=1) is None
+    monkeypatch.setattr(settings, "REVOTE_AFTER_DAYS", 1)
+    assert select_next_score_target(conn, voter_id=1) is not None
+
+
+def test_exclude_player_outranks_freshness(conn: sqlite3.Connection) -> None:
+    """Deliberate precedence: surfacing a DIFFERENT player than the one just
+    rated beats freshness, so a stale target elsewhere can appear before an
+    unscored one on the just-rated player."""
+    _seed_players(conn, 3)
+    for ind in INDICATORS:
+        record_score(conn, 1, 3, ind, 3)
+    record_score(conn, 1, 2, "attack", 3)
+    _age_all_scores(conn, 90)
+    # Unrestricted, player 2's five unscored indicators win on freshness.
+    assert select_next_score_target(conn, voter_id=1).player_id == 2
+    # Excluding player 2 hands it to player 3's stale rows, not back to 2.
+    assert select_next_score_target(conn, voter_id=1, exclude_player=2).player_id == 3

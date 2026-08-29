@@ -17,45 +17,78 @@ class ScoreTarget:
     indicator: str
 
 
-# Pick the next unscored (player, indicator) for a voter. Under-sampled players
-# (fewest existing scores on that indicator) surface first so coverage evens out.
-# A player is rateable iff active=1 AND in_pool=1 AND not currently paused, and
-# is never the voter themselves. Already-scored targets are excluded per
-# indicator; a ندیدمش skip excludes the player WHOLESALE for SKIP_COOLDOWN_DAYS,
-# because it is a claim about the person, not about one skill.
-# :exclude_player (the player just rated) sorts last so a DIFFERENT
-# player surfaces next when one exists, instead of cycling one name across all
-# six indicators back-to-back.
-_NEXT_TARGET_SQL = """
-WITH rateable AS (
+# Rateable players: active, in the pool, and not currently paused.
+#
+# The self-exclusion (nobody rates themselves) deliberately does NOT live here.
+# A CTE cannot correlate to an outer FROM alias and SQLite has no LATERAL, so
+# keeping `telegram_id != :voter` inside this fragment would make it unusable by
+# the whole-roster query in pending_counts_by_voter. Each caller applies its own
+# form instead: `r.telegram_id != :voter` here, a join predicate there.
+_RATEABLE_CTE = """
     SELECT telegram_id FROM players
     WHERE active=1 AND in_pool=1
       AND (pool_paused_until IS NULL OR pool_paused_until <= CURRENT_TIMESTAMP)
-      AND telegram_id != :voter
-),
-indicators(indicator) AS (
+"""
+
+_INDICATORS_CTE = """
     VALUES ('attack'), ('receive'), ('block'), ('setting'), ('serve'), ('positioning')
-)
+"""
+
+# A ندیدمش skip hides the WHOLE player from that voter, on every indicator,
+# until the row ages past SKIP_COOLDOWN_DAYS. Two placeholders, not one: the
+# callers bind the voter differently (a parameter vs a column) AND alias the
+# rateable table differently, so both expressions have to be injected.
+_SKIP_FILTER = """
+    NOT EXISTS (
+        SELECT 1 FROM score_skips sk
+        WHERE sk.voter_id = {voter} AND sk.player_id = {player}
+          AND sk.skipped_at > datetime('now', '-' || :cooldown_days || ' days')
+    )
+"""
+
+# Pick the next (player, indicator) for a voter. Under-sampled players (fewest
+# existing scores on that indicator) surface first so coverage evens out.
+#
+# A target qualifies when the voter has never scored it, OR when their score has
+# aged past REVOTE_AFTER_DAYS: people rate better once they have actually played
+# together, so an opinion formed months ago is worth asking again. Re-scoring
+# resets updated_at, which is what keeps this from looping.
+#
+# Ordering, in precedence order:
+#   1. :exclude_player (the player just rated) sorts last, so a DIFFERENT player
+#      surfaces next instead of cycling one name across all six indicators. This
+#      deliberately outranks freshness — a stale target elsewhere beats an
+#      unscored one on the player still on screen.
+#   2. is_revote: among everyone else, never-scored beats needs-refreshing.
+#   3. updated_at: oldest stale target first. NULL on every unscored row, so it
+#      ties there and total/voter_count still govern coverage.
+_NEXT_TARGET_SQL = f"""
+WITH rateable AS ({_RATEABLE_CTE}),
+indicators(indicator) AS ({_INDICATORS_CTE})
 SELECT
     r.telegram_id AS player_id,
     i.indicator AS indicator,
+    (sc.voter_id IS NOT NULL) AS is_revote,
     (SELECT COUNT(*) FROM scores s
         WHERE s.player_id = r.telegram_id AND s.indicator = i.indicator) AS total,
     (SELECT COUNT(*) FROM scores s
         WHERE s.voter_id = :voter AND s.player_id = r.telegram_id) AS voter_count
 FROM rateable r
 CROSS JOIN indicators i
-WHERE NOT EXISTS (
-        SELECT 1 FROM scores sc
-        WHERE sc.voter_id = :voter AND sc.player_id = r.telegram_id AND sc.indicator = i.indicator
-    )
-  AND NOT EXISTS (
-        SELECT 1 FROM score_skips sk
-        WHERE sk.voter_id = :voter AND sk.player_id = r.telegram_id
-          AND sk.skipped_at > datetime('now', '-' || :cooldown_days || ' days')
-    )
+LEFT JOIN scores sc
+    ON sc.voter_id = :voter
+   AND sc.player_id = r.telegram_id
+   AND sc.indicator = i.indicator
+WHERE r.telegram_id != :voter
+  AND (
+        sc.voter_id IS NULL
+        OR sc.updated_at <= datetime('now', '-' || :revote_days || ' days')
+      )
+  AND {_SKIP_FILTER.format(voter=":voter", player="r.telegram_id")}
 ORDER BY
     (r.telegram_id = :exclude_player),
+    is_revote ASC,
+    sc.updated_at ASC,
     total ASC,
     voter_count ASC,
     r.telegram_id, i.indicator
@@ -69,13 +102,16 @@ def select_next_score_target(
     exclude_player: int | None = None,
 ) -> ScoreTarget | None:
     """Return the next (player, indicator) the voter should rate, or None when
-    they've covered everyone.
+    they've covered everyone and nothing has gone stale yet.
 
     A ندیدمش skip hides the WHOLE player from this voter — every indicator, not
     just the one that was on screen — until the row ages past
-    SKIP_COOLDOWN_DAYS. The window is bound as an integer and concatenated into
-    the date modifier; binding a pre-formatted string risks a NULL modifier,
-    which would make the comparison silently false and ignore every skip.
+    SKIP_COOLDOWN_DAYS. A score the voter already gave comes back once it ages
+    past REVOTE_AFTER_DAYS, after every never-scored target on another player.
+
+    Both windows are bound as integers and concatenated into the date modifier;
+    binding a pre-formatted string risks a NULL modifier, which would make the
+    comparison silently false and ignore the window entirely.
     """
     row = conn.execute(
         _NEXT_TARGET_SQL,
@@ -83,6 +119,7 @@ def select_next_score_target(
             "voter": voter_id,
             "exclude_player": exclude_player,
             "cooldown_days": settings.SKIP_COOLDOWN_DAYS,
+            "revote_days": settings.REVOTE_AFTER_DAYS,
         },
     ).fetchone()
     if row is None:

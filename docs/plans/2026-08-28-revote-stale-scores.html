@@ -1200,44 +1200,44 @@
             <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests in <code>tests/test_voting_queue.py</code>: <code>test_stale_score_is_reoffered</code> (score everything for voter 1 across 2 players, then <code>UPDATE scores SET updated_at = datetime(&#x27;now&#x27;,&#x27;-90 days&#x27;)</code>, assert the selector returns a target); <code>test_fresh_score_is_not_reoffered</code> (same setup without ageing, assert None); <code>test_unscored_targets_come_before_stale_ones</code> (3 players, age only voter 1&#x27;s scores on player 2, leave player 3 unscored, assert <code>target.player_id == 3</code>); <code>test_oldest_stale_target_comes_first</code> (two aged scores at -90d and -70d, assert the -90d one is returned); <code>test_rescoring_a_stale_target_refreshes_it</code> (record_score on the returned stale target, assert the same (player, indicator) pair is not returned on the next call); <code>test_revote_window_follows_settings</code> (monkeypatch <code>toop.voting_queue.settings</code> to <code>REVOTE_AFTER_DAYS=1</code> and confirm a 2-day-old score is offered).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>test_exclude_player_outranks_freshness</code>: when the only unscored targets belong to the just-rated player and another player has a stale one, the stale target wins. This pins the deliberate ordering choice rather than leaving it to chance.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">For <code>test_oldest_stale_target_comes_first</code>, the fixture must leave **zero** unscored targets for that voter, otherwise <code>is_revote ASC</code> correctly wins and the age assertion never gets a look in. Score everything, then age two players&#x27; rows to -90d and -70d.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py -q</code> and confirm the seven new tests fail.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Extract the rateable CTE and the <code>score_skips</code> cooldown filter into module-level constants, with two corrections that were verified against SQLite rather than assumed. **<code>_RATEABLE_CTE</code> must NOT keep its <code>AND telegram_id != :voter</code> line**: a CTE cannot correlate to an outer FROM alias and SQLite has no LATERAL, so <code>.format(voter=&#x27;v.telegram_id&#x27;)</code> fails with <code>no such column: v.telegram_id</code>. Drop the self-exclusion from the CTE entirely (it then needs no placeholder) and move it to <code>_NEXT_TARGET_SQL</code>&#x27;s own WHERE as <code>AND r.telegram_id != :voter</code>, which is behaviourally identical.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**<code>_SKIP_FILTER</code> needs two placeholders, not one** — it references both the voter bind and the rateable alias, and 1.3 aliases that table <code>rp</code> rather than <code>r</code>. Make it <code>_SKIP_FILTER.format(voter=&#x27;:voter&#x27;, player=&#x27;r.telegram_id&#x27;)</code> here and <code>.format(voter=&#x27;v.telegram_id&#x27;, player=&#x27;rp.telegram_id&#x27;)</code> in 1.3; a single-placeholder version fails with <code>no such column: r.telegram_id</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Rewrite <code>_NEXT_TARGET_SQL</code>: replace the <code>NOT EXISTS (SELECT 1 FROM scores ...)</code> filter with <code>LEFT JOIN scores sc ON sc.voter_id = :voter AND sc.player_id = r.telegram_id AND sc.indicator = i.indicator</code>, and a WHERE of <code>r.telegram_id != :voter AND (sc.voter_id IS NULL OR sc.updated_at &lt;= datetime(&#x27;now&#x27;, &#x27;-&#x27; || :revote_days || &#x27; days&#x27;)) AND NOT EXISTS (SELECT 1 FROM score_skips sk ...)</code>. **The ندیدمش skip filter stays exactly as it is** — only the scores filter changes.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Select <code>(sc.voter_id IS NOT NULL) AS is_revote</code> and <code>sc.updated_at AS scored_at</code>, and set <code>ORDER BY (r.telegram_id = :exclude_player), is_revote ASC, sc.updated_at ASC, total ASC, voter_count ASC, r.telegram_id, i.indicator</code>. Precedence, stated exactly: showing a different player than the one just rated outranks freshness, so a stale target on another player can appear before an unscored one on the just-rated player; among candidates that tie on <code>exclude_player</code>, unscored always beats stale, and within the stale group the oldest goes first (<code>updated_at</code> is NULL on every unscored row, so it ties there and <code>total</code>/<code>voter_count</code> still govern coverage).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Bind <code>revote_days</code> as an integer concatenated into the date modifier, exactly like <code>cooldown_days</code> above it, and extend that function&#x27;s docstring comment to say why: a pre-formatted string risks a NULL modifier, which makes the comparison silently false and would ignore the window entirely.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py -q</code> exits 0, including the pre-existing <code>test_selector_never_targets_self</code> and <code>test_selector_excludes_scored_and_skipped</code> while-loops, which still terminate because <code>record_score</code> resets <code>updated_at</code> to now.</span>
         </li>
         <li class="step" data-status="pending">
