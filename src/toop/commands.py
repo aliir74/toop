@@ -64,6 +64,7 @@ COMMANDS: tuple[BotCmd, ...] = (
     _cmd("pause_events", admin=True),
     _cmd("resume_events", admin=True),
     _cmd("nudge", admin=True),
+    _cmd("revote_ping", admin=True),
     _cmd("snapshot", admin=True),
     _cmd("swap", admin=True),
     _cmd("change_player", admin=True),

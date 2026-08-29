@@ -48,3 +48,10 @@ def test_render_help_non_admin_hides_admin_commands() -> None:
     assert "/start" in body
     assert "/vote" in body
     assert body.count("\n") == len(PUBLIC_COMMANDS) - 1
+
+
+def test_revote_ping_is_admin_only() -> None:
+    """The other assertions here self-adjust off len(COMMANDS), so without this
+    the new command is never actually asserted anywhere."""
+    assert "/revote_ping" in render_help(admin=True)
+    assert "/revote_ping" not in render_help(admin=False)

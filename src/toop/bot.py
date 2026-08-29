@@ -32,6 +32,7 @@ from toop.handlers.health import handle_coverage, handle_health
 from toop.handlers.help import handle_help
 from toop.handlers.ops import handle_backup_db, handle_version
 from toop.handlers.poll import handle_poll_answer, weekly_attendance_job
+from toop.handlers.revote import handle_revote_ping, revote_nudge_job
 from toop.handlers.roster import (
     handle_add_ghost,
     handle_add_pick_callback,
@@ -139,6 +140,7 @@ def main() -> None:
     app.add_handler(CommandHandler("vote", handle_vote_command))
     app.add_handler(CommandHandler("help", handle_help))
     app.add_handler(CommandHandler("nudge", handle_nudge))
+    app.add_handler(CommandHandler("revote_ping", handle_revote_ping))
     app.add_handler(CommandHandler("snapshot", handle_snapshot))
     app.add_handler(CommandHandler("swap", handle_swap))
     app.add_handler(CommandHandler("change_player", handle_change_player))
@@ -180,6 +182,23 @@ def main() -> None:
             "attendance_poll scheduled: weekday=%s hour=%s %s",
             settings.SESSION_POLL_WEEKDAY,
             settings.SESSION_POLL_HOUR,
+            settings.SESSION_POLL_TZ,
+        )
+        revote_weekday = to_ptb_weekday(settings.REVOTE_NUDGE_WEEKDAY)
+        app.job_queue.run_daily(
+            revote_nudge_job,
+            time=time(
+                hour=settings.REVOTE_NUDGE_HOUR,
+                minute=0,
+                tzinfo=ZoneInfo(settings.SESSION_POLL_TZ),
+            ),
+            days=(revote_weekday,),
+            name="revote_nudge",
+        )
+        logger.info(
+            "revote_nudge scheduled: weekday=%s hour=%s %s",
+            settings.REVOTE_NUDGE_WEEKDAY,
+            settings.REVOTE_NUDGE_HOUR,
             settings.SESSION_POLL_TZ,
         )
     app.add_handler(PollAnswerHandler(handle_poll_answer))

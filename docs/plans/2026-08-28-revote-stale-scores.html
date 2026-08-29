@@ -1850,7 +1850,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="3.5" data-task-status="pending">
+  <article class="task" data-task-id="3.5" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">3.5</span><span class="task-name">Wire the command and the job into the bot</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1862,36 +1862,36 @@
             <span class="label">Files</span> Modify: src/toop/bot.py · Modify: src/toop/commands.py · Modify: tests/test_bot_wiring.py · Modify: tests/test_commands.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>_cmd(&#x27;revote_ping&#x27;, admin=True)</code> to the <code>COMMANDS</code> tuple in <code>src/toop/commands.py</code>, in the admin block near <code>_cmd(&#x27;nudge&#x27;, ...)</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Register <code>app.add_handler(CommandHandler(&#x27;revote_ping&#x27;, handle_revote_ping))</code> in <code>bot.main()</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Schedule the job: <code>app.job_queue.run_daily(revote_nudge_job, time=time(hour=settings.REVOTE_NUDGE_HOUR, minute=0, tzinfo=ZoneInfo(settings.SESSION_POLL_TZ)), days=(to_ptb_weekday(settings.REVOTE_NUDGE_WEEKDAY),), name=&#x27;revote_nudge&#x27;)</code>, followed by a <code>logger.info</code> line in the same shape as the <code>attendance_poll</code> one.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Update <code>tests/test_bot_wiring.py</code>: bump the handler-count assertion from 49 to 50 in BOTH tests, bump <code>run_daily.call_count</code> from 3 to 4, and add <code>days_by_name[&#x27;revote_nudge&#x27;] == (2,)</code> (PTB numbers weekdays 0=Sunday, so Tuesday is 2). Update the inline comment that spells out the handler arithmetic.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**Add <code>REVOTE_NUDGE_WEEKDAY=&#x27;Tuesday&#x27;</code> and <code>REVOTE_NUDGE_HOUR=19</code> to the <code>fake_settings</code> MagicMock in the <code>patched_main</code> fixture.** Without them <code>time(hour=&lt;MagicMock&gt;)</code> raises a TypeError and both wiring tests fail for a reason unrelated to the change.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>test_revote_ping_is_admin_only</code> to <code>tests/test_commands.py</code>: <code>/revote_ping</code> appears in <code>render_help(admin=True)</code> and not in <code>render_help(admin=False)</code>. The existing assertions there self-adjust off <code>len(COMMANDS)</code>, so without this the new command is never actually asserted anywhere.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_bot_wiring.py tests/test_commands.py -q</code> exits 0, with the new admin-only test among the passes.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(bot): schedule revote nudges and register /revote_ping</span>
         </li>
           </ol>
