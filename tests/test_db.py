@@ -16,6 +16,7 @@ EXPECTED_TABLES = {
     "score_skips",
     "player_ratings",
     "snapshots",
+    "score_history",
 }
 
 
@@ -184,3 +185,23 @@ def test_scores_reject_out_of_range(conn: sqlite3.Connection) -> None:
             "INSERT INTO scores (voter_id, player_id, indicator, score) VALUES (1, 2, 'attack', 9)"
         )
         conn.commit()
+
+
+def test_score_history_table_shape(conn: sqlite3.Connection) -> None:
+    """Append-only audit of superseded scores. No foreign keys by design, so
+    the trail survives link_ghost_player's hard DELETE of the ghost row."""
+    assert _columns(conn, "score_history") == {
+        "id",
+        "voter_id",
+        "player_id",
+        "indicator",
+        "score",
+        "recorded_at",
+        "superseded_at",
+    }
+
+
+def test_init_db_is_idempotent_for_new_tables(conn: sqlite3.Connection) -> None:
+    init_db(conn)
+    init_db(conn)
+    assert "score_history" in _tables(conn)
