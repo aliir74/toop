@@ -101,6 +101,13 @@ class Settings(BaseSettings):
     # A 🤷 ندیدمش tap means "I have not seen this person play", so it hides that
     # whole player from that voter (every indicator) for this many days.
     SKIP_COOLDOWN_DAYS: int = Field(default=7, gt=0)
+    # Rolling re-vote window. A score whose updated_at is older than this is
+    # offered again, because the voter now knows that player better than they
+    # did when they first rated them. ~60 days is about eight weekly sessions:
+    # long enough that they have genuinely seen them play again, short enough
+    # that a season-old opinion does not survive a whole season. Must be > 0 —
+    # a zero window would make every score permanently stale.
+    REVOTE_AFTER_DAYS: int = Field(default=60, gt=0)
 
     @field_validator("SESSION_WEEKDAY", "SESSION_POLL_WEEKDAY")
     @classmethod
