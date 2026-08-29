@@ -410,3 +410,50 @@ def test_pending_counts_agrees_with_selector(conn: sqlite3.Connection) -> None:
     for voter in (1, 2, 3, 4):
         empty = select_next_score_target(conn, voter_id=voter) is None
         assert (counts[voter].total == 0) is empty, f"voter {voter}: {counts[voter]}"
+
+
+# --- score_history: the superseded value survives the overwrite -----------
+
+
+def _history(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM score_history ORDER BY id").fetchall()
+
+
+def test_first_score_writes_no_history(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 2)
+    record_score(conn, 1, 2, "attack", 4)
+    assert _history(conn) == []
+
+
+def test_changed_score_archives_the_old_value(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 2)
+    record_score(conn, 1, 2, "attack", 4)
+    before = conn.execute(
+        "SELECT updated_at FROM scores WHERE voter_id=1 AND player_id=2 AND indicator='attack'"
+    ).fetchone()["updated_at"]
+    record_score(conn, 1, 2, "attack", 2)
+    rows = _history(conn)
+    assert len(rows) == 1
+    assert rows[0]["score"] == 4
+    assert rows[0]["recorded_at"] == before
+    assert rows[0]["voter_id"] == 1
+    assert rows[0]["player_id"] == 2
+    assert rows[0]["indicator"] == "attack"
+
+
+def test_identical_rescore_writes_no_history(conn: sqlite3.Connection) -> None:
+    """Re-confirming a score is not a change. scores.updated_at already records
+    when the confirmation happened, so an identical history row is pure bloat."""
+    _seed_players(conn, 2)
+    record_score(conn, 1, 2, "attack", 4)
+    conn.execute("UPDATE scores SET updated_at = datetime('now','-90 days')")
+    conn.commit()
+    record_score(conn, 1, 2, "attack", 4)
+    assert _history(conn) == []
+    # The confirmation still refreshed the clock, so attack drops back out of
+    # the stale set even though nothing was archived.
+    row = conn.execute(
+        "SELECT updated_at > datetime('now','-1 day') AS is_fresh FROM scores "
+        "WHERE voter_id=1 AND player_id=2 AND indicator='attack'"
+    ).fetchone()
+    assert row["is_fresh"] == 1

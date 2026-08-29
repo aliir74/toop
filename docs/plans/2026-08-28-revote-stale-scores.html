@@ -1429,7 +1429,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="2.2" data-task-status="pending">
+  <article class="task" data-task-id="2.2" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">2.2</span><span class="task-name">Archive the previous value inside record_score</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1441,44 +1441,44 @@
             <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: src/toop/players.py · Modify: tests/test_voting_queue.py · Modify: tests/test_players.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests in <code>tests/test_voting_queue.py</code>: <code>test_first_score_writes_no_history</code> (one record_score, <code>SELECT COUNT(*) FROM score_history</code> is 0); <code>test_changed_score_archives_the_old_value</code> (score 4 then 2, exactly one history row carrying score 4 and the original <code>updated_at</code> as <code>recorded_at</code>); <code>test_identical_rescore_writes_no_history</code> (score 4 twice, still 0 history rows, but <code>scores.updated_at</code> has advanced).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write a failing test in <code>tests/test_players.py</code>: <code>test_link_ghost_remaps_score_history</code> — a ghost with an archived history row (as scored player, and as voter) has both remapped onto the real id after <code>link_ghost_player</code>, and a row that would make the real account its own voter is dropped. <code>tests/test_players.py</code> has <code>_score</code>/<code>_skip</code> helpers but nothing for history, so add one; **it must pass <code>recorded_at</code> explicitly**, since 2.1 declares that column <code>NOT NULL</code> with no DEFAULT and a bare insert raises <code>IntegrityError</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py tests/test_players.py -q</code> and confirm the four fail.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">In <code>record_score</code>, SELECT the existing <code>(score, updated_at)</code> row before the UPSERT; when a row exists and its score differs from the incoming one, INSERT it into <code>score_history</code> with <code>recorded_at</code> set to the old <code>updated_at</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add the reasoning as a docstring line: an identical re-score is a confirmation, and <code>scores.updated_at</code> already records when it happened, so writing an identical history row would be pure bloat.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**Add a <code>score_history</code> remap loop to <code>players.link_ghost_player</code>**, next to the existing <code>scores</code> and <code>score_skips</code> loops. <code>_remap_endpoint</code> is a pure function, so this is a <code>SELECT id, voter_id, player_id FROM score_history WHERE voter_id=? OR player_id=?</code> loop with <code>UPDATE ... WHERE id=?</code> per row, and <code>DELETE ... WHERE id=?</code> when the two endpoints collapse to the same id. This only works because 2.1 gave the table an <code>id</code> primary key. Without the loop, 2.1&#x27;s no-FK choice leaves history rows pointing at a negative ghost id that no longer exists in <code>players</code>, permanently unattributable — the exact opposite of &#x27;history outlives roster churn&#x27;.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Place the loop **before** the <code>DELETE FROM players WHERE telegram_id=?</code> line that ends <code>link_ghost_player</code>, and do **not** let it increment <code>score_rows</code>: the existing <code>test_link_ghost_remaps_ghost_as_player_and_as_voter</code> asserts <code>result.score_rows == 2</code>, and counting history rows into it breaks that test.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Do NOT make the ghost merge itself write history rows: its <code>scores</code> UPSERT is a roster fix, not a voter changing their mind, and it already resolves collisions by keeping the newer <code>updated_at</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py tests/test_players.py -q</code> exits 0 and the whole <code>GROUP_CHAT_ID=0 uv run pytest -q</code> run stays green.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(voting): archive superseded scores to score_history</span>
         </li>
           </ol>
@@ -2233,8 +2233,8 @@
   // Rewritten per rendered plan by install_comment_layer.py --set-relay. This file is a
   // TEMPLATE, so it must stay 0: render-plan.py substitutes placeholders and never calls
   // the installer, so /create-plan sets the live port on the RENDERED plan afterwards.
-  const RELAY_PORT = 64826;
-  const RELAY_TOKEN = "7xC-1y19-UFwfpJCJW14Ug";
+  const RELAY_PORT = 49753;
+  const RELAY_TOKEN = "T_tm5AsPwKFjrVKVOyMDUg";
   const IS_UI = ".inline-comment, .actionbar, .sel-comment-btn, .plan-notes, .task-comment, .cl-attachments";
   const highlights = new Map();   // hlId -> { id, quote, section, note, marks:[], panel }
 

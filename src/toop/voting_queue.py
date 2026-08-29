@@ -158,6 +158,11 @@ def record_score(
     score. Every skip of that PLAYER is cleared, not just the matching
     indicator: a score proves the voter can rate them, which retracts the
     "I haven't seen them play" claim the skip stood for.
+
+    A value that actually CHANGES is archived to score_history first, carrying
+    the old row's updated_at as recorded_at. An identical re-score is not
+    archived: it is a confirmation, and scores.updated_at already records when
+    it happened, so a duplicate history row would add nothing but bulk.
     """
     if indicator not in _VALID_INDICATORS:
         raise ValueError(f"unknown indicator {indicator!r}")
@@ -165,6 +170,16 @@ def record_score(
         raise ValueError(f"score must be 1..5, got {score!r}")
     if voter_id == player_id:
         raise ValueError("a voter cannot score themselves")
+    previous = conn.execute(
+        "SELECT score, updated_at FROM scores WHERE voter_id=? AND player_id=? AND indicator=?",
+        (voter_id, player_id, indicator),
+    ).fetchone()
+    if previous is not None and previous["score"] != score:
+        conn.execute(
+            "INSERT INTO score_history "
+            "(voter_id, player_id, indicator, score, recorded_at) VALUES (?, ?, ?, ?, ?)",
+            (voter_id, player_id, indicator, previous["score"], previous["updated_at"]),
+        )
     conn.execute(
         """
         INSERT INTO scores (voter_id, player_id, indicator, score, updated_at)
