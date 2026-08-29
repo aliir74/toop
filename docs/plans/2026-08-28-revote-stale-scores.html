@@ -1711,7 +1711,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="3.3" data-task-status="pending">
+  <article class="task" data-task-id="3.3" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">3.3</span><span class="task-name">Write the Persian and English strings</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1723,44 +1723,44 @@
             <span class="label">Files</span> Modify: src/toop/i18n.py · Modify: tests/test_i18n.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Decide the key set: <code>revote.dm_nudge</code> (kwargs <code>first</code>, <code>total</code>), <code>revote.ping_header</code>, <code>revote.ping_row</code> (kwargs <code>name</code>, <code>total</code>), <code>revote.ping_none</code>, <code>revote.ping_sent</code> (kwargs <code>sent</code>, <code>failed</code>), <code>cmd.revote_ping.short</code>, <code>cmd.revote_ping.usage</code>, and a rewritten <code>vote.no_prompts</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text"><code>vote.no_prompts</code> has three render sites in <code>handlers/voting.py</code>, and only two of them are the &#x27;you&#x27;re done&#x27; state — the third is the fallback when a score target references a missing player. A string promising &#x27;we&#x27;ll ask you again as the group plays more&#x27; reads wrong on an error path, so **add a separate <code>vote.target_missing</code> key for that site** and rewrite <code>vote.no_prompts</code> only for the other two.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text"><code>cmd.revote_ping.short</code> and <code>.usage</code> must say the command **sends** DMs, because <code>/nudge</code> sits right next to it and only prints templates for the admin to copy.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**<code>vote.nudge_header</code> currently states &#x27;Manual sends only, no auto-DMs&#x27; in both languages.** The weekly job makes that false. Rewrite that line (via Codex for the Persian) so it describes <code>/nudge</code> as the copy-paste option rather than a promise about the bot&#x27;s behaviour.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Draft the English strings directly, matching the terse tone of the existing <code>vote.*</code> entries.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**Draft every Persian string through the <code>codex-ask</code> skill**, never by hand: it is a standing rule that shipping Persian prose is written by Codex with the colloquial-register instruction. Pass the existing Persian <code>vote.*</code> and <code>alert.*</code> strings as tone reference, and state the audience (a casual Iranian volleyball group chat).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add the keys to both the <code>_fa()</code> and <code>_en()</code> tables in <code>src/toop/i18n.py</code>, keeping them in the same relative position in each.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>test_revote_keys_resolve_in_both_languages</code> to <code>tests/test_i18n.py</code>, mirroring <code>test_set_photo_keys_resolve_in_both_languages</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_i18n.py -q</code> exits 0, including the existing <code>test_catalog_parity</code>, which fails if a key landed in only one language.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(i18n): add revote nudge strings</span>
         </li>
           </ol>

@@ -105,7 +105,7 @@ async def test_nudge_admin_only(admin_settings: None, conn: sqlite3.Connection) 
     update.effective_message.reply_text.assert_awaited_once()
     reply = update.effective_message.reply_text.await_args.args[0]
     assert "Alice" in reply
-    assert "Manual sends only" in reply
+    assert "/revote_ping" in reply
 
 
 async def test_nudge_blocked_for_non_admin(admin_settings: None, conn: sqlite3.Connection) -> None:

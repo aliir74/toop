@@ -22,6 +22,7 @@ from toop.voting_queue import ScoreTarget
 
 GROUP_VOTE_DM_NUDGE = t("vote.group_dm_nudge", "en")
 NO_PROMPTS_REPLY = t("vote.no_prompts", "en")
+TARGET_MISSING_REPLY = t("vote.target_missing", "en")
 START_DM = t("vote.start_dm", "en")
 START_GROUP = t("vote.start_group", "en")
 
@@ -414,7 +415,9 @@ async def test_nudge_with_players(
     update = _admin_update()
     await handle_nudge(update, _ctx(conn))
     reply = update.effective_message.reply_text.await_args.args[0]
-    assert "nudge" in reply.lower()
+    # The header points at /revote_ping now that auto-DMs exist; it no longer
+    # claims "manual sends only".
+    assert "/revote_ping" in reply
     assert "Alice" in reply
 
 
@@ -517,7 +520,10 @@ async def test_send_next_prompt_missing_player(
     _patch_selector(monkeypatch, ScoreTarget(player_id=111, indicator="attack"))
     ctx = _ctx(conn)
     await _send_next_prompt(conn, ctx, chat_id=1, voter_id=1)
-    assert ctx.bot.send_message.await_args.kwargs["text"] == NO_PROMPTS_REPLY
+    # Distinct from the terminal state: vote.no_prompts now promises to ask
+    # again later, which would be a lie on an error path.
+    assert ctx.bot.send_message.await_args.kwargs["text"] == TARGET_MISSING_REPLY
+    assert ctx.bot.send_message.await_args.kwargs["text"] != NO_PROMPTS_REPLY
 
 
 async def test_send_next_prompt_edit_with_target(

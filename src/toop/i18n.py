@@ -119,6 +119,11 @@ def _fa() -> dict[str, str]:
         "cmd.resume_events.usage": "/resume_events — لغو توقف و بازگشت نظرسنجی هفتگی",
         "cmd.nudge.short": "تهیه یادآور برای کم‌امتیازترین رای‌دهندگان",
         "cmd.nudge.usage": "/nudge — قالب‌های آماده برای یادآوری به کم‌فعال‌ترین رای‌دهندگان",
+        "cmd.revote_ping.short": "ارسال پیام خصوصی یادآوری برای امتیازهای منتظر",
+        "cmd.revote_ping.usage": (
+            "/revote_ping — برای کسایی که نوبت یادآوریشونه پیام می‌فرسته؛ با اضافه کردن force، "
+            "محدودیت هفته‌ای یک‌بار رو نادیده می‌گیره"
+        ),
         "cmd.snapshot.short": "ساخت تیم‌های متوازن",
         "cmd.snapshot.usage": "/snapshot — ساخت تیم‌های متوازن از حاضرین فعلی",
         "cmd.swap.short": "جابه‌جایی دو بازیکن بین تیم‌ها",
@@ -142,7 +147,7 @@ def _fa() -> dict[str, str]:
         "vote.group_dm_nudge": "👋 همین‌جا در پیوی /vote را بزنید تا به هم‌تیمی‌ها امتیاز بدهید. 🏐",
         "vote.group_blocked_nudge": "با من (@{bot}) یک گفتگوی خصوصی شروع کن و آنجا /vote را بزن 🤫",
         "vote.no_prompts": (
-            "🎉 فعلاً تمام شد — به همه امتیاز دادی. بعداً که فهرست بزرگ‌تر شد دوباره سر بزن."
+            "🎉 فعلاً به همه امتیاز دادی. بعداً که بیشتر با هم بازی کردین، دوباره ازت می‌پرسم."
         ),
         "vote.start_dm": (
             "سلام 👋 من توپ هستم — به متوازن کردن تیم‌های والیبال هفتگی کمک می‌کنم.\n\n"
@@ -164,8 +169,8 @@ def _fa() -> dict[str, str]:
         "vote.not_on_roster": "هنوز در فهرست نیستی — از ادمین بخواه اضافه‌ات کند.",
         "vote.nudge_none": "هنوز هیچ بازیکنی در فهرست نیست.",
         "vote.nudge_header": (
-            "این‌ها را کپی/پیست کن تا به کم‌فعال‌ترین رای‌دهندگان یادآوری کنی. "
-            "(فقط ارسال دستی — بدون پیام خودکار.)\n\n"
+            "این متن‌ها رو کپی کن تا به کم‌فعال‌ترین رای‌دهنده‌ها یادآوری کنی؛ یا /revote_ping رو "
+            "بزن تا خودم براشون بفرستم:"
         ),
         "vote.nudge_template": (
             "--- {name} ({handle}) — {lifetime} امتیاز کل ---\n"
@@ -173,6 +178,15 @@ def _fa() -> dict[str, str]:
             "می‌شه به توپ در تلگرام پیام بدی و /vote را بزنی؟ "
             "به متوازن‌تر شدن تیم‌ها کمک می‌کنه. 🙏 حدود ۳۰ ثانیه طول می‌کشه."
         ),
+        "vote.target_missing": "یه چیزی درست پیش نرفت؛ دوباره /vote رو بزن.",
+        "revote.dm_nudge": (
+            "سلام {first}، {total} تا امتیاز منتظرته. بعضی‌ها رو هنوز امتیاز ندادی و از امتیاز "
+            "بعضی‌ها هم یه مدت گذشته؛ شاید الان نظرت فرق کرده باشه، پس /vote رو بزن."
+        ),
+        "revote.ping_header": "به اینا یادآوری فرستادم:",
+        "revote.ping_row": "• {name} — {total} امتیاز مونده",
+        "revote.ping_sent": "{sent} تا ارسال شد، {failed} تا هم خطا خورد.",
+        "revote.ping_none": "فعلاً نوبت یادآوری کسی نرسیده.",
         # --- group attendance / reservation polls ---
         "poll.attendance_question": (
             "آیا در برنامه والیبال دوشنبه آینده (از ساعت ۶ تا ۸) شرکت میکنید؟"
@@ -475,6 +489,11 @@ def _en() -> dict[str, str]:
         "cmd.resume_events.usage": "/resume_events — lift the pause and resume the weekly poll",
         "cmd.nudge.short": "Draft nudges for low-completion voters",
         "cmd.nudge.usage": "/nudge — copy/paste templates to nudge the lowest-completion voters",
+        "cmd.revote_ping.short": "DM everyone with ratings waiting",
+        "cmd.revote_ping.usage": (
+            "/revote_ping — DMs everyone due a reminder; add 'force' to ignore the once-a-week "
+            "limit"
+        ),
         "cmd.snapshot.short": "Generate balanced teams",
         "cmd.snapshot.usage": "/snapshot — build balanced teams from the current yes-RSVPs",
         "cmd.swap.short": "Swap two players between teams",
@@ -496,7 +515,7 @@ def _en() -> dict[str, str]:
         "vote.group_dm_nudge": "👋 Tap /vote right here in our DM to rate teammates. 🏐",
         "vote.group_blocked_nudge": "start a DM with me (@{bot}) and tap /vote there 🤫",
         "vote.no_prompts": (
-            "🎉 All done for now — you've rated everyone. Check back later as the roster grows."
+            "🎉 That's everyone for now. I'll ask again later, as you all play together more."
         ),
         "vote.start_dm": (
             "Hi 👋 I'm توپ — I help balance our weekly volleyball teams.\n\n"
@@ -517,8 +536,8 @@ def _en() -> dict[str, str]:
         "vote.not_on_roster": "You're not on the roster yet — ask the admin to add you.",
         "vote.nudge_none": "No players on the roster yet.",
         "vote.nudge_header": (
-            "Copy/paste these to nudge the lowest-completion voters. "
-            "(Manual sends only — no auto-DMs.)\n\n"
+            "Copy these to remind the least active voters, or run /revote_ping to have me send "
+            "them:"
         ),
         "vote.nudge_template": (
             "--- {name} ({handle}) — {lifetime} lifetime ratings ---\n"
@@ -526,6 +545,15 @@ def _en() -> dict[str, str]:
             "could you ping توپ on Telegram and run /vote? "
             "It helps me balance teams better. 🙏 Takes ~30s."
         ),
+        "vote.target_missing": "Something went wrong there — tap /vote again.",
+        "revote.dm_nudge": (
+            "Hi {first}, you have {total} ratings waiting. Some are teammates you've never rated, "
+            "some you rated a while back and might see differently now — tap /vote."
+        ),
+        "revote.ping_header": "Sent a reminder to these people:",
+        "revote.ping_row": "• {name} — {total} left to rate",
+        "revote.ping_sent": "{sent} sent, {failed} failed.",
+        "revote.ping_none": "Nobody is due a reminder right now.",
         "poll.attendance_question": (
             "Are you joining next Monday's volleyball session (6 to 8 PM)?"
         ),
