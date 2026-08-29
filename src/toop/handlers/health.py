@@ -9,8 +9,8 @@ from telegram.constants import ParseMode
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
-from toop.config import settings
 from toop.i18n import indicator_label, t
+from toop.voting_queue import PendingCounts, pending_counts_by_voter
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +47,11 @@ def _calibration_marker(is_calibrating: bool, lifetime: int) -> str:
     return "⚠" if lifetime > 0 else "✗"
 
 
-# `pending` is the exact count of (rateable player, indicator) targets this voter
-# hasn't scored — mirrors voting_queue.select_next_score_target, including the
-# ندیدمش rule that one skip retires the WHOLE player until it ages out of the
-# SKIP_COOLDOWN_DAYS window.
+# Completion-only stats: when they last voted, and how much they have given.
+# What they still OWE is not computed here — voting_queue.pending_counts_by_voter
+# owns that, so the offerable-target rules (pool membership, the ندیدمش cooldown,
+# the revote window) have exactly one definition instead of a copy that drifts.
 HEALTH_SQL = """
-WITH indicators(indicator) AS (
-    VALUES ('attack'), ('receive'), ('block'), ('setting'), ('serve'), ('positioning')
-)
 SELECT
     p.telegram_id,
     p.display_name,
@@ -65,27 +62,20 @@ SELECT
         AS lifetime,
     (SELECT COUNT(*) FROM scores s
      WHERE s.voter_id = p.telegram_id AND s.updated_at >= DATE('now', '-30 days'))
-        AS last_30d,
-    (SELECT COUNT(*) FROM players rp CROSS JOIN indicators i
-     WHERE rp.active = 1 AND rp.in_pool = 1
-       AND (rp.pool_paused_until IS NULL OR rp.pool_paused_until <= CURRENT_TIMESTAMP)
-       AND rp.telegram_id != p.telegram_id
-       AND NOT EXISTS (SELECT 1 FROM scores s
-            WHERE s.voter_id = p.telegram_id AND s.player_id = rp.telegram_id
-              AND s.indicator = i.indicator)
-       AND NOT EXISTS (SELECT 1 FROM score_skips sk
-            WHERE sk.voter_id = p.telegram_id AND sk.player_id = rp.telegram_id
-              AND sk.skipped_at > datetime('now', '-' || :cooldown_days || ' days')))
-        AS pending
+        AS last_30d
 FROM players p
 WHERE p.active = 1
 """
 
 
 def build_health_rows(conn: sqlite3.Connection) -> list[dict]:
-    rows = conn.execute(HEALTH_SQL, {"cooldown_days": settings.SKIP_COOLDOWN_DAYS}).fetchall()
+    rows = conn.execute(HEALTH_SQL).fetchall()
+    counts = pending_counts_by_voter(conn)
     out = []
     for r in rows:
+        # .get, not [] — HEALTH_SQL selects every active player including
+        # ghosts, so the two row sets are allowed to disagree.
+        pending = counts.get(r["telegram_id"], PendingCounts(0, 0))
         out.append(
             {
                 "telegram_id": r["telegram_id"],
@@ -94,7 +84,8 @@ def build_health_rows(conn: sqlite3.Connection) -> list[dict]:
                 "last_voted_human": _humanize_age(r["last_voted"]),
                 "lifetime": r["lifetime"],
                 "last_30d": r["last_30d"],
-                "pending": r["pending"],
+                "pending": pending.unscored,
+                "stale": pending.stale,
                 "calibration": _calibration_marker(bool(r["is_calibrating"]), r["lifetime"]),
             }
         )
@@ -118,7 +109,7 @@ def format_health(rows: list[dict]) -> str:
     # The monospace table keeps latin/LTR headers on purpose: fixed-width column
     # alignment inside a ``` block breaks under RTL Persian, and this is an
     # admin-only technical diagnostic. Only the empty-state line is translated.
-    header = f"{'Player':<16}{'Last vote':<12}{'Lifetime':<10}{'30d':<6}{'Pending':<9}{'Cal'}"
+    header = f"{'Player':<16}{'Last vote':<12}{'Life':<6}{'30d':<6}{'New':<6}{'Stale':<7}{'Cal'}"
     sep = "-" * len(header)
     lines = [header, sep]
     for r in rows:
@@ -126,9 +117,10 @@ def format_health(rows: list[dict]) -> str:
         lines.append(
             f"{name:<16}"
             f"{r['last_voted_human']:<12}"
-            f"{r['lifetime']:<10}"
+            f"{r['lifetime']:<6}"
             f"{r['last_30d']:<6}"
-            f"{r['pending']:<9}"
+            f"{r['pending']:<6}"
+            f"{r['stale']:<7}"
             f"{r['calibration']}"
         )
     return "```\n" + "\n".join(lines) + "\n```"

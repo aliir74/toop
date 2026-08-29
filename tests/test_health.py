@@ -13,7 +13,7 @@ from toop.handlers.health import (
     handle_coverage,
     handle_health,
 )
-from toop.players import add_player
+from toop.players import add_ghost_player, add_player
 from toop.rating import INDICATORS
 from toop.voting_queue import record_skip
 
@@ -197,3 +197,41 @@ def test_health_pending_counts_expired_skip_again(conn: sqlite3.Connection) -> N
     rows = build_health_rows(conn)
     alice = next(r for r in rows if r["display_name"] == "Alice")
     assert alice["pending"] == len(INDICATORS)
+
+
+def test_health_splits_pending_and_stale(conn: sqlite3.Connection) -> None:
+    """A voter who finished months ago must not read as one who never started:
+    their backlog is stale, not pending."""
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    add_player(conn, 3, "Cara", "cara")
+    for ind in INDICATORS:
+        _score(conn, 1, 2, ind)
+    conn.execute("UPDATE scores SET updated_at = datetime('now','-90 days')")
+    conn.commit()
+    alice = next(r for r in build_health_rows(conn) if r["display_name"] == "Alice")
+    assert alice["stale"] == len(INDICATORS)  # Bob, all six, aged out
+    assert alice["pending"] == len(INDICATORS)  # Cara, never rated
+
+
+def test_health_includes_ghost_rows(conn: sqlite3.Connection) -> None:
+    """HEALTH_SQL selects every active player and ghosts are active, so the
+    counts lookup must tolerate them rather than KeyError on a real database."""
+    add_player(conn, 1, "Alice", "alice")
+    add_ghost_player(conn, "Ghosty")
+    rows = build_health_rows(conn)
+    ghost = next(r for r in rows if r["display_name"] == "Ghosty")
+    assert isinstance(ghost["pending"], int)
+    assert isinstance(ghost["stale"], int)
+
+
+def test_format_health_fits_the_header_width(conn: sqlite3.Connection) -> None:
+    """The table is LTR monospace on purpose; a row wider than the header wraps
+    on a phone and the column alignment it exists for is lost."""
+    add_player(conn, 1, "Alice Longsurname", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    body = format_health(build_health_rows(conn))
+    lines = body.splitlines()[1:-1]  # strip the ``` fences
+    header = lines[0]
+    assert "Stale" in header
+    assert all(len(line) <= len(header) for line in lines)

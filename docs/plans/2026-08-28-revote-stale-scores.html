@@ -1508,36 +1508,36 @@
             <span class="label">Files</span> Modify: src/toop/handlers/health.py · Modify: tests/test_health.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests in <code>tests/test_health.py</code>: <code>build_health_rows</code> returns both a <code>pending</code> key (never-scored targets) and a <code>stale</code> key (re-offerable ones) per voter, with the right numbers for a seeded fixture where one voter has aged scores; <code>format_health</code> output contains a <code>Stale</code> column header; **<code>test_health_includes_ghost_rows</code>** seeding <code>add_ghost_player</code> and asserting the ghost still gets a row with numeric <code>pending</code>/<code>stale</code> rather than raising.</span>
         </li>
         <li class="step" data-status="pending">
           <input type="checkbox" />
           <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_health.py -q</code> and confirm they fail.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Delete the <code>pending</code> correlated subquery from <code>HEALTH_SQL</code> (and the comment claiming it mirrors the queue), call <code>pending_counts_by_voter(conn)</code> once in <code>build_health_rows</code>, and merge <code>unscored</code> into <code>pending</code> and <code>stale</code> into a new <code>stale</code> key.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**Look the counts up with <code>counts.get(tid, PendingCounts(0, 0))</code>, never <code>counts[tid]</code>.** <code>HEALTH_SQL</code> is <code>WHERE p.active = 1</code> and includes ghosts, so a bare subscript is a KeyError on any real database the moment the two row sets disagree.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**Drop the now-unused <code>from toop.config import settings</code> import** from <code>handlers/health.py</code>: <code>settings</code> is referenced there only at the <code>cooldown_days</code> binding inside the deleted subquery, so leaving it behind is a ruff <code>F401</code> and <code>GROUP_CHAT_ID=0 make check</code> fails. <code>HEALTH_SQL</code> then executes as <code>conn.execute(HEALTH_SQL).fetchall()</code> with no params dict.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add the <code>Stale</code> column to <code>format_health</code>&#x27;s monospace table. Renaming the labels alone does NOT narrow anything — the width lives in the format specs — so write the header exactly as <code>f&quot;{&#x27;Player&#x27;:&lt;16}{&#x27;Last vote&#x27;:&lt;12}{&#x27;Life&#x27;:&lt;6}{&#x27;30d&#x27;:&lt;6}{&#x27;New&#x27;:&lt;6}{&#x27;Stale&#x27;:&lt;7}{&#x27;Cal&#x27;}&quot;</code> (16+12+6+6+6+7+3 = 56, the current width) and change the body row&#x27;s f-string widths to match.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_health.py -q</code> exits 0, with an assertion (not a print, which pytest swallows on pass) that every body line fits. <code>format_health</code> wraps its table in <code></code><code> fences, so strip those first: </code>assert all(len(line) &lt;= len(header) for line in body.splitlines()[1:-1])<code>.</code></span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: feat(health): split pending into new and stale targets</span>
         </li>
           </ol>
