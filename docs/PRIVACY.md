@@ -52,6 +52,23 @@ Every SQL touchpoint, audited.
 | `src/toop/handlers/health.py:HEALTH_SQL` | `MAX(answered_at)`, `COUNT(*)`, `COUNT(*) WHERE answered_at >= -30d` per voter. | ✅ Counts and timestamps only — no pair, no axis, no outcome. |
 | `src/toop/handlers/voting.py:_build_nudge_templates` | `COUNT(*) FROM answered_prompts` per voter for lifetime metric. | ✅ Count only. |
 
+### Writes — voter-linked score history (`score_history`)
+
+Added 2026-08-28 with the re-vote window. This table is voter-linked and holds
+raw 1–5 values, exactly like `scores`, so it belongs in this audit.
+
+| File:line | What it writes | Privacy check |
+| --- | --- | --- |
+| `src/toop/voting_queue.py:record_score` | The PREVIOUS (voter, player, indicator, score) when a re-vote changes it, plus that row's own `updated_at`. | ⚠️ Voter-linked by design, same posture as `scores` (B2): only the admin has DB access. Never surfaced to the group. |
+| `src/toop/players.py:link_ghost_player` | Remaps `voter_id`/`player_id` off a ghost id onto the real account; drops rows that would collapse to self-rating. | ✅ No new disclosure — same rows, renumbered. |
+
+Nothing reads `score_history` yet. It exists so a rating swing can be explained
+and so a future recency-weighting experiment has data.
+
+**Note:** the rest of this document is stale — it still describes the retired
+`vote_aggregates` / `answered_prompts` pairwise model, which the 1–5 migration
+removed. Only the section above reflects the current schema.
+
 ### No SQL anywhere joins `vote_aggregates` ↔ `answered_prompts`
 
 Verified via grep: no query mentions both table names in the same `FROM`/`JOIN`

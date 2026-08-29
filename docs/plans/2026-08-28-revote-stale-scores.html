@@ -1907,7 +1907,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="3.V" data-task-status="pending">
+  <article class="task" data-task-id="3.V" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">3.V</span><span class="task-name">Phase 3 verification</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1919,16 +1919,16 @@
             <span class="label">Files</span> <em>(none specified)</em>
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text"><code>GROUP_CHAT_ID=0 make check</code> exits 0 (ruff lint, ruff format check, ty check, and the full pytest run with the 100% coverage gate).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text"><code>uv run python -c &quot;from toop.commands import render_help; print(render_help(admin=True))&quot;</code> prints a <code>/revote_ping</code> line in Persian.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text"><code>uv run python -c &quot;from toop.i18n import t; print(t(&#x27;revote.dm_nudge&#x27;, &#x27;fa&#x27;, first=&#x27;علی&#x27;, total=7))&quot;</code> prints a complete Persian sentence with the count interpolated, and the same key in <code>&#x27;en&#x27;</code> prints its English twin.</span>
         </li>
           </ol>
@@ -1948,7 +1948,7 @@
     <span class="phase-progress">0 / 0</span>
   </div>
   <div class="phase-bar"><div class="fill"></div></div>
-  <article class="task" data-task-id="4.1" data-task-status="pending">
+  <article class="task" data-task-id="4.1" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">4.1</span><span class="task-name">Update README, .env.example and the algorithm ledger</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -1960,40 +1960,40 @@
             <span class="label">Files</span> Modify: README.md · Modify: .env.example · Modify: docs/algorithm/README.md · Modify: docs/PRIVACY.md
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">README: extend core-flow step 1 to say scores expire after <code>REVOTE_AFTER_DAYS</code> and come back around, and add a short paragraph on why votes expire (people rate better once they have actually played together).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Put the <code>/revote_ping</code> cheat-sheet row **directly next to <code>/nudge</code>** and state the difference in the description: <code>/nudge</code> prints templates for the admin to copy, <code>/revote_ping</code> actually sends the DMs. The README currently describes <code>/nudge</code> as &#x27;admin sends manually&#x27;, which a reader will otherwise assume still covers the whole nudging story.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add a ledger row to <code>docs/algorithm/README.md</code>. The table has four columns (<code>Date | Change | Effect on splits | Detail</code>): date 2026-08-28; change &#x27;scores older than REVOTE_AFTER_DAYS are re-offered; newest score fully supersedes, prior value archived to score_history&#x27;; and the Detail cell gets the PR link, as every existing row does.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">State the effect honestly: **no mechanical change to the splits**, because <code>rating.py</code> is untouched. What changes is that its inputs stop being frozen. Do not claim a measured effect that was never measured.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add a row to the ledger&#x27;s &#x27;Known open issues&#x27; table: recency weighting inside <code>refresh_ratings</code> was considered and deliberately not implemented, so a never-refreshed score still counts as much as a fresh one. <code>score_history</code> exists to make that experiment possible later.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text"><code>docs/PRIVACY.md</code> has a &#x27;Code paths that touch vote data&#x27; table with a <code>handlers/health.py:HEALTH_SQL</code> row. <code>score_history</code> is a new voter-linked table holding raw 1-5 scores, which is exactly what that doc exists to record: add a row for it and one for <code>voting_queue.record_score</code> writing to it. Do not attempt to fix the rest of that file, which still describes the retired <code>vote_aggregates</code> model; note the staleness and move on.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">While in <code>.env.example</code>, delete the stale <code>QUEUE_DEPTH=5</code> line: it maps to no field on <code>Settings</code> and pydantic&#x27;s <code>extra=&#x27;ignore&#x27;</code> silently drops it, which is the same class of bug the <code>unknown_weight_keys</code> warning exists to catch.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: <code>grep -q &#x27;revote_ping&#x27; README.md &amp;&amp; grep -q REVOTE_AFTER_DAYS README.md &amp;&amp; grep -q REVOTE_AFTER_DAYS .env.example &amp;&amp; grep -q score_history docs/PRIVACY.md</code> exits 0. Use separate <code>grep -q</code> calls, not one multi-file <code>grep -c</code>, which exits 0 when any single file matches.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Commit: docs: document the revote cycle and log it in the algorithm ledger</span>
         </li>
           </ol>

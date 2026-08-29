@@ -12,11 +12,26 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 
 ## Core flow
 
-1. Continuous scoring via 1:1 DM with bot: rate one teammate on one indicator at a time, 1–5 (re-tap to change a score)
+1. Continuous scoring via 1:1 DM with bot: rate one teammate on one indicator at a time, 1–5 (re-tap to change a score). Scores expire: once one is older than `REVOTE_AFTER_DAYS` (default 60) it comes back around, after any teammate you have never rated
 2. Admin dashboard shows voting health (last-voted, lifetime ratings, pending, coverage gaps)
 3. Every Thursday 8pm PST the bot posts a بلی/خیر **attendance poll** to the group (and opens the session). As yes-votes land it announces the session is on + posts payment at quorum, then closes the poll and opens a **reservation/waitlist poll** at capacity.
 4. Bot snapshots ratings + the poll's attendees, suggests balanced teams by exhaustively minimising the weighted sum of *squared* per-skill gaps (see [`docs/algorithm/`](docs/algorithm/README.md))
 5. Admin reviews, optionally swaps; if attendance later drifts the bot DMs the admin to fix it with `/change_player`; admin publishes teams to group chat
+
+## Why votes expire
+
+A voter who has scored every teammate on all six indicators used to be finished
+forever, so a judgement formed in week one — when half the group were strangers —
+stayed in the ratings indefinitely. People rate each other far better once they
+have actually played together, so a score older than `REVOTE_AFTER_DAYS` is
+offered again, oldest first, and only after every teammate the voter has never
+rated at all.
+
+The newest score fully replaces the old one (the maths in `rating.py` is
+unchanged); the replaced value is kept in `score_history` so a surprising swing
+can be traced. Nobody is ever asked to re-rate everything at once: the bot DMs
+people on the Tuesday after a session, and `/revote_ping` changes who is DMed,
+never what they are asked.
 
 ## Stack
 
@@ -109,7 +124,8 @@ Command **names** stay latin in both (Telegram requires ascii `/commands`); only
 | `/publish` | Post teams + attendance to group, write attendance rows, status → published |
 | `/health` | Per-player voting health (completion-only — no vote contents) |
 | `/coverage` | 10 least-sampled pairs (where more votes would help most) |
-| `/nudge` | Returns DM-able templates per low-completion voter — admin sends manually |
+| `/nudge` | Returns DM-able templates per low-completion voter — admin sends them manually |
+| `/revote_ping` | **Actually sends** the reminder DMs, to everyone currently holding ratings they owe. Honours the once-a-week per-person limit; `/revote_ping force` ignores it. Never widens the re-vote window — it only decides who gets a DM |
 | `/version` | Commit SHA + uptime |
 | `/backup_db` | Online SQLite backup → `data/backups/` |
 
