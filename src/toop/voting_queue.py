@@ -17,6 +17,24 @@ class ScoreTarget:
     indicator: str
 
 
+@dataclass(frozen=True)
+class PendingCounts:
+    """What one voter still owes, split by why.
+
+    `unscored` is coverage they have never given; `stale` is coverage that has
+    aged past REVOTE_AFTER_DAYS and is due a refresh. Keeping them apart is what
+    stops a voter who finished months ago from looking, in /health, exactly like
+    one who has never voted.
+    """
+
+    unscored: int
+    stale: int
+
+    @property
+    def total(self) -> int:
+        return self.unscored + self.stale
+
+
 # Rateable players: active, in the pool, and not currently paused.
 #
 # The self-exclusion (nobody rates themselves) deliberately does NOT live here.
@@ -194,3 +212,60 @@ def record_skip(
         (voter_id, player_id, indicator, session_id),
     )
     conn.commit()
+
+
+# Per-voter tally of everything select_next_score_target would be willing to
+# offer, split into never-scored and needs-refreshing. Same predicates as that
+# query, reusing the same two fragments, so the two can't drift.
+#
+# Three things here are load-bearing and were each got wrong first:
+#   1. Every rp-referencing predicate (self-exclusion, skip filter) lives in the
+#      LEFT JOIN's ON. In the WHERE it annihilates the outer join, so a voter
+#      who has skipped everyone drops out of the result instead of appearing
+#      with a zero count.
+#   2. The SUMs test rp.telegram_id IS NOT NULL, not just the score. Otherwise
+#      the six placeholder rows a voter with no rateable targets produces get
+#      counted as unscored.
+#   3. The staleness window lives INSIDE the stale SUM. In the join ON it would
+#      make fresh-scored targets fall through and be counted as unscored.
+_PENDING_COUNTS_SQL = f"""
+WITH rateable AS ({_RATEABLE_CTE}),
+indicators(indicator) AS ({_INDICATORS_CTE})
+SELECT
+    v.telegram_id AS voter_id,
+    SUM(rp.telegram_id IS NOT NULL AND sc.voter_id IS NULL) AS unscored,
+    SUM(rp.telegram_id IS NOT NULL AND sc.voter_id IS NOT NULL
+        AND sc.updated_at <= datetime('now', '-' || :revote_days || ' days')) AS stale
+FROM players v
+CROSS JOIN indicators i
+LEFT JOIN rateable rp
+    ON rp.telegram_id != v.telegram_id
+   AND {_SKIP_FILTER.format(voter="v.telegram_id", player="rp.telegram_id")}
+LEFT JOIN scores sc
+    ON sc.voter_id = v.telegram_id
+   AND sc.player_id = rp.telegram_id
+   AND sc.indicator = i.indicator
+WHERE v.active = 1
+GROUP BY v.telegram_id
+"""
+
+
+def pending_counts_by_voter(conn: sqlite3.Connection) -> dict[int, PendingCounts]:
+    """Return {voter_id: PendingCounts} for every active player.
+
+    Ghosts are included, matching what /health already renders — they are
+    active players with a row in the table. The "can we actually DM them"
+    question belongs to revote.nudge_targets, not to a counting function.
+
+    Every active player gets a key, including those owing nothing.
+    """
+    rows = conn.execute(
+        _PENDING_COUNTS_SQL,
+        {
+            "cooldown_days": settings.SKIP_COOLDOWN_DAYS,
+            "revote_days": settings.REVOTE_AFTER_DAYS,
+        },
+    ).fetchall()
+    return {
+        row["voter_id"]: PendingCounts(unscored=row["unscored"], stale=row["stale"]) for row in rows
+    }

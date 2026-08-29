@@ -1279,36 +1279,36 @@
             <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Write failing tests: <code>test_pending_counts_splits_new_and_stale</code> against a hand-seeded fixture (3 players, some scores aged, some fresh, one skip inside the cooldown); <code>test_pending_counts_zero_when_fully_current</code> (**a voter with six fresh scores must report <code>stale=0</code>** — this is the test that catches a stale SUM missing its window predicate); <code>test_pending_counts_zero_for_lone_player</code> (a one-player roster has no rateable target at all, so the count must be 0 and not 6); <code>test_pending_counts_keeps_voter_who_skipped_everyone</code> (they must still get a key, with total 0 — this catches the WHERE-vs-ON join mistake); <code>test_pending_counts_agrees_with_selector</code> asserting that for every active voter <code>counts.total == 0</code> is true exactly when <code>select_next_score_target(conn, voter) is None</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py -q</code> and confirm the five fail on ImportError.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>@dataclass(frozen=True) class PendingCounts</code> with <code>unscored: int</code>, <code>stale: int</code>, and a <code>total</code> property.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Add <code>pending_counts_by_voter(conn) -&gt; dict[int, PendingCounts]</code>: one query built from the <code>_RATEABLE_CTE</code> / <code>_SKIP_FILTER</code> templates from 1.2, driving off active players as <code>v</code>, LEFT JOINing rateable players <code>rp</code> cross joined with the six indicators, then LEFT JOINing <code>scores sc</code>. Bind both <code>:cooldown_days</code> and <code>:revote_days</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**Every rp-referencing predicate belongs in the <code>LEFT JOIN ... ON</code>, never the WHERE.** Self-exclusion (<code>rp.telegram_id != v.telegram_id</code>) and the formatted <code>_SKIP_FILTER</code> both go in the ON. Verified against SQLite: an rp-referencing <code>NOT EXISTS</code> in the WHERE annihilates the outer join, so a voter who has skipped everyone drops out of the result entirely, breaking the &#x27;every active player gets a key&#x27; guarantee and making <code>test_pending_counts_agrees_with_selector</code> raise KeyError instead of comparing.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**Aggregate on the rateable player, and put the staleness window inside the stale SUM:** <code>SUM(rp.telegram_id IS NOT NULL AND sc.voter_id IS NULL)</code> for <code>unscored</code>, and <code>SUM(rp.telegram_id IS NOT NULL AND sc.voter_id IS NOT NULL AND sc.updated_at &lt;= datetime(&#x27;now&#x27;,&#x27;-&#x27;||:revote_days||&#x27; days&#x27;))</code> for <code>stale</code>, grouped by <code>v.telegram_id</code>. Two traps here, both verified by running the query: a bare <code>SUM(sc.voter_id IS NULL)</code> counts the placeholder rows a voter with no rateable targets produces (reporting <code>unscored=6</code> while the selector returns None), and a stale SUM without the window predicate counts every already-scored target, so a voter with 6 perfectly fresh scores reports <code>stale=6</code>. The window must NOT move into the join ON, which would make fresh-scored targets count as unscored instead.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**Include ghosts**, matching what <code>/health</code> already does: <code>HEALTH_SQL</code> is <code>WHERE p.active = 1</code> with no <code>is_ghost</code> filter, so ghosts are today rendered as voter rows. Keeping this function ghost-inclusive means task 2.3 can merge straight into those rows; the ghost exclusion belongs in <code>revote.nudge_targets</code> (task 3.2), which is the only caller that actually sends a DM. Every active player gets a key, including those with a zero count.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py -q</code> exits 0, and <code>uv run ty check src/</code> exits 0 (voting_queue is inside the type-checked set; handlers are excluded by pyproject).</span>
         </li>
         <li class="step" data-status="pending">

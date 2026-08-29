@@ -10,6 +10,7 @@ from toop.players import add_player
 from toop.rating import INDICATORS
 from toop.voting_queue import (
     ScoreTarget,
+    pending_counts_by_voter,
     record_score,
     record_skip,
     select_next_score_target,
@@ -346,3 +347,66 @@ def test_exclude_player_outranks_freshness(conn: sqlite3.Connection) -> None:
     assert select_next_score_target(conn, voter_id=1).player_id == 2
     # Excluding player 2 hands it to player 3's stale rows, not back to 2.
     assert select_next_score_target(conn, voter_id=1, exclude_player=2).player_id == 3
+
+
+# --- pending counts: one definition of "what does this voter owe" ----------
+
+
+def test_pending_counts_splits_new_and_stale(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 3)
+    # Voter 1 scored player 2 on every indicator, then it all went stale.
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    _age_all_scores(conn, 90)
+    counts = pending_counts_by_voter(conn)[1]
+    assert counts.stale == len(INDICATORS)
+    assert counts.unscored == len(INDICATORS)  # player 3, never rated
+    assert counts.total == 2 * len(INDICATORS)
+
+
+def test_pending_counts_zero_when_fully_current(conn: sqlite3.Connection) -> None:
+    """Catches a stale SUM that forgot its window predicate: without it, six
+    perfectly fresh scores would report stale=6."""
+    _seed_players(conn, 2)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    counts = pending_counts_by_voter(conn)[1]
+    assert (counts.unscored, counts.stale, counts.total) == (0, 0, 0)
+
+
+def test_pending_counts_zero_for_lone_player(conn: sqlite3.Connection) -> None:
+    """A one-player roster has no rateable target at all. Counting the join
+    placeholder instead of the rateable player would report 6."""
+    _seed_players(conn, 1)
+    assert pending_counts_by_voter(conn)[1].total == 0
+
+
+def test_pending_counts_keeps_voter_who_skipped_everyone(conn: sqlite3.Connection) -> None:
+    """The skip filter must sit in the LEFT JOIN's ON, not the WHERE: in the
+    WHERE it annihilates the outer join and the voter vanishes from the result
+    entirely, instead of appearing with a zero count."""
+    _seed_players(conn, 2)
+    record_skip(conn, 1, 2, "attack")
+    counts = pending_counts_by_voter(conn)
+    assert 1 in counts
+    assert counts[1].total == 0
+
+
+def test_pending_counts_agrees_with_selector(conn: sqlite3.Connection) -> None:
+    """The invariant that keeps /health and the nudge job honest: a voter owes
+    nothing exactly when the queue has nothing to show them."""
+    _seed_players(conn, 4)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+        record_score(conn, 2, 3, ind, 4)
+    for ind in INDICATORS:  # voter 3 is fully current on everyone
+        record_score(conn, 3, 1, ind, 3)
+        record_score(conn, 3, 2, ind, 3)
+        record_score(conn, 3, 4, ind, 3)
+    conn.execute("UPDATE scores SET updated_at = datetime('now','-90 days') WHERE voter_id=1")
+    conn.commit()
+    record_skip(conn, 4, 1, "attack")
+    counts = pending_counts_by_voter(conn)
+    for voter in (1, 2, 3, 4):
+        empty = select_next_score_target(conn, voter_id=voter) is None
+        assert (counts[voter].total == 0) is empty, f"voter {voter}: {counts[voter]}"
