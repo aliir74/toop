@@ -383,3 +383,42 @@ def test_link_ghost_preserves_skipped_at(conn: sqlite3.Connection) -> None:
     ).fetchone()
     assert row is not None
     assert row["still_old"] == 1, "merge re-stamped skipped_at instead of carrying it over"
+
+
+def _history_row(
+    conn: sqlite3.Connection, voter: int, player: int, indicator: str = "attack", s: int = 3
+) -> None:
+    """score_history.recorded_at is NOT NULL with no DEFAULT (it carries the
+    superseded row's own updated_at), so it must be passed explicitly."""
+    conn.execute(
+        "INSERT INTO score_history (voter_id, player_id, indicator, score, recorded_at) "
+        "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+        (voter, player, indicator, s),
+    )
+    conn.commit()
+
+
+def test_link_ghost_remaps_score_history(conn: sqlite3.Connection) -> None:
+    """score_history has no FK, so nothing cascades it onto the real account.
+    Without an explicit remap its rows would point at a deleted negative ghost
+    id: surviving, but permanently unattributable."""
+    add_player(conn, 5, "Five", "five")
+    ghost = add_ghost_player(conn, "Ghost")
+    g = ghost.telegram_id
+    _history_row(conn, 5, g, "attack", 4)  # ghost as scored player
+    _history_row(conn, g, 5, "block", 2)  # ghost as voter
+    _history_row(conn, g, 10, "serve", 1)  # would collapse to 10 rating itself
+    _score(conn, 5, g, "attack", 4)
+    _score(conn, g, 5, "block", 2)
+
+    result = link_ghost_player(conn, ghost_id=g, real_id=10, username="ten", display_name="Ten")
+
+    rows = conn.execute(
+        "SELECT voter_id, player_id, indicator FROM score_history ORDER BY id"
+    ).fetchall()
+    assert [(r["voter_id"], r["player_id"], r["indicator"]) for r in rows] == [
+        (5, 10, "attack"),
+        (10, 5, "block"),
+    ]
+    # History rows must not inflate the reported score-migration count.
+    assert result.score_rows == 2

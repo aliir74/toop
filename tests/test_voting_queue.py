@@ -5,10 +5,12 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from toop.config import settings
 from toop.players import add_player
 from toop.rating import INDICATORS
 from toop.voting_queue import (
     ScoreTarget,
+    pending_counts_by_voter,
     record_score,
     record_skip,
     select_next_score_target,
@@ -255,3 +257,203 @@ def test_record_score_clears_all_skips_for_player(conn: sqlite3.Connection) -> N
         "SELECT COUNT(*) AS n FROM score_skips WHERE voter_id=1 AND player_id=2"
     ).fetchone()["n"]
     assert n == 0
+
+
+# --- re-voting: stale scores age back into the queue -----------------------
+
+
+def _age_all_scores(conn: sqlite3.Connection, days: int) -> None:
+    conn.execute("UPDATE scores SET updated_at = datetime('now', ?)", (f"-{days} days",))
+    conn.commit()
+
+
+def test_stale_score_is_reoffered(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 2)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    assert select_next_score_target(conn, voter_id=1) is None
+    _age_all_scores(conn, 90)
+    target = select_next_score_target(conn, voter_id=1)
+    assert target is not None
+    assert target.player_id == 2
+
+
+def test_fresh_score_is_not_reoffered(conn: sqlite3.Connection) -> None:
+    """30 days is inside the 60-day default window, so nothing comes back."""
+    _seed_players(conn, 2)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    _age_all_scores(conn, 30)
+    assert select_next_score_target(conn, voter_id=1) is None
+
+
+def test_unscored_targets_come_before_stale_ones(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 3)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    _age_all_scores(conn, 90)
+    # Player 3 has never been rated by voter 1: coverage beats refreshing.
+    assert select_next_score_target(conn, voter_id=1).player_id == 3
+
+
+def test_oldest_stale_target_comes_first(conn: sqlite3.Connection) -> None:
+    """The fixture must leave ZERO unscored targets, otherwise is_revote ASC
+    decides the winner and the age ordering never gets a look in."""
+    _seed_players(conn, 3)
+    for pid in (2, 3):
+        for ind in INDICATORS:
+            record_score(conn, 1, pid, ind, 3)
+    conn.execute("UPDATE scores SET updated_at = datetime('now','-70 days') WHERE player_id=3")
+    conn.execute("UPDATE scores SET updated_at = datetime('now','-90 days') WHERE player_id=2")
+    conn.commit()
+    assert select_next_score_target(conn, voter_id=1).player_id == 2
+
+
+def test_rescoring_a_stale_target_refreshes_it(conn: sqlite3.Connection) -> None:
+    """Re-scoring resets updated_at, which is what stops the two while-loop
+    tests above from spinning forever once stale targets are re-offered."""
+    _seed_players(conn, 2)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    _age_all_scores(conn, 90)
+    first = select_next_score_target(conn, voter_id=1)
+    record_score(conn, 1, first.player_id, first.indicator, 5)
+    later = select_next_score_target(conn, voter_id=1)
+    assert (later.player_id, later.indicator) != (first.player_id, first.indicator)
+
+
+def test_revote_window_follows_settings(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed_players(conn, 2)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    _age_all_scores(conn, 2)
+    assert select_next_score_target(conn, voter_id=1) is None
+    monkeypatch.setattr(settings, "REVOTE_AFTER_DAYS", 1)
+    assert select_next_score_target(conn, voter_id=1) is not None
+
+
+def test_exclude_player_outranks_freshness(conn: sqlite3.Connection) -> None:
+    """Deliberate precedence: surfacing a DIFFERENT player than the one just
+    rated beats freshness, so a stale target elsewhere can appear before an
+    unscored one on the just-rated player."""
+    _seed_players(conn, 3)
+    for ind in INDICATORS:
+        record_score(conn, 1, 3, ind, 3)
+    record_score(conn, 1, 2, "attack", 3)
+    _age_all_scores(conn, 90)
+    # Unrestricted, player 2's five unscored indicators win on freshness.
+    assert select_next_score_target(conn, voter_id=1).player_id == 2
+    # Excluding player 2 hands it to player 3's stale rows, not back to 2.
+    assert select_next_score_target(conn, voter_id=1, exclude_player=2).player_id == 3
+
+
+# --- pending counts: one definition of "what does this voter owe" ----------
+
+
+def test_pending_counts_splits_new_and_stale(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 3)
+    # Voter 1 scored player 2 on every indicator, then it all went stale.
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    _age_all_scores(conn, 90)
+    counts = pending_counts_by_voter(conn)[1]
+    assert counts.stale == len(INDICATORS)
+    assert counts.unscored == len(INDICATORS)  # player 3, never rated
+    assert counts.total == 2 * len(INDICATORS)
+
+
+def test_pending_counts_zero_when_fully_current(conn: sqlite3.Connection) -> None:
+    """Catches a stale SUM that forgot its window predicate: without it, six
+    perfectly fresh scores would report stale=6."""
+    _seed_players(conn, 2)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+    counts = pending_counts_by_voter(conn)[1]
+    assert (counts.unscored, counts.stale, counts.total) == (0, 0, 0)
+
+
+def test_pending_counts_zero_for_lone_player(conn: sqlite3.Connection) -> None:
+    """A one-player roster has no rateable target at all. Counting the join
+    placeholder instead of the rateable player would report 6."""
+    _seed_players(conn, 1)
+    assert pending_counts_by_voter(conn)[1].total == 0
+
+
+def test_pending_counts_keeps_voter_who_skipped_everyone(conn: sqlite3.Connection) -> None:
+    """The skip filter must sit in the LEFT JOIN's ON, not the WHERE: in the
+    WHERE it annihilates the outer join and the voter vanishes from the result
+    entirely, instead of appearing with a zero count."""
+    _seed_players(conn, 2)
+    record_skip(conn, 1, 2, "attack")
+    counts = pending_counts_by_voter(conn)
+    assert 1 in counts
+    assert counts[1].total == 0
+
+
+def test_pending_counts_agrees_with_selector(conn: sqlite3.Connection) -> None:
+    """The invariant that keeps /health and the nudge job honest: a voter owes
+    nothing exactly when the queue has nothing to show them."""
+    _seed_players(conn, 4)
+    for ind in INDICATORS:
+        record_score(conn, 1, 2, ind, 3)
+        record_score(conn, 2, 3, ind, 4)
+    for ind in INDICATORS:  # voter 3 is fully current on everyone
+        record_score(conn, 3, 1, ind, 3)
+        record_score(conn, 3, 2, ind, 3)
+        record_score(conn, 3, 4, ind, 3)
+    conn.execute("UPDATE scores SET updated_at = datetime('now','-90 days') WHERE voter_id=1")
+    conn.commit()
+    record_skip(conn, 4, 1, "attack")
+    counts = pending_counts_by_voter(conn)
+    for voter in (1, 2, 3, 4):
+        empty = select_next_score_target(conn, voter_id=voter) is None
+        assert (counts[voter].total == 0) is empty, f"voter {voter}: {counts[voter]}"
+
+
+# --- score_history: the superseded value survives the overwrite -----------
+
+
+def _history(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+    return conn.execute("SELECT * FROM score_history ORDER BY id").fetchall()
+
+
+def test_first_score_writes_no_history(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 2)
+    record_score(conn, 1, 2, "attack", 4)
+    assert _history(conn) == []
+
+
+def test_changed_score_archives_the_old_value(conn: sqlite3.Connection) -> None:
+    _seed_players(conn, 2)
+    record_score(conn, 1, 2, "attack", 4)
+    before = conn.execute(
+        "SELECT updated_at FROM scores WHERE voter_id=1 AND player_id=2 AND indicator='attack'"
+    ).fetchone()["updated_at"]
+    record_score(conn, 1, 2, "attack", 2)
+    rows = _history(conn)
+    assert len(rows) == 1
+    assert rows[0]["score"] == 4
+    assert rows[0]["recorded_at"] == before
+    assert rows[0]["voter_id"] == 1
+    assert rows[0]["player_id"] == 2
+    assert rows[0]["indicator"] == "attack"
+
+
+def test_identical_rescore_writes_no_history(conn: sqlite3.Connection) -> None:
+    """Re-confirming a score is not a change. scores.updated_at already records
+    when the confirmation happened, so an identical history row is pure bloat."""
+    _seed_players(conn, 2)
+    record_score(conn, 1, 2, "attack", 4)
+    conn.execute("UPDATE scores SET updated_at = datetime('now','-90 days')")
+    conn.commit()
+    record_score(conn, 1, 2, "attack", 4)
+    assert _history(conn) == []
+    # The confirmation still refreshed the clock, so attack drops back out of
+    # the stale set even though nothing was archived.
+    row = conn.execute(
+        "SELECT updated_at > datetime('now','-1 day') AS is_fresh FROM scores "
+        "WHERE voter_id=1 AND player_id=2 AND indicator='attack'"
+    ).fetchone()
+    assert row["is_fresh"] == 1

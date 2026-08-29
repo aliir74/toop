@@ -18,6 +18,8 @@ def patched_main(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         SESSION_POLL_WEEKDAY="Thursday",
         SESSION_POLL_HOUR=20,
         SESSION_POLL_TZ="America/Los_Angeles",
+        REVOTE_NUDGE_WEEKDAY="Tuesday",
+        REVOTE_NUDGE_HOUR=19,
         ADMIN_TELEGRAM_ID=42,
         GROUP_CHAT_ID=-100123,
     )
@@ -44,9 +46,9 @@ def test_main_registers_all_handlers_and_schedules_snapshot(
 
     bot.main()
 
-    # 29 command + 15 callback-query + 1 poll-answer + 4 message handlers.
-    assert mock_app.add_handler.call_count == 49
-    assert mock_app.job_queue.run_daily.call_count == 3
+    # 30 command + 15 callback-query + 1 poll-answer + 4 message handlers.
+    assert mock_app.add_handler.call_count == 50
+    assert mock_app.job_queue.run_daily.call_count == 4
     # Jobs must be scheduled on PTB's weekday numbering (0=Sunday..6=Saturday),
     # NOT datetime's Monday=0 — else every job fires a day early. With the fake
     # settings (session Monday, poll Thursday): snapshot→1 (Mon), poll→4 (Thu).
@@ -57,6 +59,7 @@ def test_main_registers_all_handlers_and_schedules_snapshot(
     }
     assert days_by_name["auto_snapshot"] == (1,)
     assert days_by_name["attendance_poll"] == (4,)
+    assert days_by_name["revote_nudge"] == (2,)
     assert "conn" in mock_app.bot_data
     assert "started_at" in mock_app.bot_data
     # The command-registration hook is wired via post_init.
@@ -71,7 +74,7 @@ def test_main_skips_scheduling_when_no_job_queue(patched_main: MagicMock) -> Non
     bot.main()
 
     # Handlers still register even without a job queue.
-    assert mock_app.add_handler.call_count == 49
+    assert mock_app.add_handler.call_count == 50
     mock_app.run_polling.assert_called_once()
 
 

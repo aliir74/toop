@@ -126,6 +126,31 @@ CREATE TABLE IF NOT EXISTS score_skips (
     CHECK (voter_id != player_id)
 );
 
+-- Append-only audit of scores that were REPLACED by a later vote. Written by
+-- voting_queue.record_score when a re-vote changes the value (an identical
+-- re-score is a confirmation, and scores.updated_at already records when that
+-- happened, so archiving it would be pure bloat).
+--
+-- Deliberately carries NO foreign keys. link_ghost_player hard-deletes the ghost
+-- players row and leans on ON DELETE CASCADE, which would erase the very audit
+-- trail it had just migrated; soft_remove_player only flips active=0. History is
+-- append-only and outlives roster churn. That is only half the story: because
+-- nothing cascades, link_ghost_player remaps these rows explicitly, which is
+-- what keeps them attributable rather than merely surviving.
+--
+-- recorded_at is the superseded row's own updated_at (when that score was last
+-- set), NOT when it was archived; superseded_at is the latter.
+CREATE TABLE IF NOT EXISTS score_history (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    voter_id        INTEGER NOT NULL,
+    player_id       INTEGER NOT NULL,
+    indicator       TEXT NOT NULL CHECK (indicator IN
+                        ('attack', 'receive', 'block', 'setting', 'serve', 'positioning')),
+    score           INTEGER NOT NULL CHECK (score BETWEEN 1 AND 5),
+    recorded_at     TIMESTAMP NOT NULL,
+    superseded_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Reserve queue, filled by the reservation poll opened once attendance caps.
 -- Ordered FIFO (created_at, then telegram_id) so promotion suggestions are
 -- stable. A row here means "willing to take a freed seat".
@@ -134,6 +159,17 @@ CREATE TABLE IF NOT EXISTS waitlist (
     telegram_id     INTEGER NOT NULL REFERENCES players(telegram_id) ON DELETE CASCADE,
     created_at      TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (session_id, telegram_id)
+);
+
+-- Per-voter clock for the weekly re-vote nudge, so nobody is DMed twice inside
+-- REVOTE_NUDGE_COOLDOWN_DAYS. Written only after a send actually succeeds: a
+-- Forbidden (blocked bot) must be retried next week, not silently retired.
+-- Unlike score_history this DOES cascade — a removed player's nudge clock is
+-- worthless. Carries no pending count: nothing would read it, and an unread
+-- column is how QUEUE_DEPTH got stranded in .env.example.
+CREATE TABLE IF NOT EXISTS revote_nudges (
+    telegram_id     INTEGER PRIMARY KEY REFERENCES players(telegram_id) ON DELETE CASCADE,
+    last_nudged_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Dedupe for post-snapshot attendance-drift DMs: stores the last drift
@@ -178,3 +214,6 @@ CREATE INDEX IF NOT EXISTS idx_rsvps_session_status
 
 CREATE INDEX IF NOT EXISTS idx_attendance_telegram
     ON attendance(telegram_id, session_id);
+
+CREATE INDEX IF NOT EXISTS idx_score_history_player
+    ON score_history(player_id, indicator);

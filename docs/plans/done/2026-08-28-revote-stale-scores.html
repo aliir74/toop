@@ -1,0 +1,3044 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Re-voting: stale scores age back into the queue, and the bot asks again — Plan</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #F5F4EF;
+    --ink: #0A0A0A;
+    --ink-2: #5A5A55;
+    --paper: #FFFFFF;
+    --accent: #5856D6;
+    --accent-2: #00C7BE;
+    --accent-3: #FF6392;
+    --success: #00C781;
+    --warn: #FFB020;
+    --rule: rgba(10,10,10,0.10);
+    --rule-2: rgba(10,10,10,0.18);
+    --shadow: 0 1px 0 rgba(0,0,0,0.04), 0 8px 24px -12px rgba(10,10,10,0.10);
+    --display: "Instrument Serif", Georgia, serif;
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0F1014;
+      --ink: #ECECEC;
+      --ink-2: #9B9B9B;
+      --paper: #181920;
+      --rule: rgba(255,255,255,0.10);
+      --rule-2: rgba(255,255,255,0.18);
+      --shadow: 0 1px 0 rgba(0,0,0,0.4), 0 8px 24px -12px rgba(0,0,0,0.6);
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; overflow-x: hidden; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  input, select, textarea { font-size: 16px; }
+  .container {
+    width: min(1280px, 100% - 2rem);
+    margin-inline: auto;
+    padding: 56px 0 120px;
+  }
+  @media (min-width: 721px) {
+    .container { width: min(1280px, 100% - 6rem); }
+  }
+
+  /* HERO */
+  .hero {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 40px;
+    align-items: end;
+    margin-bottom: 48px;
+    padding-bottom: 28px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .hero h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(38px, 9vw, 84px);
+    line-height: 0.98;
+    letter-spacing: -0.02em;
+    margin: 0 0 18px;
+    overflow-wrap: anywhere;
+  }
+  .hero .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 18px;
+  }
+  .meta { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pill {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    background: var(--paper);
+    padding: 5px 12px;
+    border: 1px solid var(--rule-2);
+    border-radius: 999px;
+    color: var(--ink-2);
+    white-space: nowrap;
+  }
+  .pill.status-planning { background: #FFE8A3; color: #5A4500; border-color: #E8C766; }
+  .pill.status-in_progress { background: var(--accent); color: white; border-color: transparent; }
+  .pill.status-done { background: var(--success); color: white; border-color: transparent; }
+
+  .progress-ring {
+    width: 132px; height: 132px; flex-shrink: 0;
+  }
+  .progress-ring circle { fill: none; stroke-width: 10; }
+  .progress-ring .bg { stroke: var(--rule-2); }
+  .progress-ring .fg { stroke: var(--accent); stroke-linecap: round; transition: stroke-dashoffset 0.5s ease; }
+  .progress-ring text {
+    font-family: var(--display);
+    font-size: 38px;
+    fill: var(--ink);
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+
+  /* ARCHITECTURE */
+  .architecture {
+    background: var(--paper);
+    border-left: 4px solid var(--accent);
+    padding: 22px 28px;
+    margin-bottom: 56px;
+    box-shadow: var(--shadow);
+    border-radius: 0 8px 8px 0;
+  }
+  .architecture h2 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin: 0 0 10px;
+    font-weight: 500;
+  }
+  .architecture p {
+    margin: 0;
+    font-size: 19px;
+    line-height: 1.6;
+    font-family: var(--sans);
+    font-weight: 500;
+    letter-spacing: -0.005em;
+  }
+
+  /* PHASE */
+  .phase { margin-bottom: 56px; }
+  .phase-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 14px;
+  }
+  .phase-header h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(30px, 6vw, 44px);
+    line-height: 1.05;
+    margin: 0;
+    letter-spacing: -0.012em;
+    overflow-wrap: anywhere;
+  }
+  .phase-header h2 .num {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-2);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    vertical-align: middle;
+    margin-right: 14px;
+    background: var(--paper);
+    padding: 5px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--rule-2);
+  }
+  .phase-progress {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-2);
+    letter-spacing: 0.06em;
+  }
+  .phase-bar {
+    height: 4px;
+    background: var(--rule);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 22px;
+  }
+  .phase-bar .fill {
+    height: 100%;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.4s ease;
+  }
+
+  /* TASK */
+  .task {
+    background: var(--paper);
+    border: 1px solid var(--rule-2);
+    border-radius: 12px;
+    margin-bottom: 14px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    transition: opacity 0.2s ease;
+  }
+  .task[data-task-status="done"] { opacity: 0.55; }
+  .task[data-task-status="done"] .task-header h3 .task-name { text-decoration: line-through; }
+
+  .task-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 18px 24px;
+    min-height: 44px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .task-header h3 {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: 19px;
+    margin: 0;
+    line-height: 1.3;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .task-header h3 .badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    font-weight: 500;
+    background: var(--ink);
+    color: var(--paper);
+    padding: 3px 8px;
+    border-radius: 4px;
+    letter-spacing: 0.04em;
+    flex-shrink: 0;
+  }
+  .task-header .right {
+    display: flex; align-items: center; gap: 14px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+    letter-spacing: 0.04em;
+  }
+  .task-header .chevron {
+    transition: transform 0.2s ease;
+    color: var(--ink-2);
+    font-size: 14px;
+  }
+  .task[data-open="true"] .chevron { transform: rotate(180deg); }
+  .task-body {
+    display: none;
+    padding: 18px 24px 22px;
+    border-top: 1px solid var(--rule);
+  }
+  .task[data-open="true"] .task-body { display: block; }
+
+  .files {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 18px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--ink);
+    line-height: 1.7;
+  }
+  .files .label {
+    font-weight: 600;
+    color: var(--ink-2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    font-size: 11px;
+    margin-right: 10px;
+  }
+
+  /* TASK GRID — main column + optional notes rail */
+  .task-grid { display: block; }
+  .task-grid.with-notes {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 24px;
+    align-items: start;
+  }
+  @media (max-width: 720px) {
+    .task-grid.with-notes { grid-template-columns: minmax(0, 1fr); }
+  }
+  .task-main { min-width: 0; }
+  .notes {
+    background: linear-gradient(180deg, var(--bg) 0%, transparent 100%);
+    border-left: 2px solid var(--accent-2);
+    border-radius: 0 8px 8px 0;
+    padding: 16px 18px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+  .notes .notes-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .notes .notes-label + p,
+  .notes .notes-label + ul { margin: 0 0 12px; }
+  .notes .notes-label + p:last-child,
+  .notes .notes-label + ul:last-child { margin-bottom: 0; }
+  .notes p { color: var(--ink); }
+  .notes ul {
+    padding-left: 16px;
+    margin: 0;
+  }
+  .notes li { margin-bottom: 4px; color: var(--ink); }
+  .notes a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--accent);
+  }
+  .notes a:hover { border-bottom-style: solid; }
+  .notes code {
+    font-family: var(--mono);
+    font-size: 0.92em;
+    background: var(--paper);
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--rule);
+  }
+
+  /* DIFF — unified git-style diff for before/after code */
+  .diff-card {
+    margin-top: 18px;
+    background: var(--paper);
+    border: 1px solid var(--rule-2);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  .diff-card-header {
+    padding: 9px 16px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    font-weight: 600;
+  }
+  .diff-card-header .diff-file {
+    color: var(--ink);
+    text-transform: none;
+    letter-spacing: 0;
+    font-size: 11.5px;
+    font-weight: 500;
+  }
+  .diff {
+    margin: 0;
+    padding: 12px 0;
+    overflow-x: auto;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--ink);
+    background: var(--paper);
+  }
+  .diff code { font-family: inherit; display: block; }
+  .diff .line {
+    display: block;
+    padding: 0 16px 0 36px;
+    position: relative;
+    white-space: pre;
+    min-height: 1.2em;
+  }
+  .diff .line::before {
+    position: absolute;
+    left: 12px;
+    width: 16px;
+    text-align: center;
+    font-weight: 600;
+    content: " ";
+    color: var(--ink-2);
+    opacity: 0.4;
+  }
+  .diff .add { background: rgba(0, 199, 129, 0.10); }
+  .diff .add::before { content: "+"; color: #008859; opacity: 1; }
+  .diff .del { background: rgba(232, 67, 127, 0.10); }
+  .diff .del::before { content: "-"; color: #B0264A; opacity: 1; }
+  @media (prefers-color-scheme: dark) {
+    .diff .add { background: rgba(0, 199, 129, 0.16); }
+    .diff .add::before { color: #6FE2A6; }
+    .diff .del { background: rgba(232, 67, 127, 0.16); }
+    .diff .del::before { color: #FF95B4; }
+  }
+
+  /* COMPARE — before / after side-by-side */
+  .compare {
+    margin-top: 18px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 720px) {
+    .compare { grid-template-columns: 1fr; }
+  }
+  .compare-col {
+    background: var(--bg);
+    border-radius: 8px;
+    padding: 14px 16px;
+    border: 1px solid var(--rule);
+    overflow: hidden;
+  }
+  .compare-col.before { border-left: 3px solid var(--warn); }
+  .compare-col.after { border-left: 3px solid var(--success); }
+  .compare-col .compare-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .compare-col.before .compare-label { color: #B07A00; }
+  .compare-col.after .compare-label { color: #008859; }
+  .compare-col pre {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--ink);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* ARCHITECTURE DIAGRAM — sits under the architecture callout */
+  .architecture-diagram {
+    background: var(--paper);
+    border-radius: 12px;
+    padding: 24px;
+    margin: -32px 0 56px;
+    box-shadow: var(--shadow);
+    border: 1px solid var(--rule);
+    overflow-x: auto;
+  }
+  .architecture-diagram svg { display: block; width: 100%; height: auto; }
+
+  /* PLAN NOTES — free-form top-level notes box */
+  .plan-notes {
+    margin: -32px 0 56px;
+    padding: 16px 20px;
+    background: var(--paper);
+    border-radius: 12px;
+    border: 1px solid var(--rule);
+    box-shadow: var(--shadow);
+  }
+  .plan-notes label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent-2);
+    margin-bottom: 8px;
+    font-weight: 600;
+  }
+  .plan-notes textarea {
+    width: 100%;
+    border: none;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 60px;
+  }
+  .plan-notes textarea:focus { outline: none; }
+  .plan-notes textarea::placeholder { color: var(--ink-2); font-style: italic; }
+
+  /* TASK COMMENT — per-task annotation injected by JS into each task body */
+  .task-comment {
+    width: 100%;
+    margin-top: 16px;
+    padding: 10px 12px;
+    border: 1px dashed var(--rule-2);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    resize: vertical;
+    min-height: 44px;
+    transition: border-color 0.15s ease, background 0.15s ease;
+  }
+  .task-comment::placeholder { color: var(--ink-2); font-style: italic; }
+  .task-comment:focus {
+    outline: none;
+    border-style: solid;
+    border-color: var(--accent);
+    background: var(--paper);
+  }
+  .task-comment.has-content {
+    border-style: solid;
+    border-color: var(--accent-2);
+    background: var(--paper);
+  }
+
+  /* INLINE ANNOTATIONS — click any element to attach a note */
+  .annotatable { position: relative; }
+  .annotate-btn {
+    position: absolute;
+    top: 4px;
+    inset-inline-end: 6px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    border: 1px solid var(--rule-2);
+    background: var(--paper);
+    color: var(--ink-2);
+    cursor: pointer;
+    font-size: 15px;
+    line-height: 1;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    z-index: 5;
+  }
+  .annotatable:hover > .annotate-btn,
+  .annotatable:focus-within > .annotate-btn,
+  .annotate-btn:focus { display: flex; }
+  @media (hover: none) {
+    .annotate-btn { display: flex; }
+  }
+  .annotatable.has-comment > .annotate-btn {
+    display: flex;
+    background: var(--accent-2);
+    color: var(--paper);
+    border-color: var(--accent-2);
+  }
+  .annotatable.has-comment { box-shadow: inset 3px 0 0 var(--accent-2); }
+  .diff .line.annotatable.has-comment { box-shadow: inset 2px 0 0 var(--accent-2); }
+  .inline-comment {
+    margin: 6px 0 8px;
+    padding: 8px 12px;
+    border-left: 2px solid var(--accent-2);
+    background: linear-gradient(180deg, rgba(0, 199, 190, 0.06) 0%, transparent 100%);
+    border-radius: 0 6px 6px 0;
+    display: none;
+  }
+  .inline-comment.open { display: block; }
+  .inline-comment .key {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 4px;
+  }
+  .inline-comment textarea {
+    width: 100%;
+    border: 1px solid var(--rule);
+    background: var(--paper);
+    color: var(--ink);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.5;
+    resize: vertical;
+    min-height: 38px;
+  }
+  .inline-comment textarea:focus { outline: none; border-color: var(--accent); }
+
+  /* COPY RESULT — sticky action bar */
+  .actionbar {
+    position: fixed;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    right: calc(16px + env(safe-area-inset-right));
+    left: auto;
+    display: flex;
+    gap: 10px;
+    z-index: 900;
+    max-width: calc(100% - 32px);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .actionbar button {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    min-height: 44px;
+    padding: 10px 18px;
+    border-radius: 999px;
+    border: 1px solid var(--rule-2);
+    cursor: pointer;
+    background: var(--paper);
+    color: var(--ink);
+    box-shadow: var(--shadow);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .actionbar button:hover { transform: translateY(-1px); }
+  .actionbar button.primary {
+    background: var(--ink);
+    color: var(--paper);
+    border-color: var(--ink);
+  }
+  .actionbar button[disabled] {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+  .actionbar button .count {
+    background: rgba(255,255,255,0.18);
+    padding: 2px 7px;
+    border-radius: 999px;
+    margin-left: 6px;
+    font-size: 11px;
+  }
+  .actionbar button:not(.primary) .count { background: var(--rule); }
+  .actionbar button .kbd-hint {
+    margin-left: 8px;
+    font-size: 11px;
+    opacity: 0.65;
+    letter-spacing: 0;
+  }
+  @media (hover: none) { .actionbar button .kbd-hint { display: none; } }
+  /* Claude's written-back answer to a comment (added when it processes the copied JSON). */
+  .claude-response {
+    margin: 6px 0 12px;
+    padding: 10px 12px;
+    border-left: 2px solid var(--ink-2);
+    background: color-mix(in srgb, var(--ink-2) 6%, transparent);
+    border-radius: 0 6px 6px 0;
+  }
+  .claude-response .key {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    margin-bottom: 4px;
+  }
+  .claude-response p { margin: 0 0 6px; font-size: 14px; line-height: 1.55; }
+  .claude-response p:last-child { margin-bottom: 0; }
+  /* Manual-copy fallback panel (only if both clipboard paths fail). */
+  .copy-fallback {
+    position: fixed;
+    left: 50%;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    width: min(560px, calc(100% - 32px));
+    background: var(--paper);
+    border: 1px solid var(--rule-2);
+    border-radius: 10px;
+    padding: 12px;
+    box-shadow: var(--shadow, 0 8px 24px -12px rgba(10,10,10,0.3));
+    z-index: 1100;
+  }
+  .copy-fallback label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-2);
+    margin-bottom: 6px;
+  }
+  .copy-fallback textarea {
+    width: 100%;
+    min-height: 120px;
+    font-family: var(--mono);
+    font-size: 12px;
+    border: 1px solid var(--rule);
+    border-radius: 6px;
+    padding: 8px;
+    box-sizing: border-box;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  .copy-fallback button {
+    margin-top: 8px;
+    min-height: 44px;
+    padding: 8px 16px;
+    border-radius: 999px;
+    border: 1px solid var(--rule-2);
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 12px;
+    cursor: pointer;
+  }
+    /* Text highlight (select-to-comment). Reads as "highlighted with a note attached". */
+  mark.hl {
+    background: var(--hl, rgba(84,150,255,0.28));
+    color: inherit;
+    border-radius: 2px;
+    padding: 0.05em 0;
+    cursor: pointer;
+    box-decoration-break: clone;
+    -webkit-box-decoration-break: clone;
+  }
+  mark.hl.has-note { box-shadow: inset 0 -0.14em 0 var(--accent, #5856D6); }
+  mark.hl.active { background: var(--hl-active, rgba(84,150,255,0.5)); }
+  @media (prefers-color-scheme: dark) {
+    mark.hl { background: var(--hl-dark, rgba(96,150,255,0.34)); }
+    mark.hl.active { background: var(--hl-active-dark, rgba(96,150,255,0.55)); }
+  }
+
+  /* Floating "comment on this selection" button, positioned at the selection. */
+  .sel-comment-btn {
+    position: absolute;
+    z-index: 950;
+    transform: translate(-50%, -100%);
+    min-height: 36px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: none;
+    background: var(--ink, #0A0A0A);
+    color: var(--paper, #fff);
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    box-shadow: var(--shadow, 0 8px 24px -12px rgba(10,10,10,0.3));
+    display: none;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+  .sel-comment-btn.show { display: inline-flex; }
+
+  .inline-comment .quote {
+    display: block;
+    font-family: var(--sans, system-ui, sans-serif);
+    font-size: 13px;
+    font-style: italic;
+    color: var(--ink, #0A0A0A);
+    border-left: 2px solid var(--hl, rgba(84,150,255,0.6));
+    padding-left: 8px;
+    margin-bottom: 6px;
+    opacity: 0.85;
+  }
+  .inline-comment .remove-hl {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    margin-top: 6px;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--ink-2, #5A5A55);
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 11px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+
+  /* Pasted or dropped image attachments on a comment. Thumbnail plus the filename the
+     browser saved it under, so Claude can find the file on disk and read it. */
+  .cl-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .cl-attach {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    border: 1px solid var(--rule-2, rgba(10,10,10,0.18));
+    border-radius: 8px;
+    background: var(--paper, #fff);
+    max-width: 100%;
+  }
+  .cl-attach img {
+    width: 56px;
+    height: 56px;
+    object-fit: cover;
+    border-radius: 4px;
+    border: 1px solid var(--rule, rgba(10,10,10,0.10));
+    flex: none;
+    cursor: zoom-in;
+  }
+  .cl-attach .name {
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 11px;
+    color: var(--ink-2, #5A5A55);
+    word-break: break-all;
+    min-width: 0;
+  }
+  .cl-attach button {
+    min-height: 44px;
+    padding: 0 6px;
+    border: none;
+    background: none;
+    color: var(--ink-2, #5A5A55);
+    font-family: var(--mono, ui-monospace, monospace);
+    font-size: 11px;
+    text-decoration: underline;
+    cursor: pointer;
+    flex: none;
+  }
+  /* Drop target feedback while an image file is dragged over a comment box. */
+  textarea.cl-dropping {
+    border-color: var(--accent, #5856D6);
+    background: color-mix(in srgb, var(--accent, #5856D6) 7%, transparent);
+  }
+  /* Tap or click a thumbnail to check the shot at full size before copying. */
+  .cl-lightbox {
+    position: fixed;
+    inset: 0;
+    z-index: 1200;
+    background: rgba(10,10,10,0.82);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    cursor: zoom-out;
+  }
+  .cl-lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; }
+
+.toast {
+    position: fixed;
+    bottom: calc(80px + env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--ink);
+    color: var(--paper);
+    padding: 12px 22px;
+    border-radius: 999px;
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s, transform 0.2s;
+    z-index: 1000;
+    box-shadow: var(--shadow);
+  }
+  .toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  .steps { list-style: none; padding: 0; margin: 0; }
+  .step {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 14px 0;
+    border-top: 1px dashed var(--rule);
+    font-size: 17px;
+    line-height: 1.6;
+  }
+  .step:first-child { border-top: none; padding-top: 4px; }
+  .step input[type="checkbox"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 24px; height: 24px;
+    min-width: 24px; min-height: 24px;
+    border: 2px solid var(--ink);
+    border-radius: 6px;
+    background: var(--paper);
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-top: 1px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    position: relative;
+  }
+  .step input[type="checkbox"]:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+  }
+  .step input[type="checkbox"]:checked::after {
+    content: "✓";
+    color: white;
+    font-size: 15px;
+    font-weight: 700;
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    line-height: 1;
+  }
+  .step[data-status="done"] .step-text {
+    text-decoration: line-through;
+    color: var(--ink-2);
+  }
+  .step-text { flex: 1; }
+  .step-text code {
+    font-family: var(--mono);
+    font-size: 0.93em;
+    background: var(--bg);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+  }
+
+  /* SECTION (Decisions / Errors) */
+  .section { margin-top: 56px; }
+  .section h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(26px, 5vw, 36px);
+    margin: 0 0 18px;
+    letter-spacing: -0.01em;
+  }
+  .section .table-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+  }
+  .section table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--paper);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .section th, .section td {
+    padding: 13px 18px;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+    font-size: 15px;
+    vertical-align: top;
+  }
+  .section th {
+    background: var(--bg);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.10em;
+    text-transform: uppercase;
+    color: var(--ink-2);
+    font-weight: 500;
+  }
+  .section tr:last-child td { border-bottom: none; }
+
+  /* DIAGRAMS */
+  .diagrams { margin-top: 56px; }
+  .diagrams .caption {
+    font-style: italic;
+    color: var(--ink-2);
+    margin: 8px 0 12px;
+    font-family: var(--display);
+    font-size: 18px;
+  }
+  .diagrams svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    background: var(--paper);
+    padding: 24px;
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+  }
+
+  /* FOOTER */
+  .footer {
+    margin-top: 72px;
+    padding-top: 22px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-2);
+    letter-spacing: 0.04em;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .footer code {
+    background: var(--paper);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--rule);
+    color: var(--ink);
+  }
+
+  /* MOBILE: collapse multi-column layouts and tighten chrome under ~640px */
+  @media (max-width: 640px) {
+    .hero {
+      grid-template-columns: 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+    .progress-ring { width: 104px; height: 104px; }
+    .phase-header {
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .architecture { padding: 18px 20px; }
+    .architecture p { font-size: 17px; }
+    .task-header { padding: 16px 18px; }
+    .task-body { padding: 16px 18px 20px; }
+    .container { padding-bottom: calc(120px + env(safe-area-inset-bottom)); }
+  }
+
+  /* PRINT */
+  @media print {
+    body { background: white; }
+    .task-body { display: block !important; }
+    .chevron { display: none; }
+    .container { max-width: none; padding: 24px; }
+    .task { break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
+    .architecture, .architecture-diagram { box-shadow: none; }
+    .task-grid.with-notes { grid-template-columns: minmax(0, 1fr) 200px; }
+    .notes { break-inside: avoid; }
+    .compare { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header class="hero" data-status="done" data-slug="2026-08-28-revote-stale-scores" data-feature="Re-voting: stale scores age back into the queue, and the bot asks again" data-tdd="true">
+    <div>
+      <div class="eyebrow">Implementation Plan · 2026-08-28</div>
+      <h1>Re-voting: stale scores age back into the queue, and the bot asks again</h1>
+      <div class="meta">
+        <span class="pill status-planning" data-status-pill>Planning</span>
+        <span class="pill" data-task-count>0 / 0 tasks</span>
+        <span class="pill" data-step-count>0 / 0 steps</span>
+        <span class="pill">TDD</span>
+      </div>
+    </div>
+    <svg class="progress-ring" viewBox="0 0 132 132">
+      <circle class="bg" cx="66" cy="66" r="56" />
+      <circle class="fg" cx="66" cy="66" r="56" stroke-dasharray="351.86" stroke-dashoffset="351.86" transform="rotate(-90 66 66)" />
+      <text x="66" y="68" data-progress-label>0%</text>
+    </svg>
+  </header>
+
+  <section class="architecture">
+    <h2>Architecture</h2>
+    <p data-architecture>Today a voter who has scored every teammate on all six indicators is done forever: select_next_score_target excludes any (voter, player, indicator) that already has a scores row, so /vote returns &#x27;nothing left to rate&#x27; and those opinions, formed when people barely knew each other, stay in the ratings indefinitely. This adds a rolling staleness window (REVOTE_AFTER_DAYS) so a score older than the window is re-offered after the unscored targets on other players, keeps the superseding UPSERT semantics while archiving the replaced value to a new score_history table, and adds a weekly DM job plus an admin /revote_ping so people are actually told they have work waiting. /revote_ping is a delivery trigger, not a reset: it chooses who gets a DM and never widens the staleness window, so nobody is ever asked to re-rate everything. The rating maths in rating.py is deliberately untouched, so team balance changes only because its inputs get fresher.</p>
+    <div class="claude-response" data-round="1" data-answers="plan note: does /revote_ping re-ask everyone for all their votes, or only the stale ones?">
+      <span class="key">Response</span>
+      <p><strong>Only the stale ones.</strong> <code>/revote_ping</code> is a delivery trigger, not a reset: it decides <em>who gets a DM</em>, never <em>what they are asked</em>. Plain <code>/revote_ping</code> DMs each reachable player who currently has pending targets, honouring the 7-day per-person nudge cooldown; <code>/revote_ping force</code> uses the same list but waives that cooldown so you can push twice in one week. Neither touches <code>REVOTE_AFTER_DAYS</code> or marks anything stale.</p>
+      <p>When the person then taps <code>/vote</code>, the queue serves what it always serves: teammates they have never rated first, then only scores older than <code>REVOTE_AFTER_DAYS</code> (60 days), oldest first. A score cast last week stays untouched however many times you ping.</p>
+      <p>So no path in this plan asks anyone to re-rate everything. That was the "admin-opened rounds" option you passed on in favour of rolling age. If you want it back it is small (a <code>/revote_round</code> that stamps <code>scores.updated_at</code> backwards past the window), but it is a different feature, and on a four-month-old database it would hand every player around a hundred prompts at once. Task 4.2 exists to size exactly that risk before the first automatic run.</p>
+      <p>The plan was vague on this, which is why the question came up: the architecture summary above and task 3.4 now state it outright, and 3.4 requires the same sentence in the module docstring.</p>
+    </div>
+  </section>
+
+  <section class="architecture-diagram"><svg viewBox="0 0 720 408" role="img" aria-label="How a stale score re-enters the voting queue, and how the weekly nudge job brings voters back" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    .box { fill: #FAFAF7; stroke: #D8D5CB; stroke-width: 1.5; }
+    .box-focal { fill: #EEF0FF; stroke: #6366F1; stroke-width: 2; }
+    .box-safe { fill: #ECFAF3; stroke: #34A97B; stroke-width: 1.5; }
+    .lbl { fill: #181818; font: 13px 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    .lbl-mono { fill: #181818; font: 12px 'JetBrains Mono', ui-monospace, monospace; }
+    .cap { fill: #7A756A; font: 11px 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; letter-spacing: 0.08em; }
+    .conn { stroke: #A9A396; stroke-width: 1.5; fill: none; }
+    .arrowhead { fill: #A9A396; }
+    @media (prefers-color-scheme: dark) {
+      .box { fill: #1E1E21; stroke: #3A3A40; }
+      .box-focal { fill: #23243A; stroke: #8B8DF5; }
+      .box-safe { fill: #172A22; stroke: #45C08F; }
+      .lbl, .lbl-mono { fill: #EDEBE5; }
+      .cap { fill: #8E887C; }
+      .conn { stroke: #56525C; }
+      .arrowhead { fill: #56525C; }
+    }
+  </style>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" class="arrowhead" />
+    </marker>
+  </defs>
+
+  <text x="16" y="32" class="cap">A SCORE'S SECOND LIFE</text>
+
+  <rect x="16" y="56" width="192" height="64" rx="8" class="box" />
+  <text x="112" y="82" class="lbl" text-anchor="middle">score ages past</text>
+  <text x="112" y="102" class="lbl-mono" text-anchor="middle">REVOTE_AFTER_DAYS</text>
+
+  <rect x="264" y="56" width="192" height="64" rx="8" class="box-focal" />
+  <text x="360" y="82" class="lbl" text-anchor="middle">queue re-offers it, after</text>
+  <text x="360" y="102" class="lbl" text-anchor="middle">other players' new ones</text>
+
+  <rect x="512" y="56" width="192" height="64" rx="8" class="box" />
+  <text x="608" y="82" class="lbl" text-anchor="middle">voter sees a normal</text>
+  <text x="608" y="102" class="lbl" text-anchor="middle">rating card</text>
+
+  <rect x="512" y="200" width="192" height="64" rx="8" class="box" />
+  <text x="608" y="226" class="lbl-mono" text-anchor="middle">record_score</text>
+  <text x="608" y="246" class="lbl" text-anchor="middle">upserts the row</text>
+
+  <rect x="264" y="200" width="192" height="64" rx="8" class="box" />
+  <text x="360" y="226" class="lbl" text-anchor="middle">old value copied to</text>
+  <text x="360" y="246" class="lbl-mono" text-anchor="middle">score_history</text>
+
+  <rect x="16" y="200" width="192" height="64" rx="8" class="box-safe" />
+  <text x="112" y="226" class="lbl-mono" text-anchor="middle">updated_at</text>
+  <text x="112" y="246" class="lbl" text-anchor="middle">reset, out of window</text>
+
+  <path d="M 208 88 L 256 88" class="conn" marker-end="url(#arrow)" />
+  <path d="M 456 88 L 504 88" class="conn" marker-end="url(#arrow)" />
+  <path d="M 608 120 L 608 192" class="conn" marker-end="url(#arrow)" />
+  <path d="M 512 232 L 464 232" class="conn" marker-end="url(#arrow)" />
+  <path d="M 264 232 L 216 232" class="conn" marker-end="url(#arrow)" />
+
+  <text x="16" y="320" class="cap">WHAT BRINGS THE VOTER BACK</text>
+
+  <rect x="16" y="336" width="320" height="56" rx="8" class="box-focal" />
+  <text x="176" y="360" class="lbl" text-anchor="middle">weekly job, plus admin</text>
+  <text x="176" y="380" class="lbl-mono" text-anchor="middle">/revote_ping</text>
+
+  <rect x="400" y="336" width="304" height="56" rx="8" class="box" />
+  <text x="552" y="360" class="lbl" text-anchor="middle">DMs everyone holding</text>
+  <text x="552" y="380" class="lbl" text-anchor="middle">pending targets</text>
+
+  <path d="M 336 364 L 392 364" class="conn" marker-end="url(#arrow)" />
+</svg></section>
+
+  <section class="plan-notes">
+    <label for="plan-notes-input">Plan-wide notes</label>
+    <textarea id="plan-notes-input" placeholder="General comments, blockers, scope changes, or context for Claude that doesn't belong to a single element..."></textarea>
+  </section>
+
+  <section class="phase" data-phase-id="1">
+  <div class="phase-header">
+    <h2><span class="num">Phase 1</span>Phase 1: Stale scores re-enter the queue</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="1.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.1</span><span class="task-name">Add the REVOTE_AFTER_DAYS setting</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/config.py · Modify: .env.example · Modify: tests/test_config.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests in <code>tests/test_config.py</code>, mirroring the existing <code>test_skip_cooldown_*</code> trio: <code>test_revote_after_days_default</code> asserts <code>Settings(_env_file=None).REVOTE_AFTER_DAYS == 60</code>; <code>test_revote_after_days_env_override</code> sets <code>REVOTE_AFTER_DAYS=30</code>; <code>test_revote_after_days_rejects_zero</code> expects <code>pydantic.ValidationError</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_config.py -q</code> and confirm the three new tests fail (AttributeError, then no-error-raised).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>REVOTE_AFTER_DAYS: int = Field(default=60, gt=0)</code> to <code>Settings</code>, directly under <code>SKIP_COOLDOWN_DAYS</code>, with a comment: a score whose <code>updated_at</code> is older than this is offered again, because the voter now knows the player better than they did when they first rated them.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>REVOTE_AFTER_DAYS=60</code> to <code>.env.example</code> under <code>SKIP_COOLDOWN_DAYS</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_config.py -q</code> exits 0 with the three new tests passing.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(config): add REVOTE_AFTER_DAYS staleness window</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>60 days is roughly eight weekly sessions, long enough that a voter has genuinely seen the player again and short enough that a season-old opinion does not survive a whole season.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>`gt=0` matters: a zero or negative window would make every score permanently stale and turn /vote into an infinite treadmill.</li>
+            <li>**Every pytest command in this plan is prefixed `GROUP_CHAT_ID=0` on purpose.** pydantic-settings loads the real `.env`, so a bare `uv run pytest` gives `settings.GROUP_CHAT_ID` a live group id; `post_attendance_poll` then skips its no-op early return and awaits `send_poll` on a plain MagicMock, failing all three `tests/test_session_handlers.py::test_open_session_*` tests and leaving one statement uncovered (99.96%, under the 100% gate). Measured on this branch before any change: bare run 3 failed / 580 passed, `GROUP_CHAT_ID=0` run 583 passed at 100%. This is a pre-existing environment leak in the test setup, not something this feature introduces. The real fix is an autouse fixture in tests/conftest.py pinning it to 0, shaped like the existing `_force_english`, but that is out of this plan&#x27;s scope and is Ali&#x27;s call.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="1.2" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.2</span><span class="task-name">Re-offer stale targets in select_next_score_target</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests in <code>tests/test_voting_queue.py</code>: <code>test_stale_score_is_reoffered</code> (score everything for voter 1 across 2 players, then <code>UPDATE scores SET updated_at = datetime(&#x27;now&#x27;,&#x27;-90 days&#x27;)</code>, assert the selector returns a target); <code>test_fresh_score_is_not_reoffered</code> (same setup without ageing, assert None); <code>test_unscored_targets_come_before_stale_ones</code> (3 players, age only voter 1&#x27;s scores on player 2, leave player 3 unscored, assert <code>target.player_id == 3</code>); <code>test_oldest_stale_target_comes_first</code> (two aged scores at -90d and -70d, assert the -90d one is returned); <code>test_rescoring_a_stale_target_refreshes_it</code> (record_score on the returned stale target, assert the same (player, indicator) pair is not returned on the next call); <code>test_revote_window_follows_settings</code> (monkeypatch <code>toop.voting_queue.settings</code> to <code>REVOTE_AFTER_DAYS=1</code> and confirm a 2-day-old score is offered).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>test_exclude_player_outranks_freshness</code>: when the only unscored targets belong to the just-rated player and another player has a stale one, the stale target wins. This pins the deliberate ordering choice rather than leaving it to chance.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">For <code>test_oldest_stale_target_comes_first</code>, the fixture must leave **zero** unscored targets for that voter, otherwise <code>is_revote ASC</code> correctly wins and the age assertion never gets a look in. Score everything, then age two players&#x27; rows to -90d and -70d.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py -q</code> and confirm the seven new tests fail.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Extract the rateable CTE and the <code>score_skips</code> cooldown filter into module-level constants, with two corrections that were verified against SQLite rather than assumed. **<code>_RATEABLE_CTE</code> must NOT keep its <code>AND telegram_id != :voter</code> line**: a CTE cannot correlate to an outer FROM alias and SQLite has no LATERAL, so <code>.format(voter=&#x27;v.telegram_id&#x27;)</code> fails with <code>no such column: v.telegram_id</code>. Drop the self-exclusion from the CTE entirely (it then needs no placeholder) and move it to <code>_NEXT_TARGET_SQL</code>&#x27;s own WHERE as <code>AND r.telegram_id != :voter</code>, which is behaviourally identical.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**<code>_SKIP_FILTER</code> needs two placeholders, not one** — it references both the voter bind and the rateable alias, and 1.3 aliases that table <code>rp</code> rather than <code>r</code>. Make it <code>_SKIP_FILTER.format(voter=&#x27;:voter&#x27;, player=&#x27;r.telegram_id&#x27;)</code> here and <code>.format(voter=&#x27;v.telegram_id&#x27;, player=&#x27;rp.telegram_id&#x27;)</code> in 1.3; a single-placeholder version fails with <code>no such column: r.telegram_id</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Rewrite <code>_NEXT_TARGET_SQL</code>: replace the <code>NOT EXISTS (SELECT 1 FROM scores ...)</code> filter with <code>LEFT JOIN scores sc ON sc.voter_id = :voter AND sc.player_id = r.telegram_id AND sc.indicator = i.indicator</code>, and a WHERE of <code>r.telegram_id != :voter AND (sc.voter_id IS NULL OR sc.updated_at &lt;= datetime(&#x27;now&#x27;, &#x27;-&#x27; || :revote_days || &#x27; days&#x27;)) AND NOT EXISTS (SELECT 1 FROM score_skips sk ...)</code>. **The ندیدمش skip filter stays exactly as it is** — only the scores filter changes.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Select <code>(sc.voter_id IS NOT NULL) AS is_revote</code> and <code>sc.updated_at AS scored_at</code>, and set <code>ORDER BY (r.telegram_id = :exclude_player), is_revote ASC, sc.updated_at ASC, total ASC, voter_count ASC, r.telegram_id, i.indicator</code>. Precedence, stated exactly: showing a different player than the one just rated outranks freshness, so a stale target on another player can appear before an unscored one on the just-rated player; among candidates that tie on <code>exclude_player</code>, unscored always beats stale, and within the stale group the oldest goes first (<code>updated_at</code> is NULL on every unscored row, so it ties there and <code>total</code>/<code>voter_count</code> still govern coverage).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Bind <code>revote_days</code> as an integer concatenated into the date modifier, exactly like <code>cooldown_days</code> above it, and extend that function&#x27;s docstring comment to say why: a pre-formatted string risks a NULL modifier, which makes the comparison silently false and would ignore the window entirely.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py -q</code> exits 0, including the pre-existing <code>test_selector_never_targets_self</code> and <code>test_selector_excludes_scored_and_skipped</code> while-loops, which still terminate because <code>record_score</code> resets <code>updated_at</code> to now.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(voting): re-offer scores older than the revote window</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>The queue is the only place that decides what a voter is asked, so the staleness rule has to live in its WHERE clause; anything bolted on later would have to re-derive the skip and pool rules.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>The two existing `while (t := select_next_score_target(...)) is not None` loops in tests/test_voting_queue.py become infinite if record_score ever stops refreshing updated_at. Both tests are the guard, so keep them.</li>
+            <li>SQLite sorts NULL first on ASC. `is_revote` already separates the two groups, so the NULL `updated_at` on unscored rows never leaks a stale target ahead of a fresh one within the same exclude_player tier, but reordering those two ORDER BY terms would break exactly that.</li>
+            <li>Dropping the `score_skips` NOT EXISTS while rewriting the WHERE would silently kill the whole ندیدمش cooldown. tests/test_voting_queue.py has three tests on it (`test_skip_hides_player_across_all_indicators`, `test_skip_still_active_within_cooldown`, `test_skip_expires_after_cooldown`) plus `test_health_pending_excludes_whole_skipped_player`.</li>
+          </ul>
+        </aside>
+      </div>
+      <div class="diff-card">
+        <div class="diff-card-header">
+          <span class="diff-file">Diff</span>
+          <span>unified diff</span>
+        </div>
+        <pre class="diff"><code><span class="line add">LEFT JOIN scores sc</span><span class="line del">WHERE NOT EXISTS (</span><span class="line del">    SELECT 1 FROM scores sc</span><span class="line del">    WHERE sc.voter_id = :voter</span><span class="line add">    ON sc.voter_id = :voter</span><span class="line del">      AND sc.player_id = r.telegram_id</span><span class="line add">   AND sc.player_id = r.telegram_id</span><span class="line del">      AND sc.indicator = i.indicator</span><span class="line add">   AND sc.indicator = i.indicator</span><span class="line add">WHERE (</span><span class="line add">    sc.voter_id IS NULL</span><span class="line add">    OR sc.updated_at &lt;= datetime(&#x27;now&#x27;, &#x27;-&#x27; || :revote_days || &#x27; days&#x27;)</span><span class="line">)</span><span class="line">  AND NOT EXISTS (</span><span class="line">    SELECT 1 FROM score_skips sk</span><span class="line">    WHERE sk.voter_id = :voter</span><span class="line">      AND sk.player_id = r.telegram_id</span><span class="line">      AND sk.skipped_at &gt; datetime(&#x27;now&#x27;, &#x27;-&#x27; || :cooldown_days || &#x27; days&#x27;)</span><span class="line">)</span><span class="line">ORDER BY</span><span class="line">    (r.telegram_id = :exclude_player),</span><span class="line add">    is_revote ASC,</span><span class="line add">    sc.updated_at ASC,</span><span class="line">    total ASC,</span><span class="line">    voter_count ASC,</span><span class="line">    r.telegram_id, i.indicator</span></code></pre>
+      </div>
+    </div>
+  </article>
+
+  <article class="task" data-task-id="1.3" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.3</span><span class="task-name">Expose pending-target counts, split new vs stale</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: tests/test_voting_queue.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests: <code>test_pending_counts_splits_new_and_stale</code> against a hand-seeded fixture (3 players, some scores aged, some fresh, one skip inside the cooldown); <code>test_pending_counts_zero_when_fully_current</code> (**a voter with six fresh scores must report <code>stale=0</code>** — this is the test that catches a stale SUM missing its window predicate); <code>test_pending_counts_zero_for_lone_player</code> (a one-player roster has no rateable target at all, so the count must be 0 and not 6); <code>test_pending_counts_keeps_voter_who_skipped_everyone</code> (they must still get a key, with total 0 — this catches the WHERE-vs-ON join mistake); <code>test_pending_counts_agrees_with_selector</code> asserting that for every active voter <code>counts.total == 0</code> is true exactly when <code>select_next_score_target(conn, voter) is None</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py -q</code> and confirm the five fail on ImportError.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>@dataclass(frozen=True) class PendingCounts</code> with <code>unscored: int</code>, <code>stale: int</code>, and a <code>total</code> property.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>pending_counts_by_voter(conn) -&gt; dict[int, PendingCounts]</code>: one query built from the <code>_RATEABLE_CTE</code> / <code>_SKIP_FILTER</code> templates from 1.2, driving off active players as <code>v</code>, LEFT JOINing rateable players <code>rp</code> cross joined with the six indicators, then LEFT JOINing <code>scores sc</code>. Bind both <code>:cooldown_days</code> and <code>:revote_days</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**Every rp-referencing predicate belongs in the <code>LEFT JOIN ... ON</code>, never the WHERE.** Self-exclusion (<code>rp.telegram_id != v.telegram_id</code>) and the formatted <code>_SKIP_FILTER</code> both go in the ON. Verified against SQLite: an rp-referencing <code>NOT EXISTS</code> in the WHERE annihilates the outer join, so a voter who has skipped everyone drops out of the result entirely, breaking the &#x27;every active player gets a key&#x27; guarantee and making <code>test_pending_counts_agrees_with_selector</code> raise KeyError instead of comparing.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**Aggregate on the rateable player, and put the staleness window inside the stale SUM:** <code>SUM(rp.telegram_id IS NOT NULL AND sc.voter_id IS NULL)</code> for <code>unscored</code>, and <code>SUM(rp.telegram_id IS NOT NULL AND sc.voter_id IS NOT NULL AND sc.updated_at &lt;= datetime(&#x27;now&#x27;,&#x27;-&#x27;||:revote_days||&#x27; days&#x27;))</code> for <code>stale</code>, grouped by <code>v.telegram_id</code>. Two traps here, both verified by running the query: a bare <code>SUM(sc.voter_id IS NULL)</code> counts the placeholder rows a voter with no rateable targets produces (reporting <code>unscored=6</code> while the selector returns None), and a stale SUM without the window predicate counts every already-scored target, so a voter with 6 perfectly fresh scores reports <code>stale=6</code>. The window must NOT move into the join ON, which would make fresh-scored targets count as unscored instead.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**Include ghosts**, matching what <code>/health</code> already does: <code>HEALTH_SQL</code> is <code>WHERE p.active = 1</code> with no <code>is_ghost</code> filter, so ghosts are today rendered as voter rows. Keeping this function ghost-inclusive means task 2.3 can merge straight into those rows; the ghost exclusion belongs in <code>revote.nudge_targets</code> (task 3.2), which is the only caller that actually sends a DM. Every active player gets a key, including those with a zero count.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py -q</code> exits 0, and <code>uv run ty check src/</code> exits 0 (voting_queue is inside the type-checked set; handlers are excluded by pyproject).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(voting): add pending_counts_by_voter</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Both /health and the nudge job need &#x27;how much work does this voter have&#x27;, and handlers/health.py already carries a comment admitting its SQL &#x27;mirrors voting_queue.select_next_score_target&#x27;. One definition, or the mirror drifts the first time the window changes.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>The cross join is voters x players x 6 indicators. At ~20 players that is ~2400 rows, which is nothing, but do not let it grow into a per-voter loop of queries.</li>
+            <li>Counting the join placeholder instead of the rateable player is the failure mode that only shows up on a degenerate roster, which is exactly the shape a test fixture has.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="1.V" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">1.V</span><span class="task-name">Phase 1 verification</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> <em>(none specified)</em>
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>GROUP_CHAT_ID=0 uv run pytest tests/test_config.py tests/test_voting_queue.py -q</code> exits 0.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>GROUP_CHAT_ID=0 uv run pytest -q</code> exits 0 for the whole suite, with no regressions in tests/test_health.py, tests/test_voting_handler.py or tests/test_rating_refresh.py.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>uv run ruff check src/ tests/</code> and <code>uv run ruff format --check src/ tests/</code> both exit 0.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>uv run ty check src/</code> exits 0.</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="2">
+  <div class="phase-header">
+    <h2><span class="num">Phase 2</span>Phase 2: Keep the superseded score, show the backlog</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="2.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.1</span><span class="task-name">Add the score_history table</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/schema.sql · Modify: tests/test_db.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write a failing test in <code>tests/test_db.py</code>: after the <code>conn</code> fixture runs <code>init_db</code>, <code>PRAGMA table_info(score_history)</code> returns the expected column names, and calling <code>init_db(conn)</code> a second time raises nothing (idempotence). Also add <code>score_history</code> to that file&#x27;s <code>EXPECTED_TABLES</code> set (asserted with <code>issubset</code>, so it will not fail on its own, but it is where the schema is self-documented).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_db.py -q</code> and confirm it fails on an empty PRAGMA result.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>CREATE TABLE IF NOT EXISTS score_history (id INTEGER PRIMARY KEY AUTOINCREMENT, voter_id INTEGER NOT NULL, player_id INTEGER NOT NULL, indicator TEXT NOT NULL CHECK (...same six...), score INTEGER NOT NULL CHECK (score BETWEEN 1 AND 5), recorded_at TIMESTAMP NOT NULL, superseded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)</code> to <code>src/toop/schema.sql</code>, plus <code>CREATE INDEX IF NOT EXISTS idx_score_history_player ON score_history(player_id, indicator)</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write the schema comment explaining the deliberate absence of foreign keys: <code>link_ghost_player</code> deletes the ghost <code>players</code> row and leans on ON DELETE CASCADE, which would erase the very audit trail it had just migrated, and <code>soft_remove_player</code> only flips <code>active=0</code>. History is append-only and outlives roster churn. Note in the same comment that the no-FK choice is only half the story: task 2.2 adds the ghost remap that keeps those surviving rows attributable.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Confirm no <code>_MIGRATIONS</code> entry is needed: that tuple exists only for late ADD COLUMN, and <code>init_db</code> already runs schema.sql idempotently, so a deployed DB picks the table up on next start.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_db.py -q</code> exits 0.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(db): add append-only score_history table</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>score_history rows survive a player being linked or removed, so any future query joining it to `players` must tolerate a missing row.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="2.2" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.2</span><span class="task-name">Archive the previous value inside record_score</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/voting_queue.py · Modify: src/toop/players.py · Modify: tests/test_voting_queue.py · Modify: tests/test_players.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests in <code>tests/test_voting_queue.py</code>: <code>test_first_score_writes_no_history</code> (one record_score, <code>SELECT COUNT(*) FROM score_history</code> is 0); <code>test_changed_score_archives_the_old_value</code> (score 4 then 2, exactly one history row carrying score 4 and the original <code>updated_at</code> as <code>recorded_at</code>); <code>test_identical_rescore_writes_no_history</code> (score 4 twice, still 0 history rows, but <code>scores.updated_at</code> has advanced).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write a failing test in <code>tests/test_players.py</code>: <code>test_link_ghost_remaps_score_history</code> — a ghost with an archived history row (as scored player, and as voter) has both remapped onto the real id after <code>link_ghost_player</code>, and a row that would make the real account its own voter is dropped. <code>tests/test_players.py</code> has <code>_score</code>/<code>_skip</code> helpers but nothing for history, so add one; **it must pass <code>recorded_at</code> explicitly**, since 2.1 declares that column <code>NOT NULL</code> with no DEFAULT and a bare insert raises <code>IntegrityError</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py tests/test_players.py -q</code> and confirm the four fail.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">In <code>record_score</code>, SELECT the existing <code>(score, updated_at)</code> row before the UPSERT; when a row exists and its score differs from the incoming one, INSERT it into <code>score_history</code> with <code>recorded_at</code> set to the old <code>updated_at</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add the reasoning as a docstring line: an identical re-score is a confirmation, and <code>scores.updated_at</code> already records when it happened, so writing an identical history row would be pure bloat.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**Add a <code>score_history</code> remap loop to <code>players.link_ghost_player</code>**, next to the existing <code>scores</code> and <code>score_skips</code> loops. <code>_remap_endpoint</code> is a pure function, so this is a <code>SELECT id, voter_id, player_id FROM score_history WHERE voter_id=? OR player_id=?</code> loop with <code>UPDATE ... WHERE id=?</code> per row, and <code>DELETE ... WHERE id=?</code> when the two endpoints collapse to the same id. This only works because 2.1 gave the table an <code>id</code> primary key. Without the loop, 2.1&#x27;s no-FK choice leaves history rows pointing at a negative ghost id that no longer exists in <code>players</code>, permanently unattributable — the exact opposite of &#x27;history outlives roster churn&#x27;.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Place the loop **before** the <code>DELETE FROM players WHERE telegram_id=?</code> line that ends <code>link_ghost_player</code>, and do **not** let it increment <code>score_rows</code>: the existing <code>test_link_ghost_remaps_ghost_as_player_and_as_voter</code> asserts <code>result.score_rows == 2</code>, and counting history rows into it breaks that test.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Do NOT make the ghost merge itself write history rows: its <code>scores</code> UPSERT is a roster fix, not a voter changing their mind, and it already resolves collisions by keeping the newer <code>updated_at</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_voting_queue.py tests/test_players.py -q</code> exits 0 and the whole <code>GROUP_CHAT_ID=0 uv run pytest -q</code> run stays green.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(voting): archive superseded scores to score_history</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>The chosen semantics are &#x27;newest fully supersedes&#x27;, so refresh_ratings needs no change at all. History exists so a future recency-weighting experiment has data to work from, and so a surprising rating swing can be traced.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>`link_ghost_player` hard-deletes the ghost `players` row last and relies on cascade for everything else. score_history has no FK, so it is the one table that will NOT be cleaned up or remapped for free.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="2.3" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.3</span><span class="task-name">Show the stale backlog in /health</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/handlers/health.py · Modify: tests/test_health.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests in <code>tests/test_health.py</code>: <code>build_health_rows</code> returns both a <code>pending</code> key (never-scored targets) and a <code>stale</code> key (re-offerable ones) per voter, with the right numbers for a seeded fixture where one voter has aged scores; <code>format_health</code> output contains a <code>Stale</code> column header; **<code>test_health_includes_ghost_rows</code>** seeding <code>add_ghost_player</code> and asserting the ghost still gets a row with numeric <code>pending</code>/<code>stale</code> rather than raising.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_health.py -q</code> and confirm they fail.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Delete the <code>pending</code> correlated subquery from <code>HEALTH_SQL</code> (and the comment claiming it mirrors the queue), call <code>pending_counts_by_voter(conn)</code> once in <code>build_health_rows</code>, and merge <code>unscored</code> into <code>pending</code> and <code>stale</code> into a new <code>stale</code> key.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**Look the counts up with <code>counts.get(tid, PendingCounts(0, 0))</code>, never <code>counts[tid]</code>.** <code>HEALTH_SQL</code> is <code>WHERE p.active = 1</code> and includes ghosts, so a bare subscript is a KeyError on any real database the moment the two row sets disagree.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**Drop the now-unused <code>from toop.config import settings</code> import** from <code>handlers/health.py</code>: <code>settings</code> is referenced there only at the <code>cooldown_days</code> binding inside the deleted subquery, so leaving it behind is a ruff <code>F401</code> and <code>GROUP_CHAT_ID=0 make check</code> fails. <code>HEALTH_SQL</code> then executes as <code>conn.execute(HEALTH_SQL).fetchall()</code> with no params dict.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add the <code>Stale</code> column to <code>format_health</code>&#x27;s monospace table. Renaming the labels alone does NOT narrow anything — the width lives in the format specs — so write the header exactly as <code>f&quot;{&#x27;Player&#x27;:&lt;16}{&#x27;Last vote&#x27;:&lt;12}{&#x27;Life&#x27;:&lt;6}{&#x27;30d&#x27;:&lt;6}{&#x27;New&#x27;:&lt;6}{&#x27;Stale&#x27;:&lt;7}{&#x27;Cal&#x27;}&quot;</code> (16+12+6+6+6+7+3 = 56, the current width) and change the body row&#x27;s f-string widths to match.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_health.py -q</code> exits 0, with an assertion (not a print, which pytest swallows on pass) that every body line fits. <code>format_health</code> wraps its table in <code></code><code> fences, so strip those first: </code>assert all(len(line) &lt;= len(header) for line in body.splitlines()[1:-1])<code>.</code></span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(health): split pending into new and stale targets</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Without the split, a voter who finished 90 days ago would jump from `pending 0` to `pending 100+`, destroying the &#x27;who has never voted&#x27; signal the admin uses to chase people in person.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>The /health table is deliberately LTR monospace (RTL breaks fixed-width alignment). Adding a column is where that line silently starts wrapping on a phone.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="2.V" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">2.V</span><span class="task-name">Phase 2 verification</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> <em>(none specified)</em>
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>GROUP_CHAT_ID=0 uv run pytest -q</code> exits 0 across the whole suite.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Coverage gate holds: the run reports <code>Required test coverage of 100% reached</code> (pyproject sets <code>fail_under = 100</code>). Note this is **statement** coverage only, since <code>[tool.coverage.run] branch = false</code>, so it proves every new line ran, not that every branch of the new <code>if</code> in <code>record_score</code> was taken. The three explicit tests in 2.2 are what cover the branches.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run a scripted end-to-end check as a one-liner (not an interactive REPL, which proves nothing reproducibly): <code>uv run python -c</code> that builds a tmp DB, calls <code>init_db</code>, adds two players, records two scores, ages one by 90 days with an UPDATE, and prints <code>pending_counts_by_voter(conn)</code> — expecting <code>stale=1</code> for that voter.</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="3">
+  <div class="phase-header">
+    <h2><span class="num">Phase 3</span>Phase 3: Ask people again</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="3.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">3.1</span><span class="task-name">Add the nudge schedule settings</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/config.py · Modify: .env.example · Modify: tests/test_config.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests: defaults are <code>REVOTE_NUDGE_WEEKDAY=&#x27;tuesday&#x27;</code>, <code>REVOTE_NUDGE_HOUR=19</code>, <code>REVOTE_NUDGE_COOLDOWN_DAYS=7</code>, <code>REVOTE_NUDGE_MIN_PENDING=3</code>; an invalid weekday raises <code>ValidationError</code>; <code>REVOTE_NUDGE_MIN_PENDING=0</code> raises; <code>REVOTE_NUDGE_HOUR=24</code> raises (mirroring the existing <code>test_snapshot_hour_out_of_range</code>).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_config.py -q</code> and confirm they fail.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add the four fields to <code>Settings</code> with the same constraint style as their neighbours: <code>REVOTE_NUDGE_WEEKDAY: str = &#x27;tuesday&#x27;</code>, <code>REVOTE_NUDGE_HOUR: int = Field(default=19, ge=0, le=23)</code> (matching <code>SNAPSHOT_HOUR</code> and <code>SESSION_POLL_HOUR</code>), <code>REVOTE_NUDGE_COOLDOWN_DAYS: int = Field(default=7, gt=0)</code>, <code>REVOTE_NUDGE_MIN_PENDING: int = Field(default=3, ge=1)</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>REVOTE_NUDGE_WEEKDAY</code> to the existing <code>@field_validator(&#x27;SESSION_WEEKDAY&#x27;, &#x27;SESSION_POLL_WEEKDAY&#x27;)</code> decorator&#x27;s argument list so it reuses <code>_weekday_valid</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Reuse <code>SESSION_POLL_TZ</code> for the nudge job&#x27;s timezone rather than adding a second tz setting, and say so in the field comment.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add all four to <code>.env.example</code> with a comment explaining Tuesday 7pm: the day after the Monday session, when the voter has just played with these people and their memory is freshest.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_config.py -q</code> exits 0.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(config): add revote nudge schedule settings</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Tuesday deliberately avoids the Thursday attendance poll, so the group never gets two bot pushes in the same evening.</p>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="3.2" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">3.2</span><span class="task-name">Nudge bookkeeping: revote_nudges table and target selection</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Create: src/toop/revote.py · Modify: src/toop/schema.sql · Create: tests/test_revote.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests in <code>tests/test_revote.py</code>: a voter under <code>min_pending</code> is excluded; a voter nudged 2 days ago is excluded at cooldown 7 but a voter nudged 8 days ago is included; a never-nudged voter is included; <code>active=0</code> players are excluded; **<code>is_ghost=1</code> players are excluded** (they have synthetic negative ids and have never DM&#x27;d the bot, so a send would always fail); **a player with no row in <code>contacts</code> is excluded**; <code>ignore_cooldown=True</code> returns a voter nudged yesterday; <code>record_nudge</code> upserts and moves <code>last_nudged_at</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_revote.py -q</code> and confirm it fails on ImportError.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>CREATE TABLE IF NOT EXISTS revote_nudges (telegram_id INTEGER PRIMARY KEY REFERENCES players(telegram_id) ON DELETE CASCADE, last_nudged_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP)</code> to schema.sql, and add <code>revote_nudges</code> to <code>EXPECTED_TABLES</code> in tests/test_db.py alongside 2.1&#x27;s entry. The FK cascade is correct here, unlike score_history: a removed player&#x27;s nudge clock is worthless. **No <code>last_pending</code> column** — nothing would ever read it, and an unread column is how <code>QUEUE_DEPTH</code> got stranded in <code>.env.example</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write <code>src/toop/revote.py</code> with a frozen <code>NudgeTarget</code> dataclass (<code>telegram_id</code>, <code>display_name</code>, <code>unscored</code>, <code>stale</code>, <code>total</code>) and <code>nudge_targets(conn, *, cooldown_days, min_pending, ignore_cooldown=False) -&gt; list[NudgeTarget]</code>, built on <code>pending_counts_by_voter</code>, filtering active non-ghost players and joining <code>revote_nudges</code> for the cooldown.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**Filter on reachability, but as a disjunction, never an inner <code>JOIN contacts</code>.** <code>upsert_contact</code> has exactly one production call site (<code>handlers/voting.py</code>, inside <code>handle_start</code>&#x27;s private-chat branch), so <code>contacts</code> records &#x27;typed /start in a DM&#x27;, not &#x27;is reachable&#x27; — casting a vote or tapping a rating button writes nothing. The table also postdates the bot&#x27;s first two weeks, so every player who /start-ed before it existed and never re-/start-ed has no row despite voting today. An inner join would silently drop exactly the long-standing core of the roster. Use <code>AND (EXISTS (SELECT 1 FROM contacts c WHERE c.telegram_id = p.telegram_id) OR EXISTS (SELECT 1 FROM scores s WHERE s.voter_id = p.telegram_id))</code> — having cast any score is itself proof of an open DM, because the whole vote flow is DM-only.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>record_nudge(conn, telegram_id)</code> doing an UPSERT on the primary key that moves <code>last_nudged_at</code> to CURRENT_TIMESTAMP.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_revote.py -q</code> exits 0, and <code>uv run ty check src/</code> exits 0 (revote.py is a pure-logic module, so it is inside the type-checked set).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(revote): add nudge targeting and cooldown bookkeeping</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>The cooldown is only recorded on a successful send (task 3.4), which is right for a transient failure but would loop forever on a permanently unreachable player. Filtering on `contacts` is what keeps that bounded.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>Ghost players are `active=1` and `in_pool=1` by design so others can rate them. Forgetting the `is_ghost=0` filter means the job tries to DM a negative telegram_id every single week.</li>
+            <li>A player who blocks the bot after having DM&#x27;d it still has a `contacts` row, so they stay in the target list. That is a small, silent per-week failure the job logs; accept it rather than adding a failure-count column.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="3.3" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">3.3</span><span class="task-name">Write the Persian and English strings</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/i18n.py · Modify: tests/test_i18n.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Decide the key set: <code>revote.dm_nudge</code> (kwargs <code>first</code>, <code>total</code>), <code>revote.ping_header</code>, <code>revote.ping_row</code> (kwargs <code>name</code>, <code>total</code>), <code>revote.ping_none</code>, <code>revote.ping_sent</code> (kwargs <code>sent</code>, <code>failed</code>), <code>cmd.revote_ping.short</code>, <code>cmd.revote_ping.usage</code>, and a rewritten <code>vote.no_prompts</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>vote.no_prompts</code> has three render sites in <code>handlers/voting.py</code>, and only two of them are the &#x27;you&#x27;re done&#x27; state — the third is the fallback when a score target references a missing player. A string promising &#x27;we&#x27;ll ask you again as the group plays more&#x27; reads wrong on an error path, so **add a separate <code>vote.target_missing</code> key for that site** and rewrite <code>vote.no_prompts</code> only for the other two.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>cmd.revote_ping.short</code> and <code>.usage</code> must say the command **sends** DMs, because <code>/nudge</code> sits right next to it and only prints templates for the admin to copy.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**<code>vote.nudge_header</code> currently states &#x27;Manual sends only, no auto-DMs&#x27; in both languages.** The weekly job makes that false. Rewrite that line (via Codex for the Persian) so it describes <code>/nudge</code> as the copy-paste option rather than a promise about the bot&#x27;s behaviour.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Draft the English strings directly, matching the terse tone of the existing <code>vote.*</code> entries.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**Draft every Persian string through the <code>codex-ask</code> skill**, never by hand: it is a standing rule that shipping Persian prose is written by Codex with the colloquial-register instruction. Pass the existing Persian <code>vote.*</code> and <code>alert.*</code> strings as tone reference, and state the audience (a casual Iranian volleyball group chat).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add the keys to both the <code>_fa()</code> and <code>_en()</code> tables in <code>src/toop/i18n.py</code>, keeping them in the same relative position in each.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>test_revote_keys_resolve_in_both_languages</code> to <code>tests/test_i18n.py</code>, mirroring <code>test_set_photo_keys_resolve_in_both_languages</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_i18n.py -q</code> exits 0, including the existing <code>test_catalog_parity</code>, which fails if a key landed in only one language.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(i18n): add revote nudge strings</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>test_catalog_parity compares the fa and en key sets, so a one-sided addition is caught immediately. It cannot catch bad Persian, which is why the copy goes through Codex.</p>
+          <span class="notes-label">Context</span>
+          <ul>
+            <li>~/.claude/skills/codex-ask/SKILL.md</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="3.4" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">3.4</span><span class="task-name">The weekly nudge job and /revote_ping</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Create: src/toop/handlers/revote.py · Create: tests/test_revote_handler.py · Reference: src/toop/handlers/alerts.py · Reference: tests/test_health.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write failing tests in <code>tests/test_revote_handler.py</code>. Take the context fixture from <code>tests/test_alerts.py</code> (a <code>MagicMock</code> carrying <code>bot_data={&#x27;conn&#x27;: conn}</code> and an <code>AsyncMock</code> <code>send_message</code>), but take the **admin fixture from <code>tests/test_health.py</code>**: <code>require_admin</code> reads <code>toop.admin.settings</code>, so the <code>/revote_ping</code> tests need <code>monkeypatch.setattr(&#x27;toop.admin.settings&#x27;, MagicMock(ADMIN_TELEGRAM_ID=42))</code>. <code>dk_alert_job</code> is undecorated, so test_alerts.py never patches it and copying that file alone leaves the gate untested.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**Patch <code>toop.handlers.revote.settings</code>, not <code>toop.config.settings</code>**, for the cooldown and min-pending tunables — the module reads them off its own imported name, exactly as <code>handlers/alerts.py</code> does, so patching the config module has no effect.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Test list: the job DMs each due voter and calls <code>record_nudge</code> for them; a voter whose DM raises <code>telegram.error.Forbidden</code> is NOT recorded (so next week retries) and does not abort the loop for the voters after them; <code>events_are_paused</code> short-circuits the whole job with no DMs; <code>/revote_ping</code> from a non-admin is rejected; <code>/revote_ping force</code> bypasses the cooldown while a bare <code>/revote_ping</code> honours it; with no targets the admin gets <code>revote.ping_none</code>; plus the two guard tests every handler module here has — <code>test_revote_ping_returns_without_message</code> (a None <code>effective_message</code>) and a missing-connection test on <code>_conn</code>, both of which are otherwise uncovered lines under the 100% gate.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>GROUP_CHAT_ID=0 uv run pytest tests/test_revote_handler.py -q</code> and confirm they fail.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Write <code>_run_nudges(conn, context, *, ignore_cooldown) -&gt; tuple[list[NudgeTarget], int]</code> returning (sent targets, failed count), shared by both entry points: fetch targets, DM <code>t(&#x27;revote.dm_nudge&#x27;, ...)</code> per voter, <code>record_nudge</code> only on a successful send, catch <code>Forbidden</code> and <code>BadRequest</code> per voter and log at info level.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>revote.dm_nudge</code> takes a <code>first</code> kwarg but <code>NudgeTarget</code> carries only <code>display_name</code>. Derive it the way <code>_build_nudge_templates</code> already does (<code>display_name.split()[0]</code>), or add a <code>first_name</code> field to the dataclass — pick one and be consistent.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Neither entry point may touch <code>REVOTE_AFTER_DAYS</code> or write to <code>scores</code>. <code>ignore_cooldown</code> waives only the per-voter nudge cooldown, so <code>/revote_ping force</code> can push twice in a week but still never asks anyone to re-rate a score that is inside the window. Put that sentence in the module docstring: it is the single most likely thing for a future reader to get wrong.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>revote_nudge_job(context)</code>: return early when <code>pause.events_are_paused(conn, datetime.now(UTC))</code> is true (the group is on a break, so do not chase votes), otherwise run <code>_run_nudges</code> with <code>ignore_cooldown=False</code> and log a one-line summary.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>handle_revote_ping(update, context)</code> decorated with <code>@require_admin</code>: run <code>_run_nudges</code> with <code>ignore_cooldown=True</code> only when <code>context.args and context.args[0] == &#x27;force&#x27;</code>, then reply with <code>revote.ping_none</code> when nothing was sent, otherwise <code>revote.ping_header</code> followed by one <code>revote.ping_row</code> per voter DMed and a closing <code>revote.ping_sent</code> carrying the sent/failed counts. This mirrors the existing <code>/nudge</code> shape (<code>vote.nudge_header</code> plus per-voter templates) and is what makes the 3.3 keys load-bearing rather than dead.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_revote_handler.py -q</code> exits 0 and the full-suite run still reports 100% statement coverage.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(revote): weekly nudge job and /revote_ping</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>Respecting /pause_events matters: the attendance poll and auto-snapshot already skip while the group is paused, and a bot that keeps asking for votes during a break is exactly the annoyance that gets it muted.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>A Forbidden send recorded as a nudge would silently retire a blocked voter from every future round. Record only on success, and rely on 3.2&#x27;s `contacts` filter to keep unreachable players out of the list in the first place.</li>
+            <li>handlers/* is excluded from `ty check` in pyproject, so type errors here surface only as test failures.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="3.5" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">3.5</span><span class="task-name">Wire the command and the job into the bot</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: src/toop/bot.py · Modify: src/toop/commands.py · Modify: tests/test_bot_wiring.py · Modify: tests/test_commands.py
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>_cmd(&#x27;revote_ping&#x27;, admin=True)</code> to the <code>COMMANDS</code> tuple in <code>src/toop/commands.py</code>, in the admin block near <code>_cmd(&#x27;nudge&#x27;, ...)</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Register <code>app.add_handler(CommandHandler(&#x27;revote_ping&#x27;, handle_revote_ping))</code> in <code>bot.main()</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Schedule the job: <code>app.job_queue.run_daily(revote_nudge_job, time=time(hour=settings.REVOTE_NUDGE_HOUR, minute=0, tzinfo=ZoneInfo(settings.SESSION_POLL_TZ)), days=(to_ptb_weekday(settings.REVOTE_NUDGE_WEEKDAY),), name=&#x27;revote_nudge&#x27;)</code>, followed by a <code>logger.info</code> line in the same shape as the <code>attendance_poll</code> one.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Update <code>tests/test_bot_wiring.py</code>: bump the handler-count assertion from 49 to 50 in BOTH tests, bump <code>run_daily.call_count</code> from 3 to 4, and add <code>days_by_name[&#x27;revote_nudge&#x27;] == (2,)</code> (PTB numbers weekdays 0=Sunday, so Tuesday is 2). Update the inline comment that spells out the handler arithmetic.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**Add <code>REVOTE_NUDGE_WEEKDAY=&#x27;Tuesday&#x27;</code> and <code>REVOTE_NUDGE_HOUR=19</code> to the <code>fake_settings</code> MagicMock in the <code>patched_main</code> fixture.** Without them <code>time(hour=&lt;MagicMock&gt;)</code> raises a TypeError and both wiring tests fail for a reason unrelated to the change.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add <code>test_revote_ping_is_admin_only</code> to <code>tests/test_commands.py</code>: <code>/revote_ping</code> appears in <code>render_help(admin=True)</code> and not in <code>render_help(admin=False)</code>. The existing assertions there self-adjust off <code>len(COMMANDS)</code>, so without this the new command is never actually asserted anywhere.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>GROUP_CHAT_ID=0 uv run pytest tests/test_bot_wiring.py tests/test_commands.py -q</code> exits 0, with the new admin-only test among the passes.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: feat(bot): schedule revote nudges and register /revote_ping</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>PTB weekday numbering is 0=Sunday, not datetime&#x27;s Monday=0. The existing test asserts this precisely because getting it wrong fires the job a day early.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="3.V" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">3.V</span><span class="task-name">Phase 3 verification</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> <em>(none specified)</em>
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>GROUP_CHAT_ID=0 make check</code> exits 0 (ruff lint, ruff format check, ty check, and the full pytest run with the 100% coverage gate).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>uv run python -c &quot;from toop.commands import render_help; print(render_help(admin=True))&quot;</code> prints a <code>/revote_ping</code> line in Persian.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>uv run python -c &quot;from toop.i18n import t; print(t(&#x27;revote.dm_nudge&#x27;, &#x27;fa&#x27;, first=&#x27;علی&#x27;, total=7))&quot;</code> prints a complete Persian sentence with the count interpolated, and the same key in <code>&#x27;en&#x27;</code> prints its English twin.</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+<section class="phase" data-phase-id="4">
+  <div class="phase-header">
+    <h2><span class="num">Phase 4</span>Phase 4: Docs, ledger, and a dry run against real data</h2>
+    <span class="phase-progress">0 / 0</span>
+  </div>
+  <div class="phase-bar"><div class="fill"></div></div>
+  <article class="task" data-task-id="4.1" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">4.1</span><span class="task-name">Update README, .env.example and the algorithm ledger</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Modify: README.md · Modify: .env.example · Modify: docs/algorithm/README.md · Modify: docs/PRIVACY.md
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">README: extend core-flow step 1 to say scores expire after <code>REVOTE_AFTER_DAYS</code> and come back around, and add a short paragraph on why votes expire (people rate better once they have actually played together).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Put the <code>/revote_ping</code> cheat-sheet row **directly next to <code>/nudge</code>** and state the difference in the description: <code>/nudge</code> prints templates for the admin to copy, <code>/revote_ping</code> actually sends the DMs. The README currently describes <code>/nudge</code> as &#x27;admin sends manually&#x27;, which a reader will otherwise assume still covers the whole nudging story.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add a ledger row to <code>docs/algorithm/README.md</code>. The table has four columns (<code>Date | Change | Effect on splits | Detail</code>): date 2026-08-28; change &#x27;scores older than REVOTE_AFTER_DAYS are re-offered; newest score fully supersedes, prior value archived to score_history&#x27;; and the Detail cell gets the PR link, as every existing row does.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">State the effect honestly: **no mechanical change to the splits**, because <code>rating.py</code> is untouched. What changes is that its inputs stop being frozen. Do not claim a measured effect that was never measured.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Add a row to the ledger&#x27;s &#x27;Known open issues&#x27; table: recency weighting inside <code>refresh_ratings</code> was considered and deliberately not implemented, so a never-refreshed score still counts as much as a fresh one. <code>score_history</code> exists to make that experiment possible later.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>docs/PRIVACY.md</code> has a &#x27;Code paths that touch vote data&#x27; table with a <code>handlers/health.py:HEALTH_SQL</code> row. <code>score_history</code> is a new voter-linked table holding raw 1-5 scores, which is exactly what that doc exists to record: add a row for it and one for <code>voting_queue.record_score</code> writing to it. Do not attempt to fix the rest of that file, which still describes the retired <code>vote_aggregates</code> model; note the staleness and move on.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">While in <code>.env.example</code>, delete the stale <code>QUEUE_DEPTH=5</code> line: it maps to no field on <code>Settings</code> and pydantic&#x27;s <code>extra=&#x27;ignore&#x27;</code> silently drops it, which is the same class of bug the <code>unknown_weight_keys</code> warning exists to catch.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: <code>grep -q &#x27;revote_ping&#x27; README.md &amp;&amp; grep -q REVOTE_AFTER_DAYS README.md &amp;&amp; grep -q REVOTE_AFTER_DAYS .env.example &amp;&amp; grep -q score_history docs/PRIVACY.md</code> exits 0. Use separate <code>grep -q</code> calls, not one multi-file <code>grep -c</code>, which exits 0 when any single file matches.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Commit: docs: document the revote cycle and log it in the algorithm ledger</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Context</span>
+          <ul>
+            <li>docs/algorithm/README.md</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="4.2" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">4.2</span><span class="task-name">Dry run against a copy of the live database</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid with-notes">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> Reference: docs/algorithm/README.md
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Pull a read-only copy using the recipe already documented in <code>docs/algorithm/README.md</code>: <code>mkdir -p /tmp/toop-revote</code> (the documented recipe uses <code>/tmp/toop-audit/</code>, and scp fails outright if the directory does not exist), then <code>scp de-rarecloud:/opt/toop/data/toop.db{,-wal,-shm} /tmp/toop-revote/</code> and <code>sqlite3 /tmp/toop-revote/toop.db &quot;PRAGMA wal_checkpoint(TRUNCATE);&quot;</code>. Never point anything at the VPS file directly.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Run <code>init_db</code> against the copy and confirm both new tables appear with no error and no data loss (row counts on <code>players</code>, <code>scores</code>, <code>score_skips</code>, <code>player_ratings</code> are unchanged).</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Print <code>pending_counts_by_voter</code> for the copy and report, per voter, how many targets are unscored versus stale at <code>REVOTE_AFTER_DAYS=60</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Print the list <code>nudge_targets</code> would produce on the first Tuesday run, and how many DMs that is.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Print <code>COUNT(*)</code> of active players **with** versus **without** a <code>contacts</code> row, and how many of the latter are rescued by the <code>scores</code> half of 3.2&#x27;s reachability disjunction. If any active, non-ghost player is excluded by both halves, name them: that is someone the bot can never nudge, and it is the admin&#x27;s job to get them to DM <code>/start</code>.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">**Decide the first-deploy window from those numbers.** The bot has been collecting scores since May, so at 60 days most of the roster may go stale at once and every player gets a DM on day one. If the projected stale counts look like a flood, ship with a larger <code>REVOTE_AFTER_DAYS</code> in the live <code>.env</code> and step it down over a few weeks; record whichever value was chosen in the ledger row from 4.1.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Verify: the dry-run output is pasted into the session, showing the per-voter stale counts and the projected first-run DM list, with the chosen live <code>REVOTE_AFTER_DAYS</code> stated explicitly.</span>
+        </li>
+          </ol>
+        </div>
+        <aside class="notes">
+          <span class="notes-label">Rationale</span>
+          <p>This is the one step that cannot be inferred from the code. Every existing score is months old, so the feature&#x27;s first run is its largest run, and that is a group of real people getting a DM.</p>
+          <span class="notes-label">Risks</span>
+          <ul>
+            <li>A 60-day window on a four-month-old database means near-everyone is stale on day one, which reads as spam and gets the bot muted.</li>
+            <li>The copy must be a checkpointed copy. Reading the live WAL directly can give a torn view.</li>
+          </ul>
+        </aside>
+      </div>
+
+    </div>
+  </article>
+
+  <article class="task" data-task-id="4.V" data-task-status="done">
+    <header class="task-header">
+      <h3><span class="badge">4.V</span><span class="task-name">Phase 4 verification</span></h3>
+      <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
+    </header>
+    <div class="task-body">
+      <div class="task-grid">
+        <div class="task-main">
+          <div class="files">
+            <span class="label">Files</span> <em>(none specified)</em>
+          </div>
+          <ol class="steps">
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>GROUP_CHAT_ID=0 make check</code> exits 0 from a clean tree.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text"><code>git log --oneline</code> shows 12 commits, one per implementation task (1.1 through 4.1; the five verification tasks and the 4.2 dry run carry no commit), and <code>git diff --stat main</code> touches neither <code>src/toop/rating.py</code> nor <code>src/toop/balance.py</code> — the rating maths was deliberately left alone.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">The dry-run numbers from 4.2 and the chosen live <code>REVOTE_AFTER_DAYS</code> are recorded in the ledger row.</span>
+        </li>
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
+          <span class="step-text">Open a PR with the checkmark block required by CLAUDE.md, targeting <code>main</code>, on a <code>feat/</code> branch (this work has no ClickUp task).</span>
+        </li>
+          </ol>
+        </div>
+
+      </div>
+
+    </div>
+  </article>
+
+</section>
+
+
+  <section class="section">
+    <h2>Decisions Made</h2>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>Decision</th><th>Rationale</th></tr></thead>
+      <tbody data-decisions>
+        <tr data-empty><td colspan="2"><em>(add as you go)</em></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="section">
+    <h2>Errors Encountered</h2>
+    <div class="table-scroll">
+    <table>
+      <thead><tr><th>Error</th><th>Attempt</th><th>Resolution</th></tr></thead>
+      <tbody data-errors>
+        <tr data-empty><td colspan="3"><em>(none yet)</em></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  
+
+  <footer class="footer">
+    <span>2026-08-28-revote-stale-scores.html</span>
+    <span>Run <code>/execute-plan &lt;path&gt;</code> to start</span>
+  </footer>
+
+</div>
+
+<div class="actionbar" role="region" aria-label="Comments export">
+  <button type="button" id="reset-btn" title="Clear all comments">Clear comments</button>
+  <button type="button" id="copy-btn" disabled aria-label="Copy all comments as JSON to clipboard">Copy comments<span class="count" id="copy-count">0</span></button>
+  <button type="button" id="send-btn" class="primary" disabled hidden aria-label="Send all comments straight to the Claude session">Send to Claude<span class="count" id="send-count">0</span></button>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+  function recomputeProgress() {
+    const allSteps = document.querySelectorAll('.step');
+    const doneSteps = document.querySelectorAll('.step[data-status="done"]');
+    const pct = allSteps.length ? Math.round(doneSteps.length / allSteps.length * 100) : 0;
+
+    const ring = document.querySelector('.progress-ring .fg');
+    if (ring) {
+      const dash = 2 * Math.PI * 56;
+      ring.setAttribute('stroke-dasharray', dash.toFixed(2));
+      ring.setAttribute('stroke-dashoffset', (dash - (dash * pct / 100)).toFixed(2));
+    }
+    const ringLabel = document.querySelector('[data-progress-label]');
+    if (ringLabel) ringLabel.textContent = pct + '%';
+
+    const taskCount = document.querySelector('[data-task-count]');
+    const allTasks = document.querySelectorAll('.task');
+    const doneTasks = document.querySelectorAll('.task[data-task-status="done"]');
+    if (taskCount) taskCount.textContent = doneTasks.length + ' / ' + allTasks.length + ' tasks';
+
+    const stepCount = document.querySelector('[data-step-count]');
+    if (stepCount) stepCount.textContent = doneSteps.length + ' / ' + allSteps.length + ' steps';
+
+    document.querySelectorAll('.phase').forEach(phase => {
+      const ps = phase.querySelectorAll('.step');
+      const pd = phase.querySelectorAll('.step[data-status="done"]');
+      const ppct = ps.length ? pd.length / ps.length * 100 : 0;
+      const fill = phase.querySelector('.phase-bar .fill');
+      if (fill) fill.style.width = ppct + '%';
+      const label = phase.querySelector('.phase-progress');
+      if (label) label.textContent = pd.length + ' / ' + ps.length;
+    });
+
+    const hero = document.querySelector('.hero');
+    const pill = document.querySelector('[data-status-pill]');
+    if (hero && pill) {
+      const s = hero.dataset.status || 'planning';
+      pill.className = 'pill status-' + s;
+      pill.textContent = ({ planning: 'Planning', in_progress: 'In Progress', done: 'Done' })[s] || s;
+    }
+  }
+
+  document.querySelectorAll('.task-header').forEach(h => {
+    h.addEventListener('click', (e) => {
+      if (e.target.tagName === 'INPUT') return;
+      const task = h.closest('.task');
+      task.dataset.open = task.dataset.open === 'true' ? 'false' : 'true';
+    });
+  });
+
+  document.querySelectorAll('.step input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const step = cb.closest('.step');
+      step.dataset.status = cb.checked ? 'done' : 'pending';
+      const task = step.closest('.task');
+      const stepsInTask = task.querySelectorAll('.step');
+      const doneInTask = task.querySelectorAll('.step[data-status="done"]');
+      task.dataset.taskStatus = (stepsInTask.length > 0 && stepsInTask.length === doneInTask.length) ? 'done' : 'pending';
+      recomputeProgress();
+    });
+  });
+
+  const tasks = document.querySelectorAll('.task');
+  tasks.forEach(t => t.dataset.open = (tasks.length <= 3) ? 'true' : 'false');
+
+  document.querySelectorAll('.step input[type="checkbox"]').forEach(cb => {
+    const step = cb.closest('.step');
+    if (step && step.dataset.status === 'done') cb.checked = true;
+  });
+
+  recomputeProgress();
+
+  // ---- Round-trip comments ----
+  const planNotesInput = document.getElementById('plan-notes-input');
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    if (!t) return;
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 1800);
+  }
+
+  // Where text highlighting is allowed, and the comment UI to never highlight or annotate.
+  const HIGHLIGHT_ROOT = "body";
+  // Rewritten per rendered plan by install_comment_layer.py --set-relay. This file is a
+  // TEMPLATE, so it must stay 0: render-plan.py substitutes placeholders and never calls
+  // the installer, so /create-plan sets the live port on the RENDERED plan afterwards.
+  const RELAY_PORT = 49753;
+  const RELAY_TOKEN = "T_tm5AsPwKFjrVKVOyMDUg";
+  const IS_UI = ".inline-comment, .actionbar, .sel-comment-btn, .plan-notes, .task-comment, .cl-attachments";
+  const highlights = new Map();   // hlId -> { id, quote, section, note, marks:[], panel }
+
+  function textOf(el) {
+    let s = "";
+    el.childNodes.forEach((n) => {
+      if (n.nodeType === 3) { s += n.nodeValue; return; }
+      if (n.nodeType !== 1) return;
+      if (n.classList.contains("annotate-btn") || n.classList.contains("inline-comment") ||
+          n.classList.contains("cl-attachments")) return;
+      // A non-inline child is its own chunk, so it needs a separator: without this a heading
+      // built as <span class="badge">1</span><span>Wire the migration</span> yields the
+      // anchor key "1Wire the migration". True inline tags (em, strong, a) stay unspaced so
+      // mid-word emphasis is not broken.
+      let disp = "inline";
+      try { disp = getComputedStyle(n).display; } catch (e) { /* detached node */ }
+      if (disp !== "inline" && s && !/\s$/.test(s)) s += " ";
+      s += textOf(n);
+    });
+    return s;
+  }
+  function nearestHeading(el) {
+    // Walk up to the closest container, then back through preceding headings.
+    let node = el;
+    while (node && node !== document.body) {
+      let sib = node.previousElementSibling;
+      while (sib) {
+        if (/^H[1-6]$/.test(sib.tagName)) return textOf(sib).trim();
+        const h = sib.querySelector && sib.querySelector("h1,h2,h3,h4,h5,h6");
+        if (h) return textOf(h).trim();
+        sib = sib.previousElementSibling;
+      }
+      node = node.parentElement;
+    }
+    return (document.title || "").trim();
+  }
+  function insertAfter(el, node) {
+    if (el.tagName === "TR") {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = el.children.length || 1;
+      td.style.padding = "0";
+      td.appendChild(node);
+      el.parentNode.insertBefore(tr, el.nextSibling);
+    } else {
+      el.parentNode.insertBefore(node, el.nextSibling);
+    }
+  }
+
+  // ---------- Pasted images ----------
+  // Paste (or drop) a screenshot into any comment box and it becomes an attachment on that
+  // comment. The blob is handed to the browser's download path so the file lands on disk
+  // (Chrome's default download folder, normally ~/Downloads) and the exported JSON carries
+  // the filename. Embedding a data: URI instead is not viable: one screenshot is hundreds of
+  // KB of base64, which would swamp the payload Ali pastes into chat.
+  const attachments = [];   // { file, anchor(), url, blob, chip }
+  let imgSeq = 0;
+  // Whether every current attachment has been written to disk. Chrome silently blocks a
+  // download that is not tied to a user gesture (verified 2026-08-21), so pasting cannot
+  // save the file itself: the Copy press or the Save images button does it.
+  let savedAll = false;
+  const DOC_SLUG = ((document.title || "artifact").trim().toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40)) || "artifact";
+
+  function extFor(type) {
+    if (type === "image/jpeg") return "jpg";
+    if (type === "image/gif") return "gif";
+    if (type === "image/webp") return "webp";
+    if (type === "image/svg+xml") return "svg";
+    return "png";
+  }
+
+  function saveBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+  }
+
+  function openLightbox(src) {
+    const box = document.createElement("div");
+    box.className = "cl-lightbox";
+    const img = document.createElement("img");
+    img.src = src;
+    img.alt = "Attached image, full size";
+    box.appendChild(img);
+    box.addEventListener("click", () => box.remove());
+    document.body.appendChild(box);
+  }
+
+  // The thumbnail strip is inserted directly after its textarea, so it always reads as
+  // belonging to that box regardless of what else the panel appends later.
+  function attachmentsHost(ta) {
+    let strip = ta._clStrip;
+    if (!strip || !strip.parentNode) {
+      strip = document.createElement("div");
+      strip.className = "cl-attachments";
+      if (ta.parentNode) ta.parentNode.insertBefore(strip, ta.nextSibling);
+      ta._clStrip = strip;
+    }
+    return strip;
+  }
+
+  function addAttachment(blob, ta, anchorFn, onChange) {
+    const n = ++imgSeq;
+    const name = "comment-img-" + DOC_SLUG + "-" + n + "." + extFor(blob.type);
+    // Kept for the page lifetime: the thumbnail and the lightbox both read from it.
+    const url = URL.createObjectURL(blob);
+    const rec = { file: name, anchor: anchorFn, url: url, blob: blob, chip: null };
+
+    const strip = attachmentsHost(ta);
+    const chip = document.createElement("div");
+    chip.className = "cl-attach";
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = name;
+    img.addEventListener("click", () => openLightbox(url));
+    const label = document.createElement("span");
+    label.className = "name";
+    label.textContent = name;
+    const again = document.createElement("button");
+    again.type = "button";
+    again.textContent = "Save again";
+    again.title = "Download this image again";
+    again.addEventListener("click", () => saveBlob(blob, name));
+    const drop = document.createElement("button");
+    drop.type = "button";
+    drop.textContent = "Remove";
+    drop.addEventListener("click", () => {
+      const i = attachments.indexOf(rec);
+      if (i > -1) attachments.splice(i, 1);
+      chip.remove();
+      if (!strip.children.length) strip.remove();
+      if (onChange) onChange();
+      refreshSaveAllBtn();
+      updateCopyButton();
+    });
+    chip.appendChild(img);
+    chip.appendChild(label);
+    chip.appendChild(again);
+    chip.appendChild(drop);
+    strip.appendChild(chip);
+    rec.chip = chip;
+
+    attachments.push(rec);
+    savedAll = false;
+    if (onChange) onChange();
+    refreshSaveAllBtn();
+    updateCopyButton();
+    showToast("Attached " + name + ". Copy writes it out; allow downloads if Chrome asks.");
+    return rec;
+  }
+
+  // Wire paste and drop on one comment textarea. `anchorFn` reports which comment the image
+  // belongs to, evaluated at export time so a highlight's quote is always current.
+  function enableImagePaste(ta, anchorFn, onChange) {
+    ta.addEventListener("paste", (e) => {
+      const items = (e.clipboardData && e.clipboardData.items) || [];
+      let found = false;
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i];
+        if (it.kind === "file" && /^image\//.test(it.type || "")) {
+          const blob = it.getAsFile();
+          if (blob) { addAttachment(blob, ta, anchorFn, onChange); found = true; }
+        }
+      }
+      // Only swallow the paste when it really was an image, so pasting text still works.
+      if (found) e.preventDefault();
+    });
+    ta.addEventListener("dragover", (e) => {
+      const types = (e.dataTransfer && e.dataTransfer.types) || [];
+      if ([].indexOf.call(types, "Files") > -1) {
+        e.preventDefault();
+        ta.classList.add("cl-dropping");
+      }
+    });
+    ta.addEventListener("dragleave", () => ta.classList.remove("cl-dropping"));
+    ta.addEventListener("drop", (e) => {
+      const files = (e.dataTransfer && e.dataTransfer.files) || [];
+      const imgs = [].filter.call(files, (f) => /^image\//.test(f.type || ""));
+      ta.classList.remove("cl-dropping");
+      if (!imgs.length) return;
+      e.preventDefault();
+      imgs.forEach((f) => addAttachment(f, ta, anchorFn, onChange));
+    });
+    // Discoverability lives in the placeholder rather than a permanent hint line on every
+    // panel, which would be noise once the mechanic is known.
+    ta.placeholder = (ta.placeholder || "Comment") + " Paste a screenshot to attach it.";
+  }
+
+  function attachmentsFor(pred) { return attachments.filter((a) => pred(a.anchor())); }
+
+  // Chrome allows the first automatic download from an origin and can block later ones as
+  // "multiple automatic downloads" until the user permits them, so the auto-save on paste is
+  // best-effort, never a guarantee. This button re-saves every attachment from one real
+  // click, which is the path Chrome always honours. It only appears once an image exists.
+  let saveAllBtn = null;
+  function refreshSaveAllBtn() {
+    const bar = document.querySelector(".actionbar");
+    if (!bar) return;
+    if (!attachments.length) {
+      if (saveAllBtn) { saveAllBtn.remove(); saveAllBtn = null; }
+      return;
+    }
+    if (!saveAllBtn) {
+      saveAllBtn = document.createElement("button");
+      saveAllBtn.type = "button";
+      saveAllBtn.id = "save-images-btn";
+      saveAllBtn.title = "Write every attached image to your downloads folder now";
+      saveAllBtn.addEventListener("click", () => {
+        attachments.forEach((a) => saveBlob(a.blob, a.file));
+        savedAll = true;
+        showToast("Saving " + attachments.length + " image" +
+          (attachments.length === 1 ? "" : "s") + " to your downloads folder");
+      });
+      bar.insertBefore(saveAllBtn, bar.firstChild);
+    }
+    saveAllBtn.textContent = "Save images (" + attachments.length + ")";
+  }
+
+  // Inject one comment textarea per task
+  document.querySelectorAll('.task').forEach(task => {
+    const body = task.querySelector('.task-body');
+    if (!body || body.querySelector('.task-comment')) return;
+    const id = task.dataset.taskId || '';
+    const ta = document.createElement('textarea');
+    ta.className = 'task-comment';
+    ta.dataset.commentFor = 'task ' + id;
+    ta.placeholder = 'Comment on task ' + id + '... (questions, scope tweaks, references, anything)';
+    ta.rows = 2;
+    ta.addEventListener('input', () => {
+      ta.classList.toggle('has-content', ta.value.trim().length > 0);
+      updateCopyButton();
+    });
+    body.appendChild(ta);
+    enableImagePaste(ta, () => ({ scope: 'task', anchor: 'task ' + id }));
+  });
+  planNotesInput?.addEventListener('input', updateCopyButton);
+  if (planNotesInput) enableImagePaste(planNotesInput, () => ({ scope: 'general', anchor: null }));
+
+  // Inline annotations: click any annotatable element to leave a note
+  const ANNOTATABLE_SELECTORS = [
+    '.step',
+    '.diff .line',
+    '.architecture p',
+    '.phase-header h2',
+    '.task-header h3',
+    '.notes p',
+    '.notes ul li',
+    '[data-decisions] tr',
+  ];
+  const inlineComments = new Map();
+
+  function anchorKey(el) {
+    if (el.matches('.step')) {
+      const task = el.closest('.task');
+      const tid = task?.dataset.taskId || '?';
+      const steps = [...task.querySelectorAll('.step')];
+      return 'step ' + tid + '.' + (steps.indexOf(el) + 1);
+    }
+    if (el.matches('.diff .line')) {
+      const card = el.closest('.diff-card');
+      const file = (card?.querySelector('.diff-file')?.textContent || 'diff').trim();
+      const lines = [...card.querySelectorAll('.line')];
+      return file + ' L' + (lines.indexOf(el) + 1);
+    }
+    if (el.matches('.phase-header h2')) {
+      const p = el.closest('.phase');
+      return 'phase ' + (p?.dataset.phaseId || '?');
+    }
+    if (el.matches('.task-header h3')) {
+      const t = el.closest('.task');
+      return 'task ' + (t?.dataset.taskId || '?') + ' (heading)';
+    }
+    if (el.matches('.architecture p')) return 'architecture';
+    const ctx = el.closest('.notes')
+      ? 'notes'
+      : (el.closest('[data-decisions]') ? 'decision' : 'note');
+    const txt = (el.textContent || '').trim().slice(0, 60).replace(/\s+/g, ' ');
+    return ctx + ': ' + txt;
+  }
+
+  function ensureCommentPanel(el) {
+    const next = el.nextElementSibling;
+    if (next && next.classList.contains('inline-comment')) return next;
+    const key = anchorKey(el);
+    const panel = document.createElement('div');
+    panel.className = 'inline-comment';
+    const keySpan = document.createElement('span');
+    keySpan.className = 'key';
+    keySpan.textContent = key;
+    const ta = document.createElement('textarea');
+    ta.rows = 2;
+    ta.placeholder = 'Comment on this...';
+    panel.appendChild(keySpan);
+    panel.appendChild(ta);
+    el.parentNode.insertBefore(panel, el.nextSibling);
+    enableImagePaste(ta, () => ({ scope: 'block', anchor: key }), () => {
+      const live = ta.value.trim() ||
+        attachmentsFor((a) => a.scope === 'block' && a.anchor === key).length;
+      el.classList.toggle('has-comment', !!live);
+    });
+    ta.addEventListener('input', () => {
+      const v = ta.value.trim();
+      if (v) {
+        inlineComments.set(key, v);
+        el.classList.add('has-comment');
+      } else {
+        inlineComments.delete(key);
+        el.classList.remove('has-comment');
+      }
+      updateCopyButton();
+    });
+    return panel;
+  }
+
+  document.querySelectorAll(ANNOTATABLE_SELECTORS.join(', ')).forEach(el => {
+    if (el.classList.contains('annotatable')) return;
+    el.classList.add('annotatable');
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'annotate-btn';
+    btn.title = 'Add a comment';
+    btn.setAttribute('aria-label', 'Add a comment');
+    btn.textContent = '+';
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      const panel = ensureCommentPanel(el);
+      panel.classList.toggle('open');
+      if (panel.classList.contains('open')) {
+        panel.querySelector('textarea').focus();
+      }
+    });
+    el.appendChild(btn);
+  });
+
+  // ---------- Text highlights (select-to-comment) ----------
+  const highlightRoot = document.querySelector(HIGHLIGHT_ROOT) || document.body;
+  let hlSeq = 0;
+
+  const selBtn = document.createElement("button");
+  selBtn.type = "button";
+  selBtn.className = "sel-comment-btn";
+  selBtn.textContent = "💬 Comment";
+  document.body.appendChild(selBtn);
+
+  function hideSelBtn() { selBtn.classList.remove("show"); }
+
+  function selectionInsideContent(sel) {
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return false;
+    const r = sel.getRangeAt(0);
+    if (!r.toString().trim()) return false;
+    const anc = r.commonAncestorContainer;
+    const el = anc.nodeType === 1 ? anc : anc.parentElement;
+    if (!el) return false;
+    if (!highlightRoot.contains(el)) return false;
+    if (el.closest(IS_UI)) return false;                 // don't highlight the UI itself
+    if (el.closest("mark.hl")) return false;             // already inside a highlight
+    return true;
+  }
+
+  function positionSelBtn(range) {
+    const rect = range.getBoundingClientRect();
+    selBtn.style.left = (rect.left + rect.width / 2 + window.scrollX) + "px";
+    selBtn.style.top = (rect.top + window.scrollY - 8) + "px";
+    selBtn.classList.add("show");
+  }
+
+  function onSelectionChange() {
+    const sel = window.getSelection();
+    if (selectionInsideContent(sel)) positionSelBtn(sel.getRangeAt(0));
+    else hideSelBtn();
+  }
+  // Only react after the gesture ends so the button doesn't chase a live drag.
+  document.addEventListener("mouseup", () => setTimeout(onSelectionChange, 0));
+  document.addEventListener("touchend", () => setTimeout(onSelectionChange, 0));
+  document.addEventListener("selectionchange", () => {
+    const sel = window.getSelection();
+    if (!selectionInsideContent(sel)) hideSelBtn();
+  });
+  window.addEventListener("scroll", hideSelBtn, { passive: true });
+
+  // Wrap every text node the range covers in its own <mark class="hl"> sharing one id.
+  // Per-node ranges stay inside a single text node so surroundContents never throws.
+  function wrapRange(range, hlId) {
+    const root = range.commonAncestorContainer;
+    const scope = root.nodeType === 1 ? root : root.parentNode;
+    const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT, null);
+    const nodes = [];
+    let n;
+    while ((n = walker.nextNode())) {
+      if (range.intersectsNode(n) && n.textContent.trim()) nodes.push(n);
+    }
+    const marks = [];
+    nodes.forEach((node) => {
+      let start = 0, end = node.textContent.length;
+      if (node === range.startContainer) start = range.startOffset;
+      if (node === range.endContainer) end = range.endOffset;
+      if (start >= end) return;
+      const r = document.createRange();
+      r.setStart(node, start);
+      r.setEnd(node, end);
+      const mark = document.createElement("mark");
+      mark.className = "hl";
+      mark.dataset.hlId = hlId;
+      try { r.surroundContents(mark); marks.push(mark); } catch (e) { /* skip odd node */ }
+    });
+    return marks;
+  }
+
+  function ensureHighlightPanel(hl) {
+    if (hl.panel) return hl.panel;
+    const firstMark = hl.marks[0];
+    // Anchor the note after the block that contains the highlight.
+    let block = firstMark.parentElement;
+    while (block && block !== document.body &&
+           getComputedStyle(block).display.indexOf("inline") === 0) {
+      block = block.parentElement;
+    }
+    block = block || firstMark.parentElement;
+
+    const panel = document.createElement("div");
+    panel.className = "inline-comment open";
+    const keySpan = document.createElement("span");
+    keySpan.className = "key";
+    keySpan.textContent = "✎ highlighted text" + (hl.section ? " · " + hl.section : "");
+    const quote = document.createElement("span");
+    quote.className = "quote";
+    quote.textContent = hl.quote.length > 180 ? hl.quote.slice(0, 180) + "…" : hl.quote;
+    const ta = document.createElement("textarea");
+    ta.rows = 2;
+    ta.placeholder = "Comment on the highlighted text...";
+    ta.value = hl.note || "";
+    ta.addEventListener("input", () => {
+      hl.note = ta.value.trim();
+      hl.marks.forEach((m) => m.classList.toggle("has-note", !!hl.note));
+      updateCopyButton();
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "remove-hl";
+    remove.textContent = "Remove highlight";
+    remove.addEventListener("click", () => removeHighlight(hl.id));
+
+    panel.appendChild(keySpan);
+    panel.appendChild(quote);
+    panel.appendChild(ta);
+    enableImagePaste(ta, () => ({ scope: "highlight", anchor: hl.quote }));
+    panel.appendChild(remove);
+    insertAfter(block, panel);
+    hl.panel = panel;
+    return panel;
+  }
+
+  function openHighlightPanel(hl) {
+    const panel = ensureHighlightPanel(hl);
+    panel.classList.add("open");
+    panel.querySelector("textarea").focus();
+    if (panel.scrollIntoView) panel.scrollIntoView({ block: "nearest" });
+  }
+  // Clicking a highlight toggles its note box open/closed. Hiding it does NOT drop the
+  // highlight or its note — the span stays marked and is still exported.
+  function toggleHighlightPanel(hl) {
+    const wasOpen = hl.panel && hl.panel.classList.contains("open");
+    if (wasOpen) hl.panel.classList.remove("open");
+    else openHighlightPanel(hl);
+  }
+
+  function unwrapMark(mark) {
+    const parent = mark.parentNode;
+    if (!parent) return;
+    while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
+    parent.removeChild(mark);
+    parent.normalize();
+  }
+  function removeHighlight(hlId) {
+    const hl = highlights.get(hlId);
+    if (!hl) return;
+    hl.marks.forEach(unwrapMark);
+    if (hl.panel && hl.panel.parentNode) hl.panel.parentNode.removeChild(hl.panel);
+    highlights.delete(hlId);
+    updateCopyButton();
+  }
+
+  selBtn.addEventListener("mousedown", (e) => e.preventDefault()); // keep the selection alive
+  selBtn.addEventListener("click", () => {
+    const sel = window.getSelection();
+    if (!selectionInsideContent(sel)) { hideSelBtn(); return; }
+    const range = sel.getRangeAt(0);
+    const quote = sel.toString().trim().replace(/\s+/g, " ");
+    const hlId = "hl-" + (++hlSeq);
+    const marks = wrapRange(range, hlId);
+    if (!marks.length) { hideSelBtn(); return; }
+    const hl = { id: hlId, quote, section: nearestHeading(marks[0]), note: "", marks, panel: null };
+    highlights.set(hlId, hl);
+    sel.removeAllRanges();
+    hideSelBtn();
+    openHighlightPanel(hl);
+    updateCopyButton();
+  });
+
+  // Click an existing highlight to show/hide its note box (the highlight itself stays).
+  document.addEventListener("click", (e) => {
+    const mark = e.target.closest && e.target.closest("mark.hl");
+    if (!mark) return;
+    const hl = highlights.get(mark.dataset.hlId);
+    if (hl) toggleHighlightPanel(hl);
+  });
+
+  // Tells Claude the round-trip is not "answer in chat", it is "patch this plan and diff it".
+  const CLAUDE_INSTRUCTIONS =
+    "Answer every comment in this payload, and write each answer BACK INTO the plan file " +
+    "(see `source`) as a visible response block next to the task or block it replies to: " +
+    "<div class=\"claude-response\"><span class=\"key\">Response</span><p>...</p></div>. " +
+    "Then show me the diff of that edit and re-open the plan (cc-open --personal <path>, or --work for OVOU content; never a flagless cc-open, it inherits Chrome's last-used profile). " +
+    "Replying only in the Claude Code chat is not enough: the plan must carry the answers. " +
+    "If a comment asks for a change to the plan itself, change the plan and note it in the " +
+    "response block instead of describing it in chat. " +
+    "Every entry in `images` is a screenshot attached to the comment named by its " +
+    "`attached_to` field, saved by the browser into the downloads folder (normally " +
+    "~/Downloads/<file>): read that file before answering the comment it belongs to. " +
+    "If a listed file is not there, Chrome blocked its download: say which file is missing " +
+    "and ask me to paste that screenshot straight into the chat, rather than guessing.";
+
+  function buildResult() {
+    const hero = document.querySelector('.hero');
+    const slug = hero?.dataset.slug || '';
+    const feature = hero?.dataset.feature || '';
+    const planNotes = (planNotesInput?.value || '').trim();
+    const comments = {};
+    document.querySelectorAll('.task-comment').forEach(ta => {
+      const v = ta.value.trim();
+      if (v) comments[ta.dataset.commentFor] = v;
+    });
+    inlineComments.forEach((v, k) => {
+      if (v && v.trim()) comments[k] = v.trim();
+    });
+    return {
+      instructions: CLAUDE_INSTRUCTIONS,
+      slug,
+      feature,
+      source: decodeURIComponent(location.pathname || "") || location.href,
+      generated_at: new Date().toISOString(),
+      plan_notes: planNotes || null,
+      comments,
+      highlights: [...highlights.values()].map((h) => ({
+        quote: h.quote,
+        section: h.section || null,
+        note: h.note || null,
+      })),
+      images: attachments.map((a) => {
+        const an = a.anchor();
+        return { file: a.file, scope: an.scope, attached_to: an.anchor };
+      }),
+    };
+  }
+
+  function countNonEmpty() {
+    let n = 0;
+    document.querySelectorAll('.task-comment').forEach(ta => { if (ta.value.trim()) n += 1; });
+    inlineComments.forEach(v => { if (v && v.trim()) n += 1; });
+    if (planNotesInput?.value.trim()) n += 1;
+    n += highlights.size + attachments.length;
+    return n;
+  }
+
+  function updateCopyButton() {
+    const btn = document.getElementById('copy-btn');
+    const count = document.getElementById('copy-count');
+    const sBtn = document.getElementById('send-btn');
+    const sCount = document.getElementById('send-count');
+    if (!btn || !count) return;
+    const n = countNonEmpty();
+    count.textContent = String(n);
+    btn.disabled = n === 0;
+    if (sCount) sCount.textContent = String(n);
+    if (sBtn) sBtn.disabled = n === 0;
+  }
+
+  // Clipboard, gesture-safe. navigator.clipboard.writeText can hang forever on a file://
+  // artifact (never resolving, never rejecting), so its .catch() fallback never runs and
+  // the copy dies silently. execCommand("copy") is synchronous and cannot hang, so it goes
+  // first, with the async API behind a 1200ms timeout.
+  function copySync(text) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    const sel = document.getSelection();
+    const prev = sel && sel.rangeCount ? sel.getRangeAt(0) : null;
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+    document.body.removeChild(ta);
+    if (prev && sel) { sel.removeAllRanges(); sel.addRange(prev); }
+    return ok;
+  }
+
+  // Manual fallback, in page. Never window.prompt(): Chrome silently blocks dialogs raised
+  // without user activation, and a pending dialog freezes the whole page.
+  function manualCopyFallback(text) {
+    let box = document.getElementById('copy-fallback');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'copy-fallback';
+      box.className = 'copy-fallback';
+      const label = document.createElement('label');
+      label.textContent = 'Automatic copy was blocked. Select all below, then copy:';
+      const ta = document.createElement('textarea');
+      ta.readOnly = true;
+      const close = document.createElement('button');
+      close.type = 'button';
+      close.textContent = 'Close';
+      close.addEventListener('click', () => box.remove());
+      box.appendChild(label);
+      box.appendChild(ta);
+      box.appendChild(close);
+      document.body.appendChild(box);
+    }
+    const ta = box.querySelector('textarea');
+    ta.value = text;
+    ta.focus();
+    ta.select();
+  }
+
+  function doCopy() {
+    const n = countNonEmpty();
+    if (!n) return;
+    // Copy is a genuine user gesture, the only download path Chrome reliably allows, so this
+    // is where attached images reach the disk. Guarded so a second Copy press does not write
+    // "name (1).png" duplicates that no longer match the filenames in the payload.
+    if (attachments.length && !savedAll) {
+      attachments.forEach((a) => saveBlob(a.blob, a.file));
+      savedAll = true;
+    }
+    const text = JSON.stringify(buildResult(), null, 2);
+    const ok = () => showToast('Copied ' + n + ' comment' + (n === 1 ? '' : 's') + '. Paste into Claude.');
+    if (copySync(text)) { ok(); return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (!settled) { settled = true; manualCopyFallback(text); }
+      }, 1200);
+      navigator.clipboard.writeText(text).then(
+        () => { if (!settled) { settled = true; clearTimeout(timer); ok(); } },
+        () => { if (!settled) { settled = true; clearTimeout(timer); manualCopyFallback(text); } }
+      );
+      return;
+    }
+    manualCopyFallback(text);
+  }
+
+  document.getElementById('copy-btn')?.addEventListener('click', doCopy);
+
+  // Cmd+Enter (Mac) / Ctrl+Enter copies, even from inside a comment textarea. doCopy() runs
+  // inline in the keydown, never via copyBtn.click(): a synthetic click loses the gesture.
+  (function () {
+    // Relay: Send to Claude. Ported by hand from templates/comment-layer.html, because this
+    // file carries a hand-rolled layer with no installer markers and --upgrade aborts on it.
+    //
+    // THE LOAD-BEARING INVARIANT: never call saveBlob() or doCopy() from a post-`await` path.
+    // The programmatic a.click() download inside saveBlob() is silently dropped without a
+    // user gesture, so the user would lose their screenshots with no error.
+    const copyBtn = document.getElementById('copy-btn');
+    const sendBtn = document.getElementById('send-btn');
+    const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
+    const hint = isMac ? '\u2318\u21B5' : 'Ctrl+\u21B5';
+    const RELAY_URL = RELAY_PORT ? 'http://127.0.0.1:' + RELAY_PORT : '';
+    let relayAlive = false;
+    let lastProbe = 0;
+
+    function applyShortcutHint() {
+      const owner = relayAlive && sendBtn ? sendBtn : copyBtn;
+      const other = owner === copyBtn ? sendBtn : copyBtn;
+      if (other) {
+        other.removeAttribute('aria-keyshortcuts');
+        other.classList.remove('primary');
+        const stale = other.querySelector('.kbd-hint');
+        if (stale) stale.remove();
+      }
+      if (!owner) return;
+      owner.classList.add('primary');
+      if (owner.querySelector('.kbd-hint')) return;
+      owner.title = (owner === sendBtn ? 'Send all comments to Claude (' : 'Copy all comments as JSON (') + hint + ')';
+      owner.setAttribute('aria-keyshortcuts', isMac ? 'Meta+Enter' : 'Control+Enter');
+      const kbd = document.createElement('span');
+      kbd.className = 'kbd-hint';
+      kbd.textContent = hint;
+      owner.appendChild(kbd);
+    }
+
+    async function probeRelay(force) {
+      if (!RELAY_URL) { applyShortcutHint(); return false; }
+      const now = Date.now();
+      if (!force && now - lastProbe < 5000) return relayAlive;
+      lastProbe = now;
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 1000);
+      try {
+        const r = await fetch(RELAY_URL + '/health', { headers: { 'X-Relay-Token': RELAY_TOKEN }, signal: ctl.signal });
+        relayAlive = r.ok;
+      } catch (e) { relayAlive = false; }
+      clearTimeout(timer);
+      if (sendBtn) sendBtn.hidden = !relayAlive;
+      applyShortcutHint();
+      updateCopyButton();
+      return relayAlive;
+    }
+
+    function bytesToBase64(bytes) {
+      let bin = '';
+      const CH = 0x8000;
+      for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+      return btoa(bin);
+    }
+
+    async function sendToClaude() {
+      const n = countNonEmpty();
+      if (!n) return;
+      if (!relayAlive) { doCopy(); return; }            // synchronous: gesture intact
+
+      const text = JSON.stringify(buildResult(), null, 2);   // captured BEFORE any await
+      const hadImages = attachments.length > 0;
+      let payload;
+      try { payload = JSON.parse(text); } catch (e) { doCopy(); return; }
+
+      try {
+        const files = [];
+        for (const a of attachments) {
+          const buf = await a.blob.arrayBuffer();
+          files.push({ filename: a.file, b64: bytesToBase64(new Uint8Array(buf)) });
+        }
+        if (files.length) payload.attachments = files;
+      } catch (e) { /* send the notes even if an image cannot be read */ }
+
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 1500);
+      try {
+        const r = await fetch(RELAY_URL + '/comments', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'X-Relay-Token': RELAY_TOKEN },
+          body: JSON.stringify(payload),
+          signal: ctl.signal,
+        });
+        clearTimeout(timer);
+        if (!r.ok) throw new Error('relay returned ' + r.status);
+        showToast('Sent ' + n + ' annotation' + (n === 1 ? '' : 's') + ' to Claude.');
+      } catch (err) {
+        clearTimeout(timer);
+        relayAlive = false;
+        if (sendBtn) sendBtn.hidden = true;
+        applyShortcutHint();
+        if (!copySync(text)) manualCopyFallback(text);
+        showToast(hadImages
+          ? 'Relay gone, copied instead. Press \u201cSave images\u201d to write the screenshots.'
+          : 'Relay gone, copied instead. Paste into Claude.');
+      }
+    }
+
+    sendBtn && sendBtn.addEventListener('click', sendToClaude);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) probeRelay(false); });
+    window.addEventListener('focus', () => probeRelay(false));
+    applyShortcutHint();
+    probeRelay(true);
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key === 'Enter') {
+        const owner = relayAlive && sendBtn && !sendBtn.hidden ? sendBtn : copyBtn;
+        if (owner && !owner.disabled) {
+          e.preventDefault();
+          if (owner === sendBtn) { sendToClaude(); } else { doCopy(); }
+        }
+      }
+    });
+  })();
+
+  document.getElementById('reset-btn')?.addEventListener('click', () => {
+    document.querySelectorAll('.task-comment').forEach(ta => {
+      ta.value = '';
+      ta.classList.remove('has-content');
+    });
+    if (planNotesInput) planNotesInput.value = '';
+    inlineComments.clear();
+    document.querySelectorAll('.inline-comment textarea').forEach(ta => { ta.value = ''; });
+    document.querySelectorAll('.inline-comment.open').forEach(p => p.classList.remove('open'));
+    document.querySelectorAll('.annotatable.has-comment').forEach(el => el.classList.remove('has-comment'));
+    [...highlights.keys()].forEach(removeHighlight);
+    attachments.splice(0).forEach((a) => { if (a.chip) a.chip.remove(); });
+    document.querySelectorAll('.cl-attachments').forEach((s) => s.remove());
+    hideSelBtn();
+    updateCopyButton();
+    showToast('Cleared all comments, highlights and images');
+  });
+
+  updateCopyButton();
+</script>
+
+</body>
+</html>

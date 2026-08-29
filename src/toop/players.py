@@ -150,6 +150,25 @@ def link_ghost_player(
             (new_voter, new_player, row["indicator"], row["skipped_at"]),
         )
 
+    # score_history carries no foreign key (see schema.sql), so nothing cascades
+    # or remaps it for free. Without this loop its rows would survive the ghost's
+    # deletion still pointing at a negative id no longer in players: present, but
+    # permanently unattributable. Deliberately does NOT touch score_rows, which
+    # counts migrated live scores.
+    for row in conn.execute(
+        "SELECT id, voter_id, player_id FROM score_history WHERE voter_id=? OR player_id=?",
+        (ghost_id, ghost_id),
+    ).fetchall():
+        new_voter = _remap_endpoint(ghost_id, real_id, row["voter_id"])
+        new_player = _remap_endpoint(ghost_id, real_id, row["player_id"])
+        if new_voter == new_player:
+            conn.execute("DELETE FROM score_history WHERE id=?", (row["id"],))
+            continue
+        conn.execute(
+            "UPDATE score_history SET voter_id=?, player_id=? WHERE id=?",
+            (new_voter, new_player, row["id"]),
+        )
+
     def _count(table: str) -> int:
         return conn.execute(
             f"SELECT COUNT(*) AS n FROM {table} WHERE telegram_id=?", (ghost_id,)

@@ -78,3 +78,31 @@ def test_set_photo_keys_resolve_in_both_languages() -> None:
         assert "Alice" in t("setphoto.send_now", lang, name="Alice")
         assert "Alice" in t("setphoto.done", lang, name="Alice")
         assert "Alice" in t("unsetphoto.done", lang, name="Alice")
+
+
+def test_revote_keys_resolve_in_both_languages() -> None:
+    """test_catalog_parity compares key sets; this checks the values actually
+    render, including their placeholders."""
+    keys = {
+        "revote.dm_nudge": {"first": "Ali", "total": 7},
+        "revote.ping_header": {},
+        "revote.ping_row": {"name": "Ali", "total": 7},
+        "revote.ping_sent": {"sent": 3, "failed": 1},
+        "revote.ping_none": {},
+        "cmd.revote_ping.short": {},
+        "cmd.revote_ping.usage": {},
+        "vote.target_missing": {},
+        "vote.no_prompts": {},
+        "vote.nudge_header": {},
+    }
+    for lang in ("fa", "en"):
+        for key, kwargs in keys.items():
+            assert t(key, lang, **kwargs).strip()
+
+
+def test_nudge_header_no_longer_promises_no_auto_dms() -> None:
+    """The weekly job made that promise false; both languages must point at
+    /revote_ping instead."""
+    assert "بدون پیام خودکار" not in t("vote.nudge_header", "fa")
+    assert "/revote_ping" in t("vote.nudge_header", "fa")
+    assert "/revote_ping" in t("vote.nudge_header", "en")

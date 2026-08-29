@@ -173,7 +173,9 @@ async def _send_next_prompt(
     player = _get_player(conn, target.player_id)
     if player is None:
         logger.warning("score target references missing player %s", target.player_id)
-        await context.bot.send_message(chat_id=chat_id, text=t("vote.no_prompts"))
+        # NOT vote.no_prompts: this is an error path, and that string now promises
+        # "I'll ask again later as you all play together more", which reads wrong here.
+        await context.bot.send_message(chat_id=chat_id, text=t("vote.target_missing"))
         return
     text = _format_prompt(target, player)
     keyboard = _prompt_keyboard(target, player)
