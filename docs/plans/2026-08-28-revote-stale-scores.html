@@ -2009,7 +2009,7 @@
     </div>
   </article>
 
-  <article class="task" data-task-id="4.2" data-task-status="pending">
+  <article class="task" data-task-id="4.2" data-task-status="done">
     <header class="task-header">
       <h3><span class="badge">4.2</span><span class="task-name">Dry run against a copy of the live database</span></h3>
       <span class="right"><span class="task-progress">0 / 0</span><span class="chevron">▾</span></span>
@@ -2021,32 +2021,32 @@
             <span class="label">Files</span> Reference: docs/algorithm/README.md
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Pull a read-only copy using the recipe already documented in <code>docs/algorithm/README.md</code>: <code>mkdir -p /tmp/toop-revote</code> (the documented recipe uses <code>/tmp/toop-audit/</code>, and scp fails outright if the directory does not exist), then <code>scp de-rarecloud:/opt/toop/data/toop.db{,-wal,-shm} /tmp/toop-revote/</code> and <code>sqlite3 /tmp/toop-revote/toop.db &quot;PRAGMA wal_checkpoint(TRUNCATE);&quot;</code>. Never point anything at the VPS file directly.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Run <code>init_db</code> against the copy and confirm both new tables appear with no error and no data loss (row counts on <code>players</code>, <code>scores</code>, <code>score_skips</code>, <code>player_ratings</code> are unchanged).</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Print <code>pending_counts_by_voter</code> for the copy and report, per voter, how many targets are unscored versus stale at <code>REVOTE_AFTER_DAYS=60</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Print the list <code>nudge_targets</code> would produce on the first Tuesday run, and how many DMs that is.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Print <code>COUNT(*)</code> of active players **with** versus **without** a <code>contacts</code> row, and how many of the latter are rescued by the <code>scores</code> half of 3.2&#x27;s reachability disjunction. If any active, non-ghost player is excluded by both halves, name them: that is someone the bot can never nudge, and it is the admin&#x27;s job to get them to DM <code>/start</code>.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">**Decide the first-deploy window from those numbers.** The bot has been collecting scores since May, so at 60 days most of the roster may go stale at once and every player gets a DM on day one. If the projected stale counts look like a flood, ship with a larger <code>REVOTE_AFTER_DAYS</code> in the live <code>.env</code> and step it down over a few weeks; record whichever value was chosen in the ledger row from 4.1.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">Verify: the dry-run output is pasted into the session, showing the per-voter stale counts and the projected first-run DM list, with the chosen live <code>REVOTE_AFTER_DAYS</code> stated explicitly.</span>
         </li>
           </ol>
@@ -2077,16 +2077,16 @@
             <span class="label">Files</span> <em>(none specified)</em>
           </div>
           <ol class="steps">
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text"><code>GROUP_CHAT_ID=0 make check</code> exits 0 from a clean tree.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text"><code>git log --oneline</code> shows 12 commits, one per implementation task (1.1 through 4.1; the five verification tasks and the 4.2 dry run carry no commit), and <code>git diff --stat main</code> touches neither <code>src/toop/rating.py</code> nor <code>src/toop/balance.py</code> — the rating maths was deliberately left alone.</span>
         </li>
-        <li class="step" data-status="pending">
-          <input type="checkbox" />
+        <li class="step" data-status="done">
+          <input type="checkbox" checked />
           <span class="step-text">The dry-run numbers from 4.2 and the chosen live <code>REVOTE_AFTER_DAYS</code> are recorded in the ledger row.</span>
         </li>
         <li class="step" data-status="pending">

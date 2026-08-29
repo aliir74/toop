@@ -31,6 +31,38 @@ One row in the ledger. If the change moved real numbers, add
 | 2026-08-22 | Objective: composite-delta → weighted per-skill gap (`Σ w·\|gap\|`) | Stopped opposite-sign skill gaps cancelling into a fake-balanced total | [#22](https://github.com/aliir74/toop/pull/22) |
 | 2026-08-22 | Snapshot message gained per-skill balance bars | Display only | [#23](https://github.com/aliir74/toop/pull/23) |
 
+## First-run measurement (2026-08-28, live DB copy)
+
+Measured before deploying the re-vote window, on a checkpointed copy of the
+production database (29 players, 1334 scores, oldest 2026-06-06).
+
+| `REVOTE_AFTER_DAYS` | Stale targets roster-wide | Players DMed on the first run |
+|---|---|---|
+| 60 (**shipped**) | 800 | 24 of 28 |
+| 90 | 0 | 22 of 28 |
+| 120 | 0 | 22 of 28 |
+
+Two things this changed:
+
+**The window barely affects how many people get DMed.** Nearly every voter is
+carried over the nudge threshold by targets they have *never* rated (typically
+100+ of a possible 168), not by stale ones. The group's real gap is coverage,
+not staleness. So the feared "first run floods everyone" effect is not something
+a larger window prevents — 22 of 28 get a DM even at 120 days.
+
+**90 days looks calm and is not.** It reports zero stale today only because the
+oldest scores are 83 days old; 950 of them would tip over within a week, as one
+cliff. 60 days spreads the same backlog out and was shipped for that reason.
+
+`init_db` against the copy added `score_history` and `revote_nudges` with row
+counts on `players` / `scores` / `score_skips` / `player_ratings` / `contacts`
+identical before and after.
+
+**Three active players can never be nudged**: Mohsen, Ahmadreza, Hessam have no
+`contacts` row and have never cast a score, so the bot has no open DM with them.
+They need to send `/start` in a DM before any reminder can reach them. That is an
+admin task, not a code one.
+
 ## Known open issues
 
 Carried from the 2026-08-24 audit, not yet fixed. Listed so they are not rediscovered
