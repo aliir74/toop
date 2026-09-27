@@ -293,6 +293,7 @@ def _fa() -> dict[str, str]:
         "roster.dur_1week": "۱ هفته",
         "roster.dur_2weeks": "۲ هفته",
         "roster.dur_1month": "۱ ماه",
+        "roster.dur_3months": "۳ ماه",
         "roster.no_username": "(بدون نام‌کاربری)",
         "roster.dm_to_add": "برای افزودن بازیکن به من پیوی بده. 🤫",
         "roster.no_new_contacts": (
@@ -654,6 +655,7 @@ def _en() -> dict[str, str]:
         "roster.dur_1week": "1 week",
         "roster.dur_2weeks": "2 weeks",
         "roster.dur_1month": "1 month",
+        "roster.dur_3months": "3 months",
         "roster.no_username": "(no username)",
         "roster.dm_to_add": "DM me to add players. 🤫",
         "roster.no_new_contacts": "No new contacts to add — ask people to DM me /start first.",

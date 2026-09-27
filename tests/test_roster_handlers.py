@@ -873,6 +873,7 @@ async def test_pause_pick_callback_shows_durations(
     callbacks = [b.callback_data for row in kb for b in row]
     assert "pausedur:111:1w" in callbacks
     assert "pausedur:111:1m" in callbacks
+    assert "pausedur:111:3m" in callbacks
 
 
 async def test_pause_pick_callback_gone_player_alerts(
