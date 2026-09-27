@@ -65,6 +65,7 @@ PAUSE_DURATIONS: tuple[tuple[str, str], ...] = (
     ("roster.dur_1week", "1w"),
     ("roster.dur_2weeks", "2w"),
     ("roster.dur_1month", "1m"),
+    ("roster.dur_3months", "3m"),
 )
 
 
