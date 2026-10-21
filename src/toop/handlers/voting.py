@@ -135,6 +135,12 @@ async def _send_card(
     )
 
 
+def _is_not_modified(exc: BadRequest) -> bool:
+    """The edit was a no-op because the card already shows this text. Sending a
+    fresh message on that error stacks a duplicate card on every repeat tap."""
+    return "not modified" in str(exc).lower()
+
+
 async def _show_no_prompts(
     context: ContextTypes.DEFAULT_TYPE,
     chat_id: int,
@@ -153,6 +159,8 @@ async def _show_no_prompts(
                 )
                 return
             except BadRequest as exc:
+                if _is_not_modified(exc):
+                    return
                 logger.warning("failed to edit prompt message: %s", exc)
     await context.bot.send_message(chat_id=chat_id, text=t("vote.no_prompts"))
 
@@ -165,8 +173,13 @@ async def _send_next_prompt(
     edit_message_id: int | None = None,
     exclude_player: int | None = None,
     current_is_photo: bool = False,
+    require_other_player: bool = False,
 ) -> None:
     target = select_next_score_target(conn, voter_id, exclude_player=exclude_player)
+    # ⏭ on the only player left would hand back the same card. Treat it as the
+    # end of the queue instead of re-showing what the voter just skipped.
+    if require_other_player and target is not None and target.player_id == exclude_player:
+        target = None
     if target is None:
         await _show_no_prompts(context, chat_id, edit_message_id, current_is_photo)
         return
@@ -198,6 +211,8 @@ async def _send_next_prompt(
                 )
                 return
             except BadRequest as exc:
+                if _is_not_modified(exc):
+                    return
                 logger.warning("failed to edit prompt message: %s", exc)
     await _send_card(context, chat_id, text, keyboard, player.photo_file_id)
 
@@ -321,6 +336,7 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             edit_message_id=message_id,
             exclude_player=player_id,
             current_is_photo=current_is_photo,
+            require_other_player=True,
         )
         return
 

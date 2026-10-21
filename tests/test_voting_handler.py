@@ -572,3 +572,44 @@ async def test_callback_dk_hides_player_from_every_later_prompt(
     assert not any("Bob" in text for text in seen), (
         f"skipped player resurfaced under another skill: {seen}"
     )
+
+
+async def test_callback_skip_on_last_player_ends_queue_instead_of_repeating(
+    conn: sqlite3.Connection,
+) -> None:
+    """⏭ on the only rateable player must not re-show the same card."""
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    ctx = _ctx(conn)
+    await handle_vote_callback(_callback_update(1, "v:sk:2"), ctx)
+    ctx.bot.edit_message_text.assert_awaited_once()
+    assert ctx.bot.edit_message_text.await_args.kwargs["text"] == NO_PROMPTS_REPLY
+    ctx.bot.send_message.assert_not_awaited()
+
+
+async def test_unmodified_edit_does_not_send_a_duplicate_card(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Telegram rejects an edit that changes nothing; that is not a reason to
+    post a second copy of the card."""
+    _seed(conn)
+    monkeypatch.setattr(
+        "toop.handlers.voting.select_next_score_target",
+        lambda *a, **k: ScoreTarget(player_id=2, indicator="attack"),
+    )
+    ctx = _ctx(conn)
+    ctx.bot.edit_message_text = AsyncMock(
+        side_effect=BadRequest("Message is not modified: specified new message content")
+    )
+    await _send_next_prompt(conn, ctx, chat_id=1, voter_id=1, edit_message_id=9)
+    ctx.bot.send_message.assert_not_awaited()
+
+
+async def test_repeat_skip_on_finished_queue_sends_no_duplicate(conn: sqlite3.Connection) -> None:
+    """A second ⏭ tap that lands after the card already says 'that's everyone'."""
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    ctx = _ctx(conn)
+    ctx.bot.edit_message_text = AsyncMock(side_effect=BadRequest("Message is not modified"))
+    await handle_vote_callback(_callback_update(1, "v:sk:2"), ctx)
+    ctx.bot.send_message.assert_not_awaited()
