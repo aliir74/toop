@@ -603,3 +603,13 @@ async def test_unmodified_edit_does_not_send_a_duplicate_card(
     )
     await _send_next_prompt(conn, ctx, chat_id=1, voter_id=1, edit_message_id=9)
     ctx.bot.send_message.assert_not_awaited()
+
+
+async def test_repeat_skip_on_finished_queue_sends_no_duplicate(conn: sqlite3.Connection) -> None:
+    """A second ⏭ tap that lands after the card already says 'that's everyone'."""
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    ctx = _ctx(conn)
+    ctx.bot.edit_message_text = AsyncMock(side_effect=BadRequest("Message is not modified"))
+    await handle_vote_callback(_callback_update(1, "v:sk:2"), ctx)
+    ctx.bot.send_message.assert_not_awaited()

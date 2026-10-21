@@ -135,6 +135,12 @@ async def _send_card(
     )
 
 
+def _is_not_modified(exc: BadRequest) -> bool:
+    """The edit was a no-op because the card already shows this text. Sending a
+    fresh message on that error stacks a duplicate card on every repeat tap."""
+    return "not modified" in str(exc).lower()
+
+
 async def _show_no_prompts(
     context: ContextTypes.DEFAULT_TYPE,
     chat_id: int,
@@ -153,6 +159,8 @@ async def _show_no_prompts(
                 )
                 return
             except BadRequest as exc:
+                if _is_not_modified(exc):
+                    return
                 logger.warning("failed to edit prompt message: %s", exc)
     await context.bot.send_message(chat_id=chat_id, text=t("vote.no_prompts"))
 
@@ -203,9 +211,7 @@ async def _send_next_prompt(
                 )
                 return
             except BadRequest as exc:
-                # The card already shows this exact prompt. Sending a fresh one
-                # here would stack duplicate cards on every tap.
-                if "not modified" in str(exc).lower():
+                if _is_not_modified(exc):
                     return
                 logger.warning("failed to edit prompt message: %s", exc)
     await _send_card(context, chat_id, text, keyboard, player.photo_file_id)
