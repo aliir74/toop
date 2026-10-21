@@ -165,8 +165,13 @@ async def _send_next_prompt(
     edit_message_id: int | None = None,
     exclude_player: int | None = None,
     current_is_photo: bool = False,
+    require_other_player: bool = False,
 ) -> None:
     target = select_next_score_target(conn, voter_id, exclude_player=exclude_player)
+    # ⏭ on the only player left would hand back the same card. Treat it as the
+    # end of the queue instead of re-showing what the voter just skipped.
+    if require_other_player and target is not None and target.player_id == exclude_player:
+        target = None
     if target is None:
         await _show_no_prompts(context, chat_id, edit_message_id, current_is_photo)
         return
@@ -198,6 +203,10 @@ async def _send_next_prompt(
                 )
                 return
             except BadRequest as exc:
+                # The card already shows this exact prompt. Sending a fresh one
+                # here would stack duplicate cards on every tap.
+                if "not modified" in str(exc).lower():
+                    return
                 logger.warning("failed to edit prompt message: %s", exc)
     await _send_card(context, chat_id, text, keyboard, player.photo_file_id)
 
@@ -321,6 +330,7 @@ async def handle_vote_callback(update: Update, context: ContextTypes.DEFAULT_TYP
             edit_message_id=message_id,
             exclude_player=player_id,
             current_is_photo=current_is_photo,
+            require_other_player=True,
         )
         return
 
