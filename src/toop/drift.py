@@ -3,17 +3,8 @@ from __future__ import annotations
 import sqlite3
 
 
-def current_yes_set(conn: sqlite3.Connection, session_id: int) -> set[int]:
-    """Telegram ids currently RSVP'd 'yes' for the session."""
-    rows = conn.execute(
-        "SELECT telegram_id FROM rsvps WHERE session_id=? AND status='yes'",
-        (session_id,),
-    ).fetchall()
-    return {r["telegram_id"] for r in rows}
-
-
 def compute_drift(snapshot_ids: set[int], current_yes: set[int]) -> tuple[list[int], list[int]]:
-    """(added, removed) of the current yes-set versus the snapshot's attendees.
+    """(added, removed) of the current attendees versus the snapshot's.
 
     Added = newly-yes since the snapshot; removed = dropped since. Both sorted
     for a deterministic signature.
