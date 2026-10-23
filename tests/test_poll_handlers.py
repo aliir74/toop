@@ -5,20 +5,22 @@ from datetime import UTC, date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from telegram.error import TelegramError
+from telegram.error import BadRequest, TelegramError
 
 from toop.config import Settings
 from toop.drift import get_last_drift_signature
 from toop.handlers.poll import (
+    ROSTER_EDIT_DELAY_SECONDS,
     _conn,
     _maybe_notify_drift,
+    _roster_edit_job,
     handle_poll_answer,
     post_attendance_poll,
     weekly_attendance_job,
 )
 from toop.pause import pause_events_until
 from toop.players import add_player
-from toop.poll import add_to_waitlist, get_poll, list_waitlist, record_poll, set_quorum_announced
+from toop.poll import get_poll, record_poll, set_quorum_announced, set_roster_message_id
 from toop.rsvp import count_rsvps, is_player_on_roster, upsert_rsvp
 from toop.sessions import get_active_session, open_session
 
@@ -37,6 +39,9 @@ def group_settings(monkeypatch: pytest.MonkeyPatch) -> None:
 def _ctx(conn: sqlite3.Connection) -> MagicMock:
     ctx = MagicMock()
     ctx.bot_data = {"conn": conn}
+    ctx.job_queue = None  # roster edits run inline unless a test opts into the queue
+    ctx.bot.send_message = AsyncMock(return_value=MagicMock(message_id=11))
+    ctx.bot.edit_message_text = AsyncMock()
     return ctx
 
 
@@ -60,8 +65,26 @@ async def test_post_attendance_poll_records(group_settings: None, conn: sqlite3.
     ctx.bot.send_poll = AsyncMock(return_value=_poll_message())
     await post_attendance_poll(ctx, conn, sess)
     ctx.bot.send_poll.assert_awaited_once()
+    assert ctx.bot.send_poll.await_args.kwargs["api_kwargs"] == {"allows_revoting": True}
     poll = get_poll(conn, "p1")
     assert poll is not None and poll.kind == "attendance" and poll.session_id == sess.id
+    # The live voter list goes out as a reply under the poll and is remembered.
+    roster_kwargs = ctx.bot.send_message.await_args.kwargs
+    assert roster_kwargs["reply_parameters"].message_id == 10
+    assert roster_kwargs["text"].startswith("📋 Attending (0/")
+    assert poll.roster_message_id == 11
+
+
+async def test_post_attendance_poll_roster_error(
+    group_settings: None, conn: sqlite3.Connection
+) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    ctx = _ctx(conn)
+    ctx.bot.send_poll = AsyncMock(return_value=_poll_message())
+    ctx.bot.send_message = AsyncMock(side_effect=TelegramError("down"))
+    await post_attendance_poll(ctx, conn, sess)  # must not raise
+    poll = get_poll(conn, "p1")
+    assert poll is not None and poll.roster_message_id is None
 
 
 async def test_post_attendance_poll_skips_without_group(
@@ -181,22 +204,12 @@ async def test_poll_answer_unknown_poll_noop(conn: sqlite3.Connection) -> None:
     await handle_poll_answer(_answer_update("zzz", (0,), 1), _ctx(conn))  # no crash
 
 
-async def test_poll_answer_reservation_adds_to_waitlist(conn: sqlite3.Connection) -> None:
+async def test_poll_answer_retired_reservation_poll_ignored(conn: sqlite3.Connection) -> None:
     sess = open_session(conn, date(2026, 5, 18))
     add_player(conn, 1, "Alice", "alice")
     record_poll(conn, session_id=sess.id, poll_id="r1", kind="reservation", message_id=1)
     await handle_poll_answer(_answer_update("r1", (0,), 1), _ctx(conn))
-    assert list_waitlist(conn, sess.id) == [1]
-    assert count_rsvps(conn, sess.id).yes == 0  # reservation never touches attendance
-
-
-async def test_poll_answer_reservation_removes_on_other_option(conn: sqlite3.Connection) -> None:
-    sess = open_session(conn, date(2026, 5, 18))
-    add_player(conn, 1, "Alice", "alice")
-    record_poll(conn, session_id=sess.id, poll_id="r1", kind="reservation", message_id=1)
-    await handle_poll_answer(_answer_update("r1", (0,), 1), _ctx(conn))
-    await handle_poll_answer(_answer_update("r1", (1,), 1), _ctx(conn))
-    assert list_waitlist(conn, sess.id) == []
+    assert count_rsvps(conn, sess.id).total == 0
 
 
 async def test_poll_answer_none_returns(conn: sqlite3.Connection) -> None:
@@ -219,7 +232,7 @@ def _bot_ctx(conn: sqlite3.Connection) -> MagicMock:
     ctx = _ctx(conn)
     ctx.bot.send_message = AsyncMock()
     ctx.bot.stop_poll = AsyncMock()
-    ctx.bot.send_poll = AsyncMock(return_value=_poll_message("r1", 7))
+    ctx.bot.send_poll = AsyncMock()
     return ctx
 
 
@@ -246,7 +259,9 @@ async def test_quorum_fires_once(group_settings: None, conn: sqlite3.Connection)
     ctx.bot.send_message.assert_awaited_once()
 
 
-async def test_cap_closes_poll(group_settings: None, conn: sqlite3.Connection) -> None:
+async def test_cap_announces_and_keeps_poll_open(
+    group_settings: None, conn: sqlite3.Connection
+) -> None:
     sess = open_session(conn, date(2026, 5, 18))
     record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
     set_quorum_announced(conn, "p1")  # isolate the cap branch
@@ -254,14 +269,16 @@ async def test_cap_closes_poll(group_settings: None, conn: sqlite3.Connection) -
     add_player(conn, 200, "Cap", "c")
     ctx = _bot_ctx(conn)
     await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # yes -> 14 == cap
-    ctx.bot.stop_poll.assert_awaited_once_with(-100123, 5)
-    assert ctx.bot.send_message.await_args.kwargs["text"] == "Capacity reached."
+    assert ctx.bot.send_message.await_args.kwargs["text"].startswith("Capacity reached.")
+    # The poll stays open so voters can retract, and no reservation poll goes out.
+    ctx.bot.stop_poll.assert_not_called()
+    ctx.bot.send_poll.assert_not_called()
     poll = get_poll(conn, "p1")
-    assert poll is not None and poll.cap_closed is True and poll.closed is True
-    # Capping opens the reservation/waitlist poll.
-    ctx.bot.send_poll.assert_awaited_once()
-    res = get_poll(conn, "r1")
-    assert res is not None and res.kind == "reservation"
+    assert poll is not None and poll.cap_announced is True and poll.closed is False
+    # A yes past the cap joins the waitlist without re-announcing.
+    add_player(conn, 201, "Late", "l")
+    await handle_poll_answer(_answer_update("p1", (0,), 201), ctx)
+    ctx.bot.send_message.assert_awaited_once()
 
 
 async def test_quorum_and_cap_same_call(group_settings: None, conn: sqlite3.Connection) -> None:
@@ -272,23 +289,8 @@ async def test_quorum_and_cap_same_call(group_settings: None, conn: sqlite3.Conn
     ctx = _bot_ctx(conn)
     await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # yes -> 14
     assert ctx.bot.send_message.await_count == 2  # quorum + capacity
-    ctx.bot.stop_poll.assert_awaited_once()
     poll = get_poll(conn, "p1")
-    assert poll is not None and poll.quorum_announced and poll.cap_closed
-
-
-async def test_cap_without_message_id_skips_stop(
-    group_settings: None, conn: sqlite3.Connection
-) -> None:
-    sess = open_session(conn, date(2026, 5, 18))
-    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=None)
-    set_quorum_announced(conn, "p1")
-    _seed_yes(conn, sess.id, 13)
-    add_player(conn, 200, "Cap", "c")
-    ctx = _bot_ctx(conn)
-    await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)
-    ctx.bot.stop_poll.assert_not_called()
-    assert get_poll(conn, "p1").cap_closed is True  # type: ignore[union-attr]
+    assert poll is not None and poll.quorum_announced and poll.cap_announced
 
 
 async def test_quorum_send_error_is_swallowed(
@@ -304,18 +306,98 @@ async def test_quorum_send_error_is_swallowed(
     assert get_poll(conn, "p1").quorum_announced is True  # type: ignore[union-attr]
 
 
-async def test_cap_stop_poll_error_is_swallowed(
-    group_settings: None, conn: sqlite3.Connection
-) -> None:
+# ----- live voter list -----
+
+
+def _roster_poll(conn: sqlite3.Connection) -> int:
     sess = open_session(conn, date(2026, 5, 18))
     record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
-    set_quorum_announced(conn, "p1")
-    _seed_yes(conn, sess.id, 13)
-    add_player(conn, 200, "Cap", "c")
-    ctx = _bot_ctx(conn)
-    ctx.bot.stop_poll = AsyncMock(side_effect=TelegramError("boom"))
-    await handle_poll_answer(_answer_update("p1", (0,), 200), ctx)  # must not raise
-    assert get_poll(conn, "p1").cap_closed is True  # type: ignore[union-attr]
+    set_roster_message_id(conn, "p1", 11)
+    add_player(conn, 1, "Alice", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    return sess.id
+
+
+async def test_vote_edits_roster(group_settings: None, conn: sqlite3.Connection) -> None:
+    _roster_poll(conn)
+    ctx = _ctx(conn)
+    await handle_poll_answer(_answer_update("p1", (0,), 1), ctx)
+    await handle_poll_answer(_answer_update("p1", (1,), 2), ctx)
+    kwargs = ctx.bot.edit_message_text.await_args.kwargs
+    assert kwargs["chat_id"] == -100123 and kwargs["message_id"] == 11
+    assert "1. Alice" in kwargs["text"] and "No (1): Bob" in kwargs["text"]
+
+
+async def test_retraction_edits_roster(group_settings: None, conn: sqlite3.Connection) -> None:
+    _roster_poll(conn)
+    ctx = _ctx(conn)
+    await handle_poll_answer(_answer_update("p1", (0,), 1), ctx)
+    await handle_poll_answer(_answer_update("p1", (), 1), ctx)
+    assert "Nobody has said yes yet." in ctx.bot.edit_message_text.await_args.kwargs["text"]
+
+
+async def test_vote_without_roster_skips_edit(conn: sqlite3.Connection) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
+    ctx = _ctx(conn)
+    ctx.job_queue = MagicMock()
+    await handle_poll_answer(_answer_update("p1", (0,), 1), ctx)
+    ctx.job_queue.run_once.assert_not_called()
+    ctx.bot.edit_message_text.assert_not_called()
+
+
+async def test_roster_edit_is_debounced(group_settings: None, conn: sqlite3.Connection) -> None:
+    _roster_poll(conn)
+    ctx = _ctx(conn)
+    ctx.job_queue = MagicMock()
+    ctx.job_queue.get_jobs_by_name = MagicMock(return_value=[])
+    await handle_poll_answer(_answer_update("p1", (0,), 1), ctx)
+    ctx.job_queue.run_once.assert_called_once_with(
+        _roster_edit_job, ROSTER_EDIT_DELAY_SECONDS, data="p1", name="roster:p1"
+    )
+    # A second vote while that edit is pending rides along instead of queueing.
+    ctx.job_queue.get_jobs_by_name = MagicMock(return_value=[MagicMock()])
+    await handle_poll_answer(_answer_update("p1", (0,), 2), ctx)
+    ctx.job_queue.run_once.assert_called_once()
+    ctx.bot.edit_message_text.assert_not_called()
+
+
+async def test_roster_edit_job_renders_current_votes(
+    group_settings: None, conn: sqlite3.Connection
+) -> None:
+    sid = _roster_poll(conn)
+    upsert_rsvp(conn, sid, 1, "yes")
+    upsert_rsvp(conn, sid, 2, "yes")
+    ctx = _ctx(conn)
+    ctx.job = MagicMock(data="p1")
+    await _roster_edit_job(ctx)
+    assert "1. Alice\n2. Bob" in ctx.bot.edit_message_text.await_args.kwargs["text"]
+
+
+async def test_roster_edit_job_noops(conn: sqlite3.Connection) -> None:
+    ctx = _ctx(conn)
+    ctx.job = None
+    await _roster_edit_job(ctx)
+    ctx.job = MagicMock(data="gone")  # poll row no longer exists
+    await _roster_edit_job(ctx)
+    sess = open_session(conn, date(2026, 5, 18))
+    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
+    ctx.job = MagicMock(data="p1")  # poll posted before the voter list existed
+    await _roster_edit_job(ctx)
+    ctx.bot.edit_message_text.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "error", [BadRequest("Message is not modified: same content"), TelegramError("down")]
+)
+async def test_roster_edit_error_is_swallowed(
+    group_settings: None, conn: sqlite3.Connection, error: TelegramError
+) -> None:
+    _roster_poll(conn)
+    ctx = _ctx(conn)
+    ctx.bot.edit_message_text = AsyncMock(side_effect=error)
+    await handle_poll_answer(_answer_update("p1", (0,), 1), ctx)  # must not raise
+    assert count_rsvps(conn, 1).yes == 1
 
 
 # ----- attendance-drift DM -----
@@ -371,12 +453,15 @@ async def test_drift_dms_admin_and_dedupes(
 ) -> None:
     _admin_group(monkeypatch)
     sess = open_session(conn, date(2026, 5, 18))
+    monkeypatch.setattr(
+        "toop.handlers.poll.settings",
+        _settings(GROUP_CHAT_ID=-100123, ADMIN_TELEGRAM_ID=42, MAX_ATTENDEES=4),
+    )
     for i in (1, 2, 3, 4, 5, 6):
         add_player(conn, i, f"P{i}", f"p{i}")
-    # Snapshot was built on {1,2,3,4}; now 4 dropped, 5 joined.
-    for i in (1, 2, 3, 5):
+    # Snapshot was built on {1,2,3,4}; 4 dropped, so 5 moved up and 6 waits.
+    for i in (1, 2, 3, 5, 6):
         upsert_rsvp(conn, sess.id, i, "yes")
-    add_to_waitlist(conn, sess.id, 6)
     _patch_snapshot(monkeypatch, [1, 2], [3, 4], [])
     ctx = _bot_ctx(conn)
     await _maybe_notify_drift(ctx, conn, sess.id)
@@ -406,3 +491,20 @@ async def test_drift_send_error_is_swallowed(
     ctx.bot.send_message = AsyncMock(side_effect=TelegramError("down"))
     await _maybe_notify_drift(ctx, conn, sess.id)  # must not raise
     assert get_last_drift_signature(conn, sess.id) is not None
+
+
+async def test_drift_ignores_waitlist_joiner(
+    monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
+    monkeypatch.setattr(
+        "toop.handlers.poll.settings",
+        _settings(GROUP_CHAT_ID=-100123, ADMIN_TELEGRAM_ID=42, MAX_ATTENDEES=2),
+    )
+    sess = open_session(conn, date(2026, 5, 18))
+    for i in (1, 2, 3):
+        add_player(conn, i, f"P{i}", f"p{i}")
+        upsert_rsvp(conn, sess.id, i, "yes")  # 3 is past the cap: waitlist, not drift
+    _patch_snapshot(monkeypatch, [1], [2], [])
+    ctx = _bot_ctx(conn)
+    await _maybe_notify_drift(ctx, conn, sess.id)
+    ctx.bot.send_message.assert_not_called()

@@ -9,9 +9,7 @@ from toop.rsvp import upsert_rsvp
 # Attendance poll options, in order. Index 0 (yes) means attending — the index
 # semantics are language-independent; only the labels are translated.
 ATTENDANCE_YES_INDEX = 0
-# Index 0 of the reservation poll means "put me on the waitlist".
-RESERVATION_WAITLIST_INDEX = 0
-
+# 'reservation' is the retired waitlist poll; kept so pre-existing rows still load.
 POLL_KINDS = ("attendance", "reservation")
 
 
@@ -21,14 +19,6 @@ def attendance_question(lang: str | None = None) -> str:
 
 def attendance_options(lang: str | None = None) -> list[str]:
     return [t("poll.attendance_yes", lang), t("poll.attendance_no", lang)]
-
-
-def reservation_question(lang: str | None = None) -> str:
-    return t("poll.reservation_question", lang)
-
-
-def reservation_options(lang: str | None = None) -> list[str]:
-    return [t("poll.reservation_waitlist", lang), t("poll.reservation_decline", lang)]
 
 
 def capacity_message(lang: str | None = None) -> str:
@@ -43,7 +33,8 @@ class PollRow:
     message_id: int | None
     closed: bool
     quorum_announced: bool
-    cap_closed: bool
+    cap_announced: bool
+    roster_message_id: int | None
 
 
 def record_poll(
@@ -73,8 +64,8 @@ def record_poll(
 
 def get_poll(conn: sqlite3.Connection, poll_id: str) -> PollRow | None:
     row = conn.execute(
-        "SELECT poll_id, session_id, kind, message_id, closed, quorum_announced, cap_closed "
-        "FROM session_polls WHERE poll_id=?",
+        "SELECT poll_id, session_id, kind, message_id, closed, quorum_announced, cap_closed, "
+        "roster_message_id FROM session_polls WHERE poll_id=?",
         (poll_id,),
     ).fetchone()
     if row is None:
@@ -86,7 +77,8 @@ def get_poll(conn: sqlite3.Connection, poll_id: str) -> PollRow | None:
         message_id=row["message_id"],
         closed=bool(row["closed"]),
         quorum_announced=bool(row["quorum_announced"]),
-        cap_closed=bool(row["cap_closed"]),
+        cap_announced=bool(row["cap_closed"]),
+        roster_message_id=row["roster_message_id"],
     )
 
 
@@ -106,11 +98,16 @@ def set_quorum_announced(conn: sqlite3.Connection, poll_id: str) -> None:
     conn.commit()
 
 
-def set_cap_closed(conn: sqlite3.Connection, poll_id: str) -> None:
-    """Latch the attendance poll closed (cap reached). Sets both flags."""
+def set_cap_announced(conn: sqlite3.Connection, poll_id: str) -> None:
+    """Latch the one-shot capacity announcement. The poll itself stays open so
+    voters can still retract; yes votes past the cap become the waitlist."""
+    conn.execute("UPDATE session_polls SET cap_closed=1 WHERE poll_id=?", (poll_id,))
+    conn.commit()
+
+
+def set_roster_message_id(conn: sqlite3.Connection, poll_id: str, message_id: int) -> None:
     conn.execute(
-        "UPDATE session_polls SET cap_closed=1, closed=1 WHERE poll_id=?",
-        (poll_id,),
+        "UPDATE session_polls SET roster_message_id=? WHERE poll_id=?", (message_id, poll_id)
     )
     conn.commit()
 
@@ -142,45 +139,38 @@ def record_attendance_answer(
     return True
 
 
-def add_to_waitlist(conn: sqlite3.Connection, session_id: int, telegram_id: int) -> None:
-    conn.execute(
-        "INSERT OR IGNORE INTO waitlist (session_id, telegram_id) VALUES (?, ?)",
-        (session_id, telegram_id),
-    )
-    conn.commit()
-
-
-def remove_from_waitlist(conn: sqlite3.Connection, session_id: int, telegram_id: int) -> None:
-    conn.execute(
-        "DELETE FROM waitlist WHERE session_id=? AND telegram_id=?",
-        (session_id, telegram_id),
-    )
-    conn.commit()
-
-
-def list_waitlist(conn: sqlite3.Connection, session_id: int) -> list[int]:
-    """Reserve players in FIFO order (earliest volunteer first)."""
+def voters_by_status(conn: sqlite3.Connection, session_id: int, status: str) -> list[int]:
+    """Telegram ids with this RSVP status, in vote order."""
     rows = conn.execute(
-        "SELECT telegram_id FROM waitlist WHERE session_id=? ORDER BY created_at, telegram_id",
-        (session_id,),
+        "SELECT telegram_id FROM rsvps WHERE session_id=? AND status=? "
+        "ORDER BY created_at, telegram_id",
+        (session_id, status),
     ).fetchall()
     return [r["telegram_id"] for r in rows]
 
 
-def record_reservation_answer(
-    conn: sqlite3.Connection,
-    session_id: int,
-    voter_id: int,
-    option_ids: list[int],
-) -> bool:
-    """Apply one reservation poll_answer to the waitlist.
+def roster_message(
+    attending: list[str],
+    waitlist: list[str],
+    declined: list[str],
+    cap: int,
+    lang: str | None = None,
+) -> str:
+    """The live voter list posted under the attendance poll.
 
-    'مایل به لیست انتظار' (index 0) adds the voter; the other option or a
-    retraction removes them. The voter must already be a registered player (the
-    poll handler auto-registers unknown voters first). Returns True.
+    Telegram hides who voted until you vote yourself; this message shows
+    everyone the attendees, waitlist and 'no' votes as they stand.
     """
-    if RESERVATION_WAITLIST_INDEX in option_ids:
-        add_to_waitlist(conn, session_id, voter_id)
+    lines = [t("poll.roster_header", lang, n=len(attending), cap=cap)]
+    if attending:
+        lines += [f"{i}. {name}" for i, name in enumerate(attending, 1)]
     else:
-        remove_from_waitlist(conn, session_id, voter_id)
-    return True
+        lines.append(t("poll.roster_empty", lang))
+    if waitlist:
+        lines.append("")
+        lines.append(t("poll.roster_waitlist", lang, n=len(waitlist)))
+        lines += [f"{i}. {name}" for i, name in enumerate(waitlist, 1)]
+    if declined:
+        lines.append("")
+        lines.append(t("poll.roster_declined", lang, n=len(declined), names=", ".join(declined)))
+    return "\n".join(lines)

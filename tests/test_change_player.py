@@ -16,9 +16,18 @@ from toop.handlers.change_player import (
 )
 from toop.handlers.snapshot import _weights, take_snapshot
 from toop.players import add_player
-from toop.poll import add_to_waitlist, list_waitlist
 from toop.rsvp import upsert_rsvp
+from toop.selection import select_attendees
 from toop.sessions import Session, get_active_session, open_session
+
+
+def _join_waitlist(
+    monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection, sess: Session, pid: int
+) -> None:
+    """Cap at the 6 seeded attendees, then vote yes past it: pid lands on the waitlist."""
+    monkeypatch.setattr(settings, "MAX_ATTENDEES", 6)
+    upsert_rsvp(conn, sess.id, pid, "yes")
+    assert select_attendees(conn, sess.id, 6).cut == [pid]
 
 
 @pytest.fixture
@@ -97,10 +106,12 @@ async def test_no_snapshot(admin_settings: None, conn: sqlite3.Connection) -> No
     assert "No snapshot yet" in _last_reply(u)
 
 
-async def test_no_args_lists_buttons(admin_settings: None, conn: sqlite3.Connection) -> None:
+async def test_no_args_lists_buttons(
+    admin_settings: None, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
     sess = _seed_snapshot(conn)
     add_player(conn, 50, "Waiter", "waiter")
-    add_to_waitlist(conn, sess.id, 50)
+    _join_waitlist(monkeypatch, conn, sess, 50)
     u = _update()
     await handle_change_player(u, _ctx(conn, []))
     kb = u.effective_message.reply_text.await_args.kwargs["reply_markup"].inline_keyboard
@@ -143,14 +154,14 @@ async def test_add_by_username_rebalances(admin_settings: None, conn: sqlite3.Co
 
 
 async def test_add_by_id_drops_from_waitlist(
-    admin_settings: None, conn: sqlite3.Connection
+    admin_settings: None, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
 ) -> None:
     sess = _seed_snapshot(conn)
     add_player(conn, 99, "New", "p99")
-    add_to_waitlist(conn, sess.id, 99)
+    _join_waitlist(monkeypatch, conn, sess, 99)
     u = _update()
     await handle_change_player(u, _ctx(conn, ["+99"]))
-    assert list_waitlist(conn, sess.id) == []
+    assert 99 in select_attendees(conn, sess.id, 6).selected
 
 
 async def test_remove_rebalances(admin_settings: None, conn: sqlite3.Connection) -> None:
@@ -184,17 +195,19 @@ async def test_remove_callback(admin_settings: None, conn: sqlite3.Connection) -
     u.callback_query.edit_message_text.assert_awaited()
 
 
-async def test_promote_callback(admin_settings: None, conn: sqlite3.Connection) -> None:
+async def test_promote_callback(
+    admin_settings: None, monkeypatch: pytest.MonkeyPatch, conn: sqlite3.Connection
+) -> None:
     sess = _seed_snapshot(conn)
     add_player(conn, 99, "New", "p99")
-    add_to_waitlist(conn, sess.id, 99)
+    _join_waitlist(monkeypatch, conn, sess, 99)
     u = _cb("cpadd:99")
     await handle_change_promote_callback(u, _ctx(conn))
     row = conn.execute(
         "SELECT status FROM rsvps WHERE session_id=? AND telegram_id=99", (sess.id,)
     ).fetchone()
     assert row["status"] == "yes"
-    assert list_waitlist(conn, sess.id) == []
+    assert 99 in select_attendees(conn, sess.id, 6).selected
 
 
 async def test_callback_no_session_alerts(admin_settings: None, conn: sqlite3.Connection) -> None:

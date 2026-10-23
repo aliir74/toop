@@ -22,8 +22,8 @@ from toop.handlers.snapshot import (
     take_snapshot,
 )
 from toop.i18n import t
-from toop.poll import list_waitlist, remove_from_waitlist
 from toop.rsvp import lock_in_player, upsert_rsvp
+from toop.selection import select_attendees
 from toop.sessions import Session, get_active_session
 from toop.snapshots import Snapshot, get_snapshot
 
@@ -62,9 +62,8 @@ def _resolve_target(conn: sqlite3.Connection, raw: str) -> int | None:
 
 
 def _apply_add(conn: sqlite3.Connection, session_id: int, telegram_id: int) -> None:
-    """Force the player into the attendee set and drop them off the waitlist."""
+    """Force the player into the attendee set (which also takes them off the waitlist)."""
     lock_in_player(conn, session_id, telegram_id)
-    remove_from_waitlist(conn, session_id, telegram_id)
 
 
 def _apply_remove(conn: sqlite3.Connection, session_id: int, telegram_id: int) -> None:
@@ -88,7 +87,7 @@ def _change_keyboard(
                 )
             ]
         )
-    for pid in list_waitlist(conn, session_id):
+    for pid in select_attendees(conn, session_id, settings.MAX_ATTENDEES).cut:
         rows.append(
             [
                 InlineKeyboardButton(
