@@ -27,17 +27,18 @@ def upsert_rsvp(
 
     created_at is the vote time that orders seats and the waitlist, so it only
     moves when the status actually changes: a re-sent identical vote keeps its
-    place, while yes → no → yes goes to the back.
+    place, while yes → no → yes goes to the back. It's stamped to the
+    millisecond so votes inside one second keep their arrival order.
     """
     if status not in RSVP_STATUSES:
         raise ValueError(f"status must be one of {RSVP_STATUSES}, got {status!r}")
     conn.execute(
         """
-        INSERT INTO rsvps (session_id, telegram_id, status)
-        VALUES (?, ?, ?)
+        INSERT INTO rsvps (session_id, telegram_id, status, created_at)
+        VALUES (?, ?, ?, strftime('%Y-%m-%d %H:%M:%f', 'now'))
         ON CONFLICT(session_id, telegram_id) DO UPDATE SET
             created_at=CASE WHEN rsvps.status = excluded.status
-                THEN rsvps.created_at ELSE CURRENT_TIMESTAMP END,
+                THEN rsvps.created_at ELSE excluded.created_at END,
             status=excluded.status
         """,
         (session_id, telegram_id, status),

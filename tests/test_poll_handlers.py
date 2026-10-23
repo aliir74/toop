@@ -16,6 +16,7 @@ from toop.handlers.poll import (
     _roster_edit_job,
     handle_poll_answer,
     post_attendance_poll,
+    refresh_roster,
     weekly_attendance_job,
 )
 from toop.pause import pause_events_until
@@ -245,6 +246,7 @@ def _seed_yes(conn: sqlite3.Connection, session_id: int, n: int, start: int = 10
 async def test_quorum_fires_once(group_settings: None, conn: sqlite3.Connection) -> None:
     sess = open_session(conn, date(2026, 5, 18))
     record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
+    set_roster_message_id(conn, "p1", 11)  # voter list already posted
     _seed_yes(conn, sess.id, 9)  # one short of the 10-yes quorum
     add_player(conn, 200, "Quorum", "q")
     ctx = _bot_ctx(conn)
@@ -264,6 +266,7 @@ async def test_cap_announces_and_keeps_poll_open(
 ) -> None:
     sess = open_session(conn, date(2026, 5, 18))
     record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
+    set_roster_message_id(conn, "p1", 11)  # voter list already posted
     set_quorum_announced(conn, "p1")  # isolate the cap branch
     _seed_yes(conn, sess.id, 13)
     add_player(conn, 200, "Cap", "c")
@@ -284,6 +287,7 @@ async def test_cap_announces_and_keeps_poll_open(
 async def test_quorum_and_cap_same_call(group_settings: None, conn: sqlite3.Connection) -> None:
     sess = open_session(conn, date(2026, 5, 18))
     record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
+    set_roster_message_id(conn, "p1", 11)  # voter list already posted
     _seed_yes(conn, sess.id, 13)  # neither latch set
     add_player(conn, 200, "Both", "b")
     ctx = _bot_ctx(conn)
@@ -336,7 +340,30 @@ async def test_retraction_edits_roster(group_settings: None, conn: sqlite3.Conne
     assert "Nobody has said yes yet." in ctx.bot.edit_message_text.await_args.kwargs["text"]
 
 
-async def test_vote_without_roster_skips_edit(conn: sqlite3.Connection) -> None:
+async def test_vote_reposts_missing_roster(group_settings: None, conn: sqlite3.Connection) -> None:
+    # The voter list's first post failed: the next vote posts it instead.
+    sess = open_session(conn, date(2026, 5, 18))
+    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
+    record_poll(conn, session_id=sess.id, poll_id="p0", kind="attendance", message_id=None)
+    ctx = _ctx(conn)
+    await handle_poll_answer(_answer_update("p0", (0,), 1), ctx)  # no poll message to reply to
+    ctx.bot.send_message.assert_not_called()
+    await handle_poll_answer(_answer_update("p1", (0,), 1), ctx)
+    assert ctx.bot.send_message.await_args.kwargs["reply_parameters"].message_id == 5
+    assert get_poll(conn, "p1").roster_message_id == 11  # type: ignore[union-attr]
+
+
+async def test_refresh_roster(group_settings: None, conn: sqlite3.Connection) -> None:
+    sid = _roster_poll(conn)
+    ctx = _ctx(conn)
+    await refresh_roster(ctx, conn, sid + 1)  # session without a poll
+    ctx.bot.edit_message_text.assert_not_called()
+    upsert_rsvp(conn, sid, 1, "no")
+    await refresh_roster(ctx, conn, sid)
+    assert "No (1): Alice" in ctx.bot.edit_message_text.await_args.kwargs["text"]
+
+
+async def test_vote_without_group_skips_roster(conn: sqlite3.Connection) -> None:
     sess = open_session(conn, date(2026, 5, 18))
     record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=5)
     ctx = _ctx(conn)

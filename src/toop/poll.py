@@ -82,6 +82,16 @@ def get_poll(conn: sqlite3.Connection, poll_id: str) -> PollRow | None:
     )
 
 
+def get_attendance_poll(conn: sqlite3.Connection, session_id: int) -> PollRow | None:
+    """The session's most recent attendance poll, if one was posted."""
+    row = conn.execute(
+        "SELECT poll_id FROM session_polls WHERE session_id=? AND kind='attendance' "
+        "ORDER BY created_at DESC, rowid DESC LIMIT 1",
+        (session_id,),
+    ).fetchone()
+    return get_poll(conn, row["poll_id"]) if row is not None else None
+
+
 def quorum_message(amount: str, email: str, sheet_url: str, lang: str | None = None) -> str:
     """The 'it's happening + pay' announcement posted once quorum is reached."""
     lines = [t("poll.quorum_header", lang)]

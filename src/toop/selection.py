@@ -23,7 +23,7 @@ def select_attendees(
        waitlist (`cut`), in the order they'll be promoted. A yes that's changed
        and re-cast moves to the back, since upsert_rsvp re-stamps created_at.
 
-    Ties (same-second votes) broken by telegram_id for determinism.
+    Ties (same-millisecond votes) broken by telegram_id for determinism.
     """
     rsvps = conn.execute(
         "SELECT telegram_id, locked_in FROM rsvps "

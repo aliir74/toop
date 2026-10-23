@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
 from toop.config import settings
+from toop.handlers.poll import refresh_roster
 from toop.handlers.roster import _pick_id, _safe_edit
 from toop.handlers.snapshot import (
     _format_attendance,
@@ -140,6 +141,7 @@ async def handle_change_player(update: Update, context: ContextTypes.DEFAULT_TYP
         _apply_add(conn, sess.id, target)
     else:
         _apply_remove(conn, sess.id, target)
+    await refresh_roster(context, conn, sess.id)
     await _rebalance_and_reply(message, conn, sess)
 
 
@@ -177,6 +179,7 @@ async def _change_callback(
         _apply_add(conn, sess.id, telegram_id)
     else:
         _apply_remove(conn, sess.id, telegram_id)
+    await refresh_roster(context, conn, sess.id)
     await query.answer()
     await _rebalance_and_edit(query, conn, sess)
 

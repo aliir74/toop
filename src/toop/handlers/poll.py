@@ -24,6 +24,7 @@ from toop.poll import (
     attendance_options,
     attendance_question,
     capacity_message,
+    get_attendance_poll,
     get_poll,
     quorum_message,
     record_attendance_answer,
@@ -107,16 +108,27 @@ async def post_attendance_poll(
         kind="attendance",
         message_id=message.message_id,
     )
+    await _post_roster(context, conn, message.poll.id, session.id, message.message_id)
+
+
+async def _post_roster(
+    context: ContextTypes.DEFAULT_TYPE,
+    conn: sqlite3.Connection,
+    poll_id: str,
+    session_id: int,
+    poll_message_id: int,
+) -> None:
+    """Reply under the poll with the voter list and remember the reply's id."""
     try:
         roster = await context.bot.send_message(
             chat_id=settings.GROUP_CHAT_ID,
-            text=_render_roster(conn, session.id),
-            reply_parameters=ReplyParameters(message_id=message.message_id),
+            text=_render_roster(conn, session_id),
+            reply_parameters=ReplyParameters(message_id=poll_message_id),
         )
     except TelegramError as exc:
         logger.warning("failed to post voter list: %s", exc)
         return
-    set_roster_message_id(conn, message.poll.id, roster.message_id)
+    set_roster_message_id(conn, poll_id, roster.message_id)
 
 
 async def weekly_attendance_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -185,8 +197,13 @@ async def _schedule_roster_edit(
     context: ContextTypes.DEFAULT_TYPE, conn: sqlite3.Connection, poll: PollRow
 ) -> None:
     """Queue one delayed roster edit per poll; votes landing while it is pending
-    ride along, since the job re-reads the RSVPs when it fires."""
+    ride along, since the job re-reads the RSVPs when it fires. A poll without
+    a voter list yet (its first post failed) gets one posted now instead."""
+    if settings.GROUP_CHAT_ID == 0:
+        return
     if poll.roster_message_id is None:
+        if poll.message_id is not None:
+            await _post_roster(context, conn, poll.poll_id, poll.session_id, poll.message_id)
         return
     job_queue = context.job_queue
     if job_queue is None:
@@ -196,6 +213,16 @@ async def _schedule_roster_edit(
     if job_queue.get_jobs_by_name(name):
         return
     job_queue.run_once(_roster_edit_job, ROSTER_EDIT_DELAY_SECONDS, data=poll.poll_id, name=name)
+
+
+async def refresh_roster(
+    context: ContextTypes.DEFAULT_TYPE, conn: sqlite3.Connection, session_id: int
+) -> None:
+    """Refresh the voter list after an RSVP change that didn't come from the poll
+    (e.g. /change_player)."""
+    poll = get_attendance_poll(conn, session_id)
+    if poll is not None:
+        await _schedule_roster_edit(context, conn, poll)
 
 
 async def _announce_capacity(

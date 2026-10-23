@@ -116,3 +116,10 @@ def test_upsert_keeps_vote_time_unless_status_changes(
     assert _vote_time(conn, session_id) == "2000-01-01 00:00:00"
     upsert_rsvp(conn, session_id, 1, "no")  # a real change re-stamps
     assert _vote_time(conn, session_id) != "2000-01-01 00:00:00"
+
+
+def test_upsert_stamps_milliseconds(conn: sqlite3.Connection, session_id: int) -> None:
+    # Seats go by vote order, so same-second votes need sub-second precision.
+    add_player(conn, 1, "Alice", "alice")
+    upsert_rsvp(conn, session_id, 1, "yes")
+    assert "." in _vote_time(conn, session_id)
