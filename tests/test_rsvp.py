@@ -97,3 +97,22 @@ def test_is_player_on_roster_respects_active_flag(conn: sqlite3.Connection) -> N
     conn.execute("UPDATE players SET active=0 WHERE telegram_id=1")
     conn.commit()
     assert is_player_on_roster(conn, 1) is False
+
+
+def _vote_time(conn: sqlite3.Connection, session_id: int) -> str:
+    row = conn.execute(
+        "SELECT created_at FROM rsvps WHERE session_id=? AND telegram_id=1", (session_id,)
+    ).fetchone()
+    return row["created_at"]
+
+
+def test_upsert_keeps_vote_time_unless_status_changes(
+    conn: sqlite3.Connection, session_id: int
+) -> None:
+    add_player(conn, 1, "Alice", "alice")
+    upsert_rsvp(conn, session_id, 1, "yes")
+    conn.execute("UPDATE rsvps SET created_at='2000-01-01 00:00:00'")
+    upsert_rsvp(conn, session_id, 1, "yes")  # re-sent identical vote keeps its place
+    assert _vote_time(conn, session_id) == "2000-01-01 00:00:00"
+    upsert_rsvp(conn, session_id, 1, "no")  # a real change re-stamps
+    assert _vote_time(conn, session_id) != "2000-01-01 00:00:00"
