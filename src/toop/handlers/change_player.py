@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
 from toop.config import settings
+from toop.handlers.poll import refresh_roster
 from toop.handlers.roster import _pick_id, _safe_edit
 from toop.handlers.snapshot import (
     _format_attendance,
@@ -22,8 +23,8 @@ from toop.handlers.snapshot import (
     take_snapshot,
 )
 from toop.i18n import t
-from toop.poll import list_waitlist, remove_from_waitlist
 from toop.rsvp import lock_in_player, upsert_rsvp
+from toop.selection import select_attendees
 from toop.sessions import Session, get_active_session
 from toop.snapshots import Snapshot, get_snapshot
 
@@ -62,9 +63,8 @@ def _resolve_target(conn: sqlite3.Connection, raw: str) -> int | None:
 
 
 def _apply_add(conn: sqlite3.Connection, session_id: int, telegram_id: int) -> None:
-    """Force the player into the attendee set and drop them off the waitlist."""
+    """Force the player into the attendee set (which also takes them off the waitlist)."""
     lock_in_player(conn, session_id, telegram_id)
-    remove_from_waitlist(conn, session_id, telegram_id)
 
 
 def _apply_remove(conn: sqlite3.Connection, session_id: int, telegram_id: int) -> None:
@@ -88,7 +88,7 @@ def _change_keyboard(
                 )
             ]
         )
-    for pid in list_waitlist(conn, session_id):
+    for pid in select_attendees(conn, session_id, settings.MAX_ATTENDEES).cut:
         rows.append(
             [
                 InlineKeyboardButton(
@@ -141,6 +141,7 @@ async def handle_change_player(update: Update, context: ContextTypes.DEFAULT_TYP
         _apply_add(conn, sess.id, target)
     else:
         _apply_remove(conn, sess.id, target)
+    await refresh_roster(context, conn, sess.id)
     await _rebalance_and_reply(message, conn, sess)
 
 
@@ -178,6 +179,7 @@ async def _change_callback(
         _apply_add(conn, sess.id, telegram_id)
     else:
         _apply_remove(conn, sess.id, telegram_id)
+    await refresh_roster(context, conn, sess.id)
     await query.answer()
     await _rebalance_and_edit(query, conn, sess)
 

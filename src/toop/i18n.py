@@ -187,19 +187,20 @@ def _fa() -> dict[str, str]:
         "revote.ping_row": "• {name} — {total} امتیاز مونده",
         "revote.ping_sent": "{sent} تا ارسال شد، {failed} تا هم خطا خورد.",
         "revote.ping_none": "فعلاً نوبت یادآوری کسی نرسیده.",
-        # --- group attendance / reservation polls ---
+        # --- group attendance poll ---
         "poll.attendance_question": (
             "آیا در برنامه والیبال دوشنبه آینده (از ساعت ۶ تا ۸) شرکت میکنید؟"
         ),
         "poll.attendance_yes": "بلی",
         "poll.attendance_no": "خیر",
-        "poll.reservation_question": (
-            "لیست انتظار - لطفا تنها در صورتی که موفق به شرکت در رای‌گیری فوق نشده‌اید و "
-            "علاقه‌مند به حضور در برنامه والیبال دوشنبه آینده هستید، اینجا اعلام بفرمایید."
+        "poll.capacity": (
+            "ظرفیت تکمیل شد. از این به بعد هر رأی «بلی» به لیست انتظار اضافه می‌شود. "
+            "اگر نمی‌توانید بیایید، رأی خود را پس بگیرید تا نفر اول لیست انتظار جایگزین شود."
         ),
-        "poll.reservation_waitlist": "مایل به قرار گرفتن در لیست انتظار هستم.",
-        "poll.reservation_decline": "متاسفانه این جلسه نمیتوانم شرکت کنم.",
-        "poll.capacity": "ظرفیت تکمیل شد.",
+        "poll.roster_header": "📋 شرکت‌کنندگان ({n}/{cap}):",
+        "poll.roster_empty": "هنوز کسی «بلی» نداده است.",
+        "poll.roster_waitlist": "⏳ لیست انتظار ({n}):",
+        "poll.roster_declined": "❌ «خیر» ({n}): {names}",
         "poll.quorum_header": "🎉 والیبال برگزار می‌شود 🏐",
         "poll.quorum_payment": (
             "\nلطفا در صورتی که در رای‌گیری حضور اعلام کرده‌اید مبلغ {amount} دلار "
@@ -560,13 +561,14 @@ def _en() -> dict[str, str]:
         ),
         "poll.attendance_yes": "Yes",
         "poll.attendance_no": "No",
-        "poll.reservation_question": (
-            "Waitlist — only if you missed the poll above and still want to join next Monday's "
-            "volleyball session, let us know here."
+        "poll.capacity": (
+            "Capacity reached. From now on a Yes vote joins the waitlist. If you can't make it, "
+            "retract your vote so the first person on the waitlist gets your seat."
         ),
-        "poll.reservation_waitlist": "I'd like to be on the waitlist.",
-        "poll.reservation_decline": "Sorry, I can't make this session.",
-        "poll.capacity": "Capacity reached.",
+        "poll.roster_header": "📋 Attending ({n}/{cap}):",
+        "poll.roster_empty": "Nobody has said yes yet.",
+        "poll.roster_waitlist": "⏳ Waitlist ({n}):",
+        "poll.roster_declined": "❌ No ({n}): {names}",
         "poll.quorum_header": "🎉 Volleyball is on 🏐",
         "poll.quorum_payment": (
             "\nIf you said yes in the poll, please e-transfer {amount} dollars "

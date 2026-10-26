@@ -7,14 +7,12 @@ import pytest
 
 from toop.drift import (
     compute_drift,
-    current_yes_set,
     display_names,
     drift_signature,
     get_last_drift_signature,
     set_drift_signature,
 )
 from toop.players import add_player
-from toop.rsvp import upsert_rsvp
 from toop.sessions import open_session
 
 
@@ -36,15 +34,6 @@ def test_compute_drift_no_change() -> None:
 def test_drift_signature_stable() -> None:
     assert drift_signature([5], [4]) == drift_signature([5], [4])
     assert drift_signature([5], [4]) != drift_signature([6], [4])
-
-
-def test_current_yes_set(conn: sqlite3.Connection, session_id: int) -> None:
-    for i in (1, 2, 3):
-        add_player(conn, i, f"P{i}", f"p{i}")
-    upsert_rsvp(conn, session_id, 1, "yes")
-    upsert_rsvp(conn, session_id, 2, "yes")
-    upsert_rsvp(conn, session_id, 3, "no")
-    assert current_yes_set(conn, session_id) == {1, 2}
 
 
 def test_display_names_with_fallback(conn: sqlite3.Connection) -> None:

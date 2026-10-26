@@ -62,7 +62,7 @@ class Settings(BaseSettings):
     # weekday + hour in SESSION_POLL_TZ (the group's real Thursday-8pm-PST
     # cadence). QUORUM_THRESHOLD is the yes-count at or above which the bot
     # announces the session is on and posts payment; MAX_ATTENDEES is the cap
-    # that closes the poll and opens the reservation/waitlist poll.
+    # past which yes votes join the waitlist (the poll itself stays open).
     SESSION_POLL_WEEKDAY: str = "thursday"
     SESSION_POLL_HOUR: int = Field(default=20, ge=0, le=23)
     SESSION_POLL_TZ: str = "America/Los_Angeles"

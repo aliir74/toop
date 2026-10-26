@@ -7,18 +7,17 @@ import pytest
 
 from toop.players import add_player
 from toop.poll import (
-    add_to_waitlist,
     get_poll,
-    list_waitlist,
     quorum_message,
     record_attendance_answer,
     record_poll,
-    record_reservation_answer,
-    remove_from_waitlist,
-    set_cap_closed,
+    roster_message,
+    set_cap_announced,
     set_quorum_announced,
+    set_roster_message_id,
+    voters_by_status,
 )
-from toop.rsvp import count_rsvps
+from toop.rsvp import count_rsvps, upsert_rsvp
 from toop.sessions import open_session
 
 
@@ -36,7 +35,8 @@ def test_record_and_get_poll(conn: sqlite3.Connection, session_id: int) -> None:
     assert poll.message_id == 99
     assert poll.closed is False
     assert poll.quorum_announced is False
-    assert poll.cap_closed is False
+    assert poll.cap_announced is False
+    assert poll.roster_message_id is None
 
 
 def test_record_poll_upserts(conn: sqlite3.Connection, session_id: int) -> None:
@@ -95,49 +95,40 @@ def test_set_quorum_announced(conn: sqlite3.Connection, session_id: int) -> None
     record_poll(conn, session_id=session_id, poll_id="p1", kind="attendance", message_id=1)
     set_quorum_announced(conn, "p1")
     poll = get_poll(conn, "p1")
-    assert poll is not None and poll.quorum_announced is True and poll.cap_closed is False
+    assert poll is not None and poll.quorum_announced is True and poll.cap_announced is False
 
 
-def test_set_cap_closed(conn: sqlite3.Connection, session_id: int) -> None:
+def test_set_cap_announced_keeps_poll_open(conn: sqlite3.Connection, session_id: int) -> None:
     record_poll(conn, session_id=session_id, poll_id="p1", kind="attendance", message_id=1)
-    set_cap_closed(conn, "p1")
+    set_cap_announced(conn, "p1")
     poll = get_poll(conn, "p1")
-    assert poll is not None and poll.cap_closed is True and poll.closed is True
+    assert poll is not None and poll.cap_announced is True and poll.closed is False
 
 
-def test_waitlist_add_idempotent_and_list(conn: sqlite3.Connection, session_id: int) -> None:
+def test_set_roster_message_id(conn: sqlite3.Connection, session_id: int) -> None:
+    record_poll(conn, session_id=session_id, poll_id="p1", kind="attendance", message_id=1)
+    set_roster_message_id(conn, "p1", 77)
+    poll = get_poll(conn, "p1")
+    assert poll is not None and poll.roster_message_id == 77
+
+
+def test_voters_by_status_in_vote_order(conn: sqlite3.Connection, session_id: int) -> None:
     for i in (1, 2, 3):
         add_player(conn, i, f"P{i}", f"p{i}")
-    add_to_waitlist(conn, session_id, 2)
-    add_to_waitlist(conn, session_id, 1)
-    add_to_waitlist(conn, session_id, 1)  # idempotent
-    add_to_waitlist(conn, session_id, 3)
-    # Same-second inserts tie-break by telegram_id, so order is deterministic.
-    assert list_waitlist(conn, session_id) == [1, 2, 3]
+        upsert_rsvp(conn, session_id, i, "no")
+    upsert_rsvp(conn, session_id, 2, "yes")
+    conn.execute("UPDATE rsvps SET created_at=datetime('now', '+1 minute') WHERE telegram_id=1")
+    conn.commit()
+    assert voters_by_status(conn, session_id, "no") == [3, 1]
+    assert voters_by_status(conn, session_id, "yes") == [2]
 
 
-def test_remove_from_waitlist(conn: sqlite3.Connection, session_id: int) -> None:
-    add_player(conn, 1, "Alice", "alice")
-    add_to_waitlist(conn, session_id, 1)
-    remove_from_waitlist(conn, session_id, 1)
-    assert list_waitlist(conn, session_id) == []
+def test_roster_message_full() -> None:
+    msg = roster_message(["Ali", "Sara"], ["Reza"], ["Mina", "Omid"], cap=2)
+    assert msg == (
+        "📋 Attending (2/2):\n1. Ali\n2. Sara\n\n⏳ Waitlist (1):\n1. Reza\n\n❌ No (2): Mina, Omid"
+    )
 
 
-def test_reservation_answer_adds(conn: sqlite3.Connection, session_id: int) -> None:
-    add_player(conn, 1, "Alice", "alice")
-    assert record_reservation_answer(conn, session_id, 1, [0]) is True
-    assert list_waitlist(conn, session_id) == [1]
-
-
-def test_reservation_answer_other_option_removes(conn: sqlite3.Connection, session_id: int) -> None:
-    add_player(conn, 1, "Alice", "alice")
-    add_to_waitlist(conn, session_id, 1)
-    record_reservation_answer(conn, session_id, 1, [1])
-    assert list_waitlist(conn, session_id) == []
-
-
-def test_reservation_answer_retract_removes(conn: sqlite3.Connection, session_id: int) -> None:
-    add_player(conn, 1, "Alice", "alice")
-    add_to_waitlist(conn, session_id, 1)
-    record_reservation_answer(conn, session_id, 1, [])
-    assert list_waitlist(conn, session_id) == []
+def test_roster_message_empty() -> None:
+    assert roster_message([], [], [], cap=12) == "📋 Attending (0/12):\nNobody has said yes yet."
