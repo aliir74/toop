@@ -70,7 +70,7 @@ class Settings(BaseSettings):
     # Payment block posted once quorum is reached (interpolated into the Persian
     # announcement). Left blank by default; fill in .env for the live group.
     PAYMENT_EMAIL: str = ""
-    PAYMENT_AMOUNT: str = "7.5"
+    PAYMENT_AMOUNT: str = "8.5"
     ACCOUNTING_SHEET_URL: str = ""
     # Composite weights, one per indicator. Default = equal (1/6 each, summing to
     # 1.0). Env-tunable; they need not sum to 1.0 (a warning logs if they don't).
