@@ -10,11 +10,11 @@ test:
 	uv run pytest -v
 
 lint:
-	uv run ruff check src/ tests/
-	uv run ruff format --check src/ tests/
+	uv run ruff check src/ tests/ scripts/
+	uv run ruff format --check src/ tests/ scripts/
 
 format:
-	uv run ruff format src/ tests/
+	uv run ruff format src/ tests/ scripts/
 
 typecheck:
 	uv run ty check src/
