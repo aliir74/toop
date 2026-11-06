@@ -14,7 +14,7 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 
 1. Continuous scoring via 1:1 DM with bot: rate one teammate on one indicator at a time, 1–5 (re-tap to change a score). Scores expire: once one is older than `REVOTE_AFTER_DAYS` (default 60) it comes back around, after any teammate you have never rated
 2. Admin dashboard shows voting health (last-voted, lifetime ratings, pending, coverage gaps)
-3. Every Thursday 8pm PST the bot posts a بلی/خیر **attendance poll** to the group (and opens the session). As yes-votes land it announces the session is on + posts payment at quorum, then closes the poll and opens a **reservation/waitlist poll** at capacity.
+3. Every Thursday 8pm Vancouver time the bot posts a بلی/خیر **attendance poll** to the group (and opens the session). As yes-votes land it announces the session is on + posts payment at quorum, then closes the poll and opens a **reservation/waitlist poll** at capacity.
 4. Bot snapshots ratings + the poll's attendees, suggests balanced teams by exhaustively minimising the weighted sum of *squared* per-skill gaps (see [`docs/algorithm/`](docs/algorithm/README.md))
 5. Admin reviews, optionally swaps; if attendance later drifts the bot DMs the admin to fix it with `/change_player`; admin publishes teams to group chat
 

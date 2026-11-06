@@ -17,7 +17,7 @@ def patched_main(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         SNAPSHOT_HOUR=12,
         SESSION_POLL_WEEKDAY="Thursday",
         SESSION_POLL_HOUR=20,
-        SESSION_POLL_TZ="America/Los_Angeles",
+        SESSION_POLL_TZ="America/Vancouver",
         REVOTE_NUDGE_WEEKDAY="Tuesday",
         REVOTE_NUDGE_HOUR=19,
         ADMIN_TELEGRAM_ID=42,
