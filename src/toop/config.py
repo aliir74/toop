@@ -59,13 +59,13 @@ class Settings(BaseSettings):
     SESSION_WEEKDAY: str = "monday"
     MAX_ATTENDEES: int = Field(default=14, gt=0)
     # Attendance-poll schedule: the bot posts the weekly بلی/خیر poll on this
-    # weekday + hour in SESSION_POLL_TZ (the group's real Thursday-8pm-PST
+    # weekday + hour in SESSION_POLL_TZ (the group's real Thursday-8pm Vancouver
     # cadence). QUORUM_THRESHOLD is the yes-count at or above which the bot
     # announces the session is on and posts payment; MAX_ATTENDEES is the cap
     # that closes the poll and opens the reservation/waitlist poll.
     SESSION_POLL_WEEKDAY: str = "thursday"
     SESSION_POLL_HOUR: int = Field(default=20, ge=0, le=23)
-    SESSION_POLL_TZ: str = "America/Los_Angeles"
+    SESSION_POLL_TZ: str = "America/Vancouver"
     QUORUM_THRESHOLD: int = Field(default=10, ge=0)
     # Payment block posted once quorum is reached (interpolated into the Persian
     # announcement). Left blank by default; fill in .env for the live group.
