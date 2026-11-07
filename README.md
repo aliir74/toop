@@ -1,5 +1,8 @@
 # توپ (Toop)
 
+[![GitHub Sponsors](https://img.shields.io/badge/sponsor-30363D?style=for-the-badge&logo=GitHub-Sponsors&logoColor=#EA4AAA)](https://github.com/sponsors/aliir74)
+[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-ffdd00?style=for-the-badge&logo=buy-me-a-coffee&logoColor=black)](https://www.buymeacoffee.com/aliir74)
+
 Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skills, fair attendance rotation, and balanced team generation.
 
 ## Context
@@ -184,3 +187,11 @@ The rating model is **voter-linked by design** (the `scores` table carries `vote
 ## Plan
 
 See `docs/plans/done/2026-05-14-toop-volleyball-team-balancing-bot.md` for the implementation history.
+
+## Support This Project
+
+If you find this project useful, consider supporting its development:
+
+- Star this repo
+- Report bugs and submit PRs
+- [Sponsor on GitHub](https://github.com/sponsors/aliir74) or [Buy me a coffee](https://www.buymeacoffee.com/aliir74)
