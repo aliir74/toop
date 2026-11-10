@@ -170,7 +170,7 @@ def _fa() -> dict[str, str]:
         "vote.widget_submit": "ثبت",
         "vote.widget_saved": "✅ امتیاز {name} ثبت شد",
         "vote.widget_end_title": "به همه امتیاز دادی",
-        "vote.widget_end_body": "بعداً که بیشتر با هم بازی کردین، دوباره ازت می‌پرسم.",
+        "vote.widget_end_body": "هر وقت بیشتر با هم بازی کردین، دوباره ازت می‌پرسم.",
         "vote.widget_saving": "در حال ثبت…",
         "vote.widget_slow": "تلگرام کُنده؛ منتظر تأییدم…",
         "vote.widget_fast": "یه کم آروم‌تر 🙂",

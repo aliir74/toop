@@ -63,6 +63,17 @@ def test_widget_html_lays_out_persian_right_to_left_by_hand() -> None:
 # --- states ---------------------------------------------------------------
 
 
+def test_states_made_back_to_back_still_order() -> None:
+    qs = [vw.end_state()["q"] for _ in range(50)]
+    assert qs == sorted(set(qs))
+
+
+def test_widget_text_has_no_tanween() -> None:
+    # Telegram's widget renderer drops a word with tanween (ً) onto its own
+    # baseline, so «بعداً» looked like it started a new line.
+    assert "\u064b" not in vw.build_widget_html("fa")
+
+
 def test_states_are_versioned_ordered_and_small() -> None:
     first = vw.rating_state(2, "x" * 500)
     later = vw.end_state()
@@ -183,6 +194,7 @@ def _ctx(conn: sqlite3.Connection) -> MagicMock:
     ctx.bot_data = {"conn": conn}
     ctx.bot.do_api_request = AsyncMock()
     ctx.bot.send_message = AsyncMock()
+    ctx.bot.edit_message_caption = AsyncMock()
     ctx.tasks = []
     ctx.application.create_task = MagicMock(side_effect=lambda coro, **_: ctx.tasks.append(coro))
     return ctx
@@ -345,19 +357,15 @@ async def test_the_first_tap_clears_the_update_your_app_caption_once(
         )
         await vw.handle_widget_query(update, ctx)
         await _run_tasks(ctx)
-    methods = [c.args[0] for c in ctx.bot.do_api_request.call_args_list]
-    assert methods.count("editMessageCaption") == 1
+    ctx.bot.edit_message_caption.assert_awaited_once()
+    assert ctx.bot.edit_message_caption.call_args.kwargs["message_id"] == 70
+    assert "caption" not in ctx.bot.edit_message_caption.call_args.kwargs
 
 
 async def test_a_failed_caption_clear_still_writes_the_state(conn: sqlite3.Connection) -> None:
     _seed(conn)
     ctx = _ctx(conn)
-
-    async def fail_caption(method: str, **_: object) -> None:
-        if method == "editMessageCaption":
-            raise BadRequest("message can't be edited")
-
-    ctx.bot.do_api_request.side_effect = fail_caption
+    ctx.bot.edit_message_caption.side_effect = BadRequest("message can't be edited")
     update = _widget_update(
         id="q", data="1n:2", chat={"id": VOTER}, message_id=70, **{"from": {"id": VOTER}}
     )

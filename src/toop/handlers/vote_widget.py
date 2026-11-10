@@ -84,8 +84,16 @@ def build_widget_html(lang: str) -> str:
     )
 
 
+_last_seq = 0
+
+
 def _seq() -> int:
-    return time.time_ns() // 1_000_000
+    """Milliseconds since the epoch, made strictly increasing. Two taps handled
+    in the same millisecond must still order, or the older card's edit would
+    not be skipped."""
+    global _last_seq
+    _last_seq = max(time.time_ns() // 1_000_000, _last_seq + 1)
+    return _last_seq
 
 
 def rating_state(player_id: int, name: str) -> dict[str, Any]:
@@ -226,10 +234,9 @@ async def _persist_state(
             # tap proves this app can, so the hint only clutters the card now.
             edits.caption_cleared = True
             try:
-                await context.bot.do_api_request(
-                    "editMessageCaption",
-                    api_kwargs={"chat_id": chat_id, "message_id": message_id},
-                    read_timeout=EDIT_READ_TIMEOUT,
+                # No caption argument removes the caption.
+                await context.bot.edit_message_caption(
+                    chat_id=chat_id, message_id=message_id, read_timeout=EDIT_READ_TIMEOUT
                 )
             except TelegramError as exc:
                 logger.info("could not clear widget caption %s/%s: %s", chat_id, message_id, exc)
