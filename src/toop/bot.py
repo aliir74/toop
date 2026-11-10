@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault
 from telegram.ext import (
     Application,
+    ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
@@ -104,6 +105,19 @@ async def _register_commands(app: Application) -> None:
         )
 
 
+# Bot API endpoints for Telegram's test server. PTB fills in {token}.
+TEST_SERVER_BASE_URL = "https://api.telegram.org/bot{token}/test"
+TEST_SERVER_BASE_FILE_URL = "https://api.telegram.org/file/bot{token}/test"
+
+
+def _application_builder() -> ApplicationBuilder:
+    """Builder with the token set, aimed at the test server when configured."""
+    builder = Application.builder().token(settings.BOT_TOKEN)
+    if settings.TELEGRAM_TEST_SERVER:
+        builder = builder.base_url(TEST_SERVER_BASE_URL).base_file_url(TEST_SERVER_BASE_FILE_URL)
+    return builder
+
+
 def main() -> None:
     """Entry point for the توپ bot."""
     logging.basicConfig(
@@ -115,7 +129,7 @@ def main() -> None:
     conn = get_connection(settings.DATABASE_PATH)
     init_db(conn)
 
-    app = Application.builder().token(settings.BOT_TOKEN).post_init(_register_commands).build()
+    app = _application_builder().post_init(_register_commands).build()
     app.bot_data["conn"] = conn
     app.bot_data["started_at"] = datetime.now(UTC)
 
@@ -240,9 +254,10 @@ def main() -> None:
     )
 
     logger.info(
-        "توپ starting (admin=%s, group=%s)",
+        "توپ starting (admin=%s, group=%s, server=%s)",
         settings.ADMIN_TELEGRAM_ID,
         settings.GROUP_CHAT_ID,
+        "test" if settings.TELEGRAM_TEST_SERVER else "production",
     )
     app.run_polling()  # pragma: no cover
 

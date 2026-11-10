@@ -22,6 +22,7 @@ def patched_main(monkeypatch: pytest.MonkeyPatch) -> MagicMock:
         REVOTE_NUDGE_HOUR=19,
         ADMIN_TELEGRAM_ID=42,
         GROUP_CHAT_ID=-100123,
+        TELEGRAM_TEST_SERVER=False,
     )
     monkeypatch.setattr(bot, "settings", fake_settings)
     monkeypatch.setattr(bot, "get_connection", lambda _path: MagicMock())
@@ -138,3 +139,23 @@ def test_dunder_main_module_imports() -> None:
     import toop.__main__ as entry
 
     assert entry.main is bot.main
+
+
+def test_main_uses_production_api_by_default(patched_main: MagicMock) -> None:
+    bot.main()
+    patched_main._builder.token.return_value.base_url.assert_not_called()
+
+
+def test_main_points_at_test_server_when_enabled(patched_main: MagicMock) -> None:
+    bot.settings.TELEGRAM_TEST_SERVER = True
+    token_builder = patched_main._builder.token.return_value
+    test_builder = token_builder.base_url.return_value.base_file_url.return_value
+    test_builder.post_init.return_value.build.return_value = patched_main
+
+    bot.main()
+
+    token_builder.base_url.assert_called_once_with("https://api.telegram.org/bot{token}/test")
+    token_builder.base_url.return_value.base_file_url.assert_called_once_with(
+        "https://api.telegram.org/file/bot{token}/test"
+    )
+    test_builder.post_init.return_value.build.assert_called_once()

@@ -50,6 +50,11 @@ class Settings(BaseSettings):
 
     BOT_TOKEN: str = ""
     ADMIN_TELEGRAM_ID: int = 0
+    # Point the bot at Telegram's test server instead of production. The test
+    # server is a separate world (its own accounts, bots and tokens), so a token
+    # from the test-server @BotFather only works with this on. Use it to try Bot
+    # API features that production still restricts, such as widgets in groups.
+    TELEGRAM_TEST_SERVER: bool = False
     GROUP_CHAT_ID: int = 0
     # Active language for all user-facing bot text. Persian by default (the group
     # is Iranian); set BOT_LANG=en for English. Command NAMES stay latin

@@ -154,6 +154,28 @@ The more you rate, the more accurate our teams get. Takes 30 seconds.
 
 ---
 
+## Testing on Telegram's test server
+
+Telegram runs a separate test server with its own accounts, bots and tokens. New Bot API
+features often work there before production: Bot API 10.4 widgets, for example, work in
+groups, forwards and inline mode on the test server, but only in private chats in production.
+
+1. **Log in to the test server in a Telegram app.**
+   - Desktop: Settings, then Shift+Alt+right-click "Add Account", then "Test Server".
+   - iOS: tap the Settings tab 10 times, then Accounts, "Login to another account", "Test".
+   A number of the form `99966XYYYY` (X = 1-3) signs in with the code `XXXXX`. A real
+   number gets its code in a Telegram app that is already logged in to the test server.
+2. **Make a test bot.** Message @BotFather from the test account and copy the token.
+3. **Point a second checkout at it** with its own `.env`, so it never touches the live data:
+   ```bash
+   BOT_TOKEN=<test-server token>
+   TELEGRAM_TEST_SERVER=true
+   DATABASE_PATH=data/toop-test.db
+   ADMIN_TELEGRAM_ID=<your test-account id>
+   GROUP_CHAT_ID=<a test-server group>
+   ```
+4. `make run`. The startup log line says `server=test`.
+
 ## Troubleshooting
 
 - **"Couldn't find @username" when adding a player** — they need to DM the bot `/start` first so Telegram lets us resolve their numeric ID. Run `/contacts` to see who has already DM'd and is therefore addable. If they have **no** Telegram username at all (so there's no `@handle` to resolve), add them by id instead: `/contacts` prints a ready-to-copy `/add_player <id> "Name"` line for every non-roster contact.
