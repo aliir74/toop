@@ -1,6 +1,6 @@
 <style>
 body{text-align:__ALIGN__;font-size:var(--tg-text-font-size);color:var(--tg-theme-text-color)}
-h4{margin:4px 0 16px}h4:empty{display:none}
+#hd{display:flex;flex-direction:__ROW__;align-items:center;gap:10px;margin:4px 0 16px}#hd[hidden]{display:none}h4{margin:0}#av{width:40px;height:40px;border-radius:50%;object-fit:cover}
 button{border:0;border-radius:8px;font:inherit;background:var(--tg-theme-secondary-bg-color);color:var(--tg-theme-text-color)}
 button:disabled{opacity:.4}
 .pri{background:var(--tg-theme-button-color);color:var(--tg-theme-button-text-color)}
@@ -16,7 +16,7 @@ button:disabled{opacity:.4}
 #m.ok{color:#2a9d4b}
 #m{color:var(--tg-theme-hint-color);font-size:.85em;margin-top:10px;min-height:1.2em;padding-bottom:var(--tg-content-safe-area-inset-bottom)}
 </style>
-<h4 id="t"></h4><div id="app"></div><div id="m"></div>
+<div id="hd"><img id="av" hidden alt=""><h4 id="t"></h4></div><div id="app"></div><div id="m"></div>
 <script>
 const C=__CFG__,X=C.t,W=window.TelegramWidget||{chatData:null,request:()=>Promise.reject({code:'NOT_ALLOWED'}),onEvent(){}};
 const $=i=>document.getElementById(i),E=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
@@ -29,7 +29,8 @@ function stars(n,tap){const b=E('span','st');for(let k=0;k<5;k++){const x=C.rtl?
 function row(i,n,tap){const r=E('div','r');r.appendChild(E('span','l',C.S[i]+(n?' · '+C.L[n-1]:'')));r.appendChild(stars(n,tap));return r}
 function draw(){const a=$('app');a.innerHTML='';
  if(!cur){$('t').textContent='';return}
- if(cur.e){$('t').textContent='';const d=E('div','end');d.appendChild(E('div','em','🎉'));d.appendChild(E('b','',X.endTitle));d.appendChild(E('p','',X.endBody));a.appendChild(d);return}
+ $('hd').hidden=!!cur.e;const av=$('av');av.hidden=!cur.i;if(cur.i)av.src=cur.i;
+ if(cur.e){const s=cur.e===2,d=E('div','end');d.appendChild(E('div','em',s?'👋':'🎉'));d.appendChild(E('b','',s?X.skipTitle:X.endTitle));d.appendChild(E('p','',s?X.skipBody:X.endBody));a.appendChild(d);return}
  $('t').textContent=X.title.replace('{name}',cur.n);
  C.S.forEach((_,i)=>a.appendChild(row(i,v[i],x=>{v[i]=x;draw()})));
  const f=E('div','f'),s=E('button','pri',X.submit),k=E('button','',X.dk);
