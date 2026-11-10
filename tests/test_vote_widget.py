@@ -1,0 +1,323 @@
+from __future__ import annotations
+
+import json
+import sqlite3
+import zlib
+from datetime import date
+from unittest.mock import AsyncMock, MagicMock
+
+import pytest
+from telegram.error import BadRequest, Forbidden, NetworkError, TimedOut
+
+import toop.handlers.vote_widget as vw
+from toop.config import settings
+from toop.handlers.voting import _send_next_prompt
+from toop.i18n import indicator_label, score_word, t
+from toop.players import add_player
+from toop.rating import INDICATORS
+from toop.sessions import open_session
+
+VOTER = 1
+
+
+def _seed(conn: sqlite3.Connection) -> None:
+    add_player(conn, VOTER, "Alice", "alice")
+    add_player(conn, 2, "Bob", "bob")
+    add_player(conn, 3, "Carol", "carol")
+
+
+def _scores(conn: sqlite3.Connection, player_id: int) -> dict[str, int]:
+    rows = conn.execute(
+        "SELECT indicator, score FROM scores WHERE voter_id=? AND player_id=?",
+        (VOTER, player_id),
+    ).fetchall()
+    return {r["indicator"]: r["score"] for r in rows}
+
+
+# --- HTML -----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("lang", ["fa", "en"])
+def test_widget_html_fits_telegram_limits_and_carries_the_catalog(lang: str) -> None:
+    html = vw.build_widget_html(lang)
+    # Telegram refuses widgets over 32 KB raw or 4 KB zlib-9 compressed.
+    assert len(html.encode()) <= 32768
+    assert len(zlib.compress(html.encode(), 9)) <= 4096
+    assert "__" not in html.replace("__proto__", "")
+    for ind in INDICATORS:
+        assert indicator_label(ind, lang) in html
+    for n in range(1, 6):
+        assert score_word(n, lang) in html
+    assert t("vote.widget_submit", lang) in html
+
+
+def test_widget_html_lays_out_persian_right_to_left_by_hand() -> None:
+    # The sandbox ignores CSS `direction`, so the row order itself must flip.
+    fa, en = vw.build_widget_html("fa"), vw.build_widget_html("en")
+    assert "flex-direction:row-reverse" in fa and "text-align:right" in fa
+    assert "flex-direction:row-reverse" not in en and "text-align:left" in en
+    assert '"rtl": true' in fa and '"rtl": false' in en
+
+
+# --- states ---------------------------------------------------------------
+
+
+def test_states_are_versioned_ordered_and_small() -> None:
+    first = vw.rating_state(2, "x" * 500)
+    later = vw.end_state()
+    assert first["v"] == 1 and later["v"] == 1
+    assert later["q"] >= first["q"]
+    assert len(first["n"]) == vw.MAX_NAME_CHARS
+    # chat_data and answer data are capped at 1024 bytes.
+    assert len(vw.dump_state(vw.saved_state(2, "ن" * 500, "123451")).encode()) <= 1024
+
+
+# --- applying requests ----------------------------------------------------
+
+
+def test_submit_records_all_six_scores_and_shows_the_saved_card(
+    conn: sqlite3.Connection,
+) -> None:
+    _seed(conn)
+    state = vw.apply_query(conn, VOTER, "1r:2:543215")
+    assert state is not None
+    assert (state["p"], state["n"], state["s"]) == (2, "Bob", "543215")
+    assert _scores(conn, 2) == dict(zip(INDICATORS, [5, 4, 3, 2, 1, 5], strict=True))
+
+
+def test_dont_know_records_one_skip_and_moves_to_another_player(
+    conn: sqlite3.Connection,
+) -> None:
+    _seed(conn)
+    session = open_session(conn, date(2026, 11, 16))
+    state = vw.apply_query(conn, VOTER, "1k:2")
+    assert state is not None and state["p"] == 3
+    rows = conn.execute("SELECT player_id, session_id FROM score_skips").fetchall()
+    assert [(r["player_id"], r["session_id"]) for r in rows] == [(2, session.id)]
+    assert _scores(conn, 2) == {}
+
+
+def test_dont_know_without_a_session_still_records_the_skip(conn: sqlite3.Connection) -> None:
+    _seed(conn)
+    vw.apply_query(conn, VOTER, "1k:2")
+    row = conn.execute("SELECT session_id FROM score_skips").fetchone()
+    assert row["session_id"] is None
+
+
+def test_next_moves_on_without_recording_anything(conn: sqlite3.Connection) -> None:
+    _seed(conn)
+    state = vw.apply_query(conn, VOTER, "1n:2")
+    assert state is not None and state["p"] == 3
+    assert conn.execute("SELECT COUNT(*) FROM scores").fetchone()[0] == 0
+
+
+def test_next_on_the_only_player_left_ends_instead_of_repeating(
+    conn: sqlite3.Connection,
+) -> None:
+    add_player(conn, VOTER, "Alice")
+    add_player(conn, 2, "Bob")
+    state = vw.apply_query(conn, VOTER, "1n:2")
+    assert state is not None and state.get("e") == 1
+
+
+def test_after_rating_everyone_the_next_card_is_the_end(conn: sqlite3.Connection) -> None:
+    add_player(conn, VOTER, "Alice")
+    add_player(conn, 2, "Bob")
+    vw.apply_query(conn, VOTER, "1r:2:333333")
+    state = vw.apply_query(conn, VOTER, "1n:2")
+    assert state is not None and state.get("e") == 1
+
+
+def test_a_card_for_a_removed_player_moves_on(conn: sqlite3.Connection) -> None:
+    _seed(conn)
+    state = vw.apply_query(conn, VOTER, "1r:999:333333")
+    assert state is not None and state["p"] in (2, 3)
+    assert conn.execute("SELECT COUNT(*) FROM scores").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    ("voter", "data"),
+    [
+        (42, "1r:2:333333"),  # not on the roster
+        (VOTER, "garbage"),
+        (VOTER, "2r:2:333333"),  # unknown format version
+        (VOTER, "1r:2:333336"),  # score out of range
+        (VOTER, "1r:2"),  # submit without scores
+        (VOTER, "1k:2:333333"),  # scores on a non-submit request
+        (VOTER, f"1r:{VOTER}:333333"),  # rating yourself
+    ],
+)
+def test_bad_requests_change_nothing(conn: sqlite3.Connection, voter: int, data: str) -> None:
+    _seed(conn)
+    assert vw.apply_query(conn, voter, data) is None
+    assert conn.execute("SELECT COUNT(*) FROM scores").fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM score_skips").fetchone()[0] == 0
+
+
+def test_next_state_ends_when_the_offered_player_has_no_row(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed(conn)
+    monkeypatch.setattr(vw, "_player_name", lambda _c, _id: None)
+    assert vw.next_state(conn, VOTER, 2, require_other=False).get("e") == 1
+
+
+# --- Telegram calls -------------------------------------------------------
+
+
+def _ctx(conn: sqlite3.Connection) -> MagicMock:
+    ctx = MagicMock()
+    ctx.bot_data = {"conn": conn}
+    ctx.bot.do_api_request = AsyncMock()
+    ctx.bot.send_message = AsyncMock()
+    ctx.application.create_task = MagicMock(side_effect=lambda coro, **_: coro.close())
+    return ctx
+
+
+async def test_send_widget_card_sends_a_queryable_card_for_the_player(
+    conn: sqlite3.Connection,
+) -> None:
+    ctx = _ctx(conn)
+    assert await vw.send_widget_card(ctx, 7, 2, "Bob", "en") is True
+    method = ctx.bot.do_api_request.call_args.args[0]
+    kwargs = ctx.bot.do_api_request.call_args.kwargs["api_kwargs"]
+    assert method == "sendWidget"
+    assert kwargs["chat_id"] == 7 and kwargs["allow_queries"] is True
+    assert kwargs["html"] == vw.build_widget_html("en")
+    assert json.loads(kwargs["chat_data"])["p"] == 2
+    assert kwargs["caption"] == t("vote.widget_caption", "en")
+
+
+async def test_send_widget_card_treats_a_timeout_as_sent(conn: sqlite3.Connection) -> None:
+    ctx = _ctx(conn)
+    ctx.bot.do_api_request.side_effect = TimedOut()
+    assert await vw.send_widget_card(ctx, 7, 2, "Bob", "en") is True
+
+
+async def test_send_widget_card_reports_a_refusal(conn: sqlite3.Connection) -> None:
+    ctx = _ctx(conn)
+    ctx.bot.do_api_request.side_effect = BadRequest("method not found")
+    assert await vw.send_widget_card(ctx, 7, 2, "Bob", "en") is False
+
+
+async def test_send_widget_card_lets_forbidden_reach_the_caller(conn: sqlite3.Connection) -> None:
+    ctx = _ctx(conn)
+    ctx.bot.do_api_request.side_effect = Forbidden("bot was blocked")
+    with pytest.raises(Forbidden):
+        await vw.send_widget_card(ctx, 7, 2, "Bob", "en")
+
+
+@pytest.mark.parametrize(
+    "error",
+    [None, BadRequest("Message is not modified"), BadRequest("chat not found"), NetworkError("x")],
+)
+async def test_persist_state_never_raises(
+    conn: sqlite3.Connection, error: Exception | None
+) -> None:
+    ctx = _ctx(conn)
+    ctx.bot.do_api_request.side_effect = error
+    await vw._persist_state(ctx, 7, 70, vw.end_state())
+    assert ctx.bot.do_api_request.call_args.args[0] == "editMessageWidgetData"
+    assert ctx.bot.do_api_request.call_args.kwargs["api_kwargs"]["message_id"] == 70
+
+
+def _widget_update(**query: object) -> MagicMock:
+    update = MagicMock()
+    update.api_kwargs = {"widget_query": query}
+    return update
+
+
+async def test_widget_query_is_answered_with_the_new_state_then_persisted(
+    conn: sqlite3.Connection,
+) -> None:
+    _seed(conn)
+    ctx = _ctx(conn)
+    update = _widget_update(
+        id="q1", data="1r:2:333333", chat={"id": VOTER}, message_id=70, **{"from": {"id": VOTER}}
+    )
+    await vw.handle_widget_query(update, ctx)
+    (method,) = ctx.bot.do_api_request.call_args.args
+    answer = ctx.bot.do_api_request.call_args.kwargs["api_kwargs"]
+    assert method == "answerWidgetQuery" and answer["widget_query_id"] == "q1"
+    assert json.loads(answer["data"])["s"] == "333333"
+    ctx.application.create_task.assert_called_once()
+
+
+async def test_widget_query_answer_failure_still_persists(conn: sqlite3.Connection) -> None:
+    _seed(conn)
+    ctx = _ctx(conn)
+    ctx.bot.do_api_request.side_effect = BadRequest("query is too old")
+    update = _widget_update(
+        id="q1", data="1n:2", chat={"id": VOTER}, message_id=70, **{"from": {"id": VOTER}}
+    )
+    await vw.handle_widget_query(update, ctx)
+    ctx.application.create_task.assert_called_once()
+
+
+async def test_ignored_widget_query_gets_an_empty_answer_and_no_edit(
+    conn: sqlite3.Connection,
+) -> None:
+    _seed(conn)
+    ctx = _ctx(conn)
+    update = _widget_update(id="q1", data="nonsense", **{"from": {"id": "not-an-id"}})
+    await vw.handle_widget_query(update, ctx)
+    assert ctx.bot.do_api_request.call_args.kwargs["api_kwargs"] == {"widget_query_id": "q1"}
+    ctx.application.create_task.assert_not_called()
+
+
+async def test_widget_query_without_a_message_is_answered_but_not_persisted(
+    conn: sqlite3.Connection,
+) -> None:
+    _seed(conn)
+    ctx = _ctx(conn)
+    update = _widget_update(id="q1", data="1n:2", **{"from": {"id": VOTER}})
+    await vw.handle_widget_query(update, ctx)
+    assert "data" in ctx.bot.do_api_request.call_args.kwargs["api_kwargs"]
+    ctx.application.create_task.assert_not_called()
+
+
+@pytest.mark.parametrize("api_kwargs", [None, {}, {"widget_query": "x"}, {"widget_query": {}}])
+async def test_other_updates_pass_through_untouched(
+    conn: sqlite3.Connection, api_kwargs: dict | None
+) -> None:
+    ctx = _ctx(conn)
+    update = MagicMock()
+    update.api_kwargs = api_kwargs
+    await vw.handle_widget_query(update, ctx)
+    ctx.bot.do_api_request.assert_not_called()
+
+
+# --- the voting flow ------------------------------------------------------
+
+
+async def test_fresh_prompt_is_a_widget_when_enabled(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed(conn)
+    monkeypatch.setattr(settings, "VOTE_WIDGET", True)
+    ctx = _ctx(conn)
+    await _send_next_prompt(conn, ctx, chat_id=VOTER, voter_id=VOTER)
+    assert ctx.bot.do_api_request.call_args.args[0] == "sendWidget"
+    ctx.bot.send_message.assert_not_called()
+
+
+async def test_refused_widget_falls_back_to_the_button_card(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed(conn)
+    monkeypatch.setattr(settings, "VOTE_WIDGET", True)
+    ctx = _ctx(conn)
+    ctx.bot.do_api_request.side_effect = BadRequest("method not found")
+    await _send_next_prompt(conn, ctx, chat_id=VOTER, voter_id=VOTER)
+    assert ctx.bot.send_message.call_args.kwargs["reply_markup"] is not None
+
+
+async def test_buttons_stay_when_the_widget_is_off(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed(conn)
+    monkeypatch.setattr(settings, "VOTE_WIDGET", False)
+    ctx = _ctx(conn)
+    await _send_next_prompt(conn, ctx, chat_id=VOTER, voter_id=VOTER)
+    ctx.bot.do_api_request.assert_not_called()
+    ctx.bot.send_message.assert_called_once()

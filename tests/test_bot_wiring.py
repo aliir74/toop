@@ -46,8 +46,8 @@ def test_main_registers_all_handlers_and_schedules_snapshot(
 
     bot.main()
 
-    # 30 command + 15 callback-query + 1 poll-answer + 4 message handlers.
-    assert mock_app.add_handler.call_count == 50
+    # 30 command + 15 callback-query + 1 poll-answer + 4 message + 1 widget handlers.
+    assert mock_app.add_handler.call_count == 51
     assert mock_app.job_queue.run_daily.call_count == 4
     # Jobs must be scheduled on PTB's weekday numbering (0=Sunday..6=Saturday),
     # NOT datetime's Monday=0 — else every job fires a day early. With the fake
@@ -74,7 +74,7 @@ def test_main_skips_scheduling_when_no_job_queue(patched_main: MagicMock) -> Non
     bot.main()
 
     # Handlers still register even without a job queue.
-    assert mock_app.add_handler.call_count == 50
+    assert mock_app.add_handler.call_count == 51
     mock_app.run_polling.assert_called_once()
 
 
@@ -138,3 +138,30 @@ def test_dunder_main_module_imports() -> None:
     import toop.__main__ as entry
 
     assert entry.main is bot.main
+
+
+def test_widget_queries_are_requested_and_handled_in_their_own_group(
+    patched_main: MagicMock,
+) -> None:
+    from telegram import Update
+    from telegram.ext import TypeHandler
+
+    bot.main()
+
+    # Telegram sends widget_query only when asked for by name; the rest keeps
+    # Telegram's default set (no chat_member or reaction updates).
+    assert "widget_query" in bot.ALLOWED_UPDATES
+    assert Update.MESSAGE in bot.ALLOWED_UPDATES and Update.POLL_ANSWER in bot.ALLOWED_UPDATES
+    assert Update.CHAT_MEMBER not in bot.ALLOWED_UPDATES
+    patched_main.run_polling.assert_called_once_with(allowed_updates=bot.ALLOWED_UPDATES)
+    # A TypeHandler matches every update; any group shared with other handlers
+    # would let it swallow commands and callbacks.
+    widget_calls = [
+        c for c in patched_main.add_handler.call_args_list if isinstance(c.args[0], TypeHandler)
+    ]
+    assert len(widget_calls) == 1
+    group = widget_calls[0].kwargs["group"]
+    others = [
+        c for c in patched_main.add_handler.call_args_list if c.kwargs.get("group", 0) == group
+    ]
+    assert others == widget_calls

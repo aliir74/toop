@@ -18,6 +18,26 @@ Telegram bot for managing a weekly 6v6 volleyball group: peer-rated player skill
 4. Bot snapshots ratings + the poll's attendees, suggests balanced teams by exhaustively minimising the weighted sum of *squared* per-skill gaps (see [`docs/algorithm/`](docs/algorithm/README.md))
 5. Admin reviews, optionally swaps; if attendance later drifts the bot DMs the admin to fix it with `/change_player`; admin publishes teams to group chat
 
+## Rating widget (`VOTE_WIDGET`)
+
+With `VOTE_WIDGET=true`, `/vote` sends one star card per teammate instead of one
+button card per skill: six rows of stars, «ثبت», «🤷 ندیدمش» and «⏭ رد کردن». After
+a submit the card shows what was saved, and «نفر بعدی» turns the same card into the
+next teammate, so a voter works through the queue without new messages piling up.
+
+- It uses Bot API 10.4 HTML widgets, which work only in the bot's private chat in
+  production. A Telegram app too old for widgets shows only the caption, which tells
+  the voter to update.
+- python-telegram-bot does not know widgets yet, so `handlers/vote_widget.py` calls
+  them through `do_api_request`, and `bot.py` asks Telegram for `widget_query`
+  updates by name.
+- Telegram's widget calls were slow at launch (sends and edits sometimes took most of
+  a minute). The bot therefore answers each tap with the next card at once and saves
+  it to the message in the background.
+- Widgets cannot show `/set_photo` photos. Button cards still do.
+- Cards already sent keep using buttons when they advance; turning the flag off goes
+  back to buttons for new cards.
+
 ## Why votes expire
 
 A voter who has scored every teammate on all six indicators used to be finished

@@ -16,6 +16,7 @@ from telegram.ext import ContextTypes
 from toop.admin import require_admin
 from toop.config import settings
 from toop.contacts import get_contact, upsert_contact
+from toop.handlers.vote_widget import send_widget_card
 from toop.i18n import indicator_label, score_word, t
 from toop.players import Player
 from toop.sessions import get_active_session
@@ -189,6 +190,16 @@ async def _send_next_prompt(
         # NOT vote.no_prompts: this is an error path, and that string now promises
         # "I'll ask again later as you all play together more", which reads wrong here.
         await context.bot.send_message(chat_id=chat_id, text=t("vote.target_missing"))
+        return
+    # A fresh card is a widget when enabled; an advance from a button card keeps
+    # the button flow, since a message can't change into a widget.
+    if (
+        edit_message_id is None
+        and settings.VOTE_WIDGET
+        and await send_widget_card(
+            context, chat_id, player.telegram_id, player.display_name, settings.BOT_LANG
+        )
+    ):
         return
     text = _format_prompt(target, player)
     keyboard = _prompt_keyboard(target, player)
