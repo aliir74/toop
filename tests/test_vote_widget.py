@@ -7,11 +7,12 @@ from datetime import date
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from telegram.constants import ChatType
 from telegram.error import BadRequest, Forbidden, NetworkError, TimedOut
 
 import toop.handlers.vote_widget as vw
 from toop.config import settings
-from toop.handlers.voting import _send_next_prompt
+from toop.handlers.voting import _send_next_prompt, handle_vote_command
 from toop.i18n import indicator_label, score_word, t
 from toop.players import add_player
 from toop.rating import INDICATORS
@@ -170,8 +171,14 @@ def _ctx(conn: sqlite3.Connection) -> MagicMock:
     ctx.bot_data = {"conn": conn}
     ctx.bot.do_api_request = AsyncMock()
     ctx.bot.send_message = AsyncMock()
-    ctx.application.create_task = MagicMock(side_effect=lambda coro, **_: coro.close())
+    ctx.tasks = []
+    ctx.application.create_task = MagicMock(side_effect=lambda coro, **_: ctx.tasks.append(coro))
     return ctx
+
+
+async def _run_tasks(ctx: MagicMock) -> None:
+    while ctx.tasks:
+        await ctx.tasks.pop(0)
 
 
 async def test_send_widget_card_sends_a_queryable_card_for_the_player(
@@ -216,7 +223,10 @@ async def test_persist_state_never_raises(
 ) -> None:
     ctx = _ctx(conn)
     ctx.bot.do_api_request.side_effect = error
-    await vw._persist_state(ctx, 7, 70, vw.end_state())
+    state = vw.end_state()
+    edits = vw._card_edits(ctx, 7, 70)
+    edits.latest = state["q"]
+    await vw._persist_state(ctx, 7, 70, state, edits)
     assert ctx.bot.do_api_request.call_args.args[0] == "editMessageWidgetData"
     assert ctx.bot.do_api_request.call_args.kwargs["api_kwargs"]["message_id"] == 70
 
@@ -241,6 +251,7 @@ async def test_widget_query_is_answered_with_the_new_state_then_persisted(
     assert method == "answerWidgetQuery" and answer["widget_query_id"] == "q1"
     assert json.loads(answer["data"])["s"] == "333333"
     ctx.application.create_task.assert_called_once()
+    await _run_tasks(ctx)
 
 
 async def test_widget_query_answer_failure_still_persists(conn: sqlite3.Connection) -> None:
@@ -252,6 +263,7 @@ async def test_widget_query_answer_failure_still_persists(conn: sqlite3.Connecti
     )
     await vw.handle_widget_query(update, ctx)
     ctx.application.create_task.assert_called_once()
+    await _run_tasks(ctx)
 
 
 async def test_ignored_widget_query_gets_an_empty_answer_and_no_edit(
@@ -287,6 +299,28 @@ async def test_other_updates_pass_through_untouched(
     ctx.bot.do_api_request.assert_not_called()
 
 
+async def test_an_older_state_never_overwrites_a_newer_one(conn: sqlite3.Connection) -> None:
+    _seed(conn)
+    ctx = _ctx(conn)
+
+    def tap(data: str) -> MagicMock:
+        return _widget_update(
+            id=data, data=data, chat={"id": VOTER}, message_id=70, **{"from": {"id": VOTER}}
+        )
+
+    await vw.handle_widget_query(tap("1r:2:333333"), ctx)
+    await vw.handle_widget_query(tap("1n:2"), ctx)
+    ctx.bot.do_api_request.reset_mock()
+    await _run_tasks(ctx)
+    # Only the newest state is written: the "next player" card, not the saved one.
+    edits = [
+        c for c in ctx.bot.do_api_request.call_args_list if c.args[0] == "editMessageWidgetData"
+    ]
+    assert len(edits) == 1
+    written = json.loads(edits[0].kwargs["api_kwargs"]["chat_data"])
+    assert "s" not in written and written["p"] == 3
+
+
 # --- the voting flow ------------------------------------------------------
 
 
@@ -297,6 +331,9 @@ async def test_fresh_prompt_is_a_widget_when_enabled(
     monkeypatch.setattr(settings, "VOTE_WIDGET", True)
     ctx = _ctx(conn)
     await _send_next_prompt(conn, ctx, chat_id=VOTER, voter_id=VOTER)
+    # The send runs in the background, so a slow sendWidget never holds up other updates.
+    ctx.bot.do_api_request.assert_not_called()
+    await _run_tasks(ctx)
     assert ctx.bot.do_api_request.call_args.args[0] == "sendWidget"
     ctx.bot.send_message.assert_not_called()
 
@@ -309,6 +346,7 @@ async def test_refused_widget_falls_back_to_the_button_card(
     ctx = _ctx(conn)
     ctx.bot.do_api_request.side_effect = BadRequest("method not found")
     await _send_next_prompt(conn, ctx, chat_id=VOTER, voter_id=VOTER)
+    await _run_tasks(ctx)
     assert ctx.bot.send_message.call_args.kwargs["reply_markup"] is not None
 
 
@@ -321,3 +359,49 @@ async def test_buttons_stay_when_the_widget_is_off(
     await _send_next_prompt(conn, ctx, chat_id=VOTER, voter_id=VOTER)
     ctx.bot.do_api_request.assert_not_called()
     ctx.bot.send_message.assert_called_once()
+
+
+async def test_a_blocked_widget_dm_calls_back_the_caller(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed(conn)
+    monkeypatch.setattr(settings, "VOTE_WIDGET", True)
+    ctx = _ctx(conn)
+    ctx.bot.do_api_request.side_effect = Forbidden("bot was blocked by the user")
+    on_forbidden = AsyncMock()
+    await _send_next_prompt(conn, ctx, chat_id=VOTER, voter_id=VOTER, on_forbidden=on_forbidden)
+    await _run_tasks(ctx)
+    on_forbidden.assert_awaited_once()
+
+
+@pytest.mark.parametrize("error", [Forbidden("blocked"), NetworkError("down")])
+async def test_background_send_failures_never_raise(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    _seed(conn)
+    monkeypatch.setattr(settings, "VOTE_WIDGET", True)
+    ctx = _ctx(conn)
+    ctx.bot.do_api_request.side_effect = error
+    await _send_next_prompt(conn, ctx, chat_id=VOTER, voter_id=VOTER)
+    await _run_tasks(ctx)
+    ctx.bot.send_message.assert_not_called()
+
+
+async def test_group_vote_with_a_blocked_dm_still_nudges_in_the_group(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _seed(conn)
+    monkeypatch.setattr(settings, "VOTE_WIDGET", True)
+    ctx = _ctx(conn)
+    ctx.bot.username = "toop_bot"
+    ctx.bot.delete_message = AsyncMock()
+    ctx.bot.send_message = AsyncMock(return_value=MagicMock(message_id=9))
+    ctx.bot.do_api_request.side_effect = Forbidden("bot can't initiate conversation")
+    update = MagicMock()
+    update.effective_user = MagicMock(id=VOTER, username="alice", full_name="Alice")
+    update.effective_chat = MagicMock(id=-100123, type=ChatType.GROUP)
+    update.effective_message = MagicMock(message_id=555)
+    await handle_vote_command(update, ctx)
+    await _run_tasks(ctx)
+    nudge = ctx.bot.send_message.call_args.kwargs
+    assert nudge["chat_id"] == -100123 and "@alice" in nudge["text"]

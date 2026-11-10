@@ -13,11 +13,13 @@ through Bot.do_api_request and widget_query updates arrive in Update.api_kwargs.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
 import sqlite3
 import time
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 from typing import Any
@@ -189,26 +191,50 @@ async def send_widget_card(
     return True
 
 
+@dataclass
+class _CardEdits:
+    """Orders the background edits of one card. Telegram applies edits to the
+    same message in whatever order they finish, and one can take most of a
+    minute, so an older state could land last and come back when the card is
+    reopened. Edits run one at a time, and one that a newer state has already
+    replaced is skipped."""
+
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    latest: int = 0
+
+
+def _card_edits(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int) -> _CardEdits:
+    cards: dict[tuple[int, int], _CardEdits] = context.bot_data.setdefault("widget_edits", {})
+    return cards.setdefault((chat_id, message_id), _CardEdits())
+
+
 async def _persist_state(
-    context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int, state: dict[str, Any]
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    message_id: int,
+    state: dict[str, Any],
+    edits: _CardEdits,
 ) -> None:
     """Write the state into the message, so it survives the widget being
     reopened. Runs as a background task: the edit can take most of a minute."""
-    try:
-        await context.bot.do_api_request(
-            "editMessageWidgetData",
-            api_kwargs={
-                "chat_id": chat_id,
-                "message_id": message_id,
-                "chat_data": dump_state(state),
-            },
-            read_timeout=EDIT_READ_TIMEOUT,
-        )
-    except BadRequest as exc:
-        if "not modified" not in str(exc).lower():
+    async with edits.lock:
+        if state["q"] != edits.latest:
+            return
+        try:
+            await context.bot.do_api_request(
+                "editMessageWidgetData",
+                api_kwargs={
+                    "chat_id": chat_id,
+                    "message_id": message_id,
+                    "chat_data": dump_state(state),
+                },
+                read_timeout=EDIT_READ_TIMEOUT,
+            )
+        except BadRequest as exc:
+            if "not modified" not in str(exc).lower():
+                logger.warning("editMessageWidgetData %s/%s failed: %s", chat_id, message_id, exc)
+        except TelegramError as exc:
             logger.warning("editMessageWidgetData %s/%s failed: %s", chat_id, message_id, exc)
-    except TelegramError as exc:
-        logger.warning("editMessageWidgetData %s/%s failed: %s", chat_id, message_id, exc)
 
 
 async def handle_widget_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -233,6 +259,8 @@ async def handle_widget_query(update: Update, context: ContextTypes.DEFAULT_TYPE
     chat_id = (raw.get("chat") or {}).get("id")
     message_id = raw.get("message_id")
     if state is not None and isinstance(chat_id, int) and isinstance(message_id, int):
+        edits = _card_edits(context, chat_id, message_id)
+        edits.latest = state["q"]
         context.application.create_task(
-            _persist_state(context, chat_id, message_id, state), update=update
+            _persist_state(context, chat_id, message_id, state, edits), update=update
         )

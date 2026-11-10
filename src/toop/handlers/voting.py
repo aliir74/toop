@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from collections.abc import Awaitable, Callable
 
 from telegram import (
     InlineKeyboardButton,
@@ -10,7 +11,7 @@ from telegram import (
     User,
 )
 from telegram.constants import ChatType, ParseMode
-from telegram.error import BadRequest, Forbidden
+from telegram.error import BadRequest, Forbidden, TelegramError
 from telegram.ext import ContextTypes
 
 from toop.admin import require_admin
@@ -175,6 +176,7 @@ async def _send_next_prompt(
     exclude_player: int | None = None,
     current_is_photo: bool = False,
     require_other_player: bool = False,
+    on_forbidden: Callable[[], Awaitable[None]] | None = None,
 ) -> None:
     target = select_next_score_target(conn, voter_id, exclude_player=exclude_player)
     # ⏭ on the only player left would hand back the same card. Treat it as the
@@ -191,18 +193,15 @@ async def _send_next_prompt(
         # "I'll ask again later as you all play together more", which reads wrong here.
         await context.bot.send_message(chat_id=chat_id, text=t("vote.target_missing"))
         return
-    # A fresh card is a widget when enabled; an advance from a button card keeps
-    # the button flow, since a message can't change into a widget.
-    if (
-        edit_message_id is None
-        and settings.VOTE_WIDGET
-        and await send_widget_card(
-            context, chat_id, player.telegram_id, player.display_name, settings.BOT_LANG
-        )
-    ):
-        return
     text = _format_prompt(target, player)
     keyboard = _prompt_keyboard(target, player)
+    # A fresh card is a widget when enabled; an advance from a button card keeps
+    # the button flow, since a message can't change into a widget.
+    if edit_message_id is None and settings.VOTE_WIDGET:
+        context.application.create_task(
+            _send_widget_or_card(context, chat_id, player, text, keyboard, on_forbidden)
+        )
+        return
     incoming_is_photo = player.photo_file_id is not None
     if edit_message_id is not None:
         # Telegram can't convert a message between text and photo types, and
@@ -226,6 +225,34 @@ async def _send_next_prompt(
                     return
                 logger.warning("failed to edit prompt message: %s", exc)
     await _send_card(context, chat_id, text, keyboard, player.photo_file_id)
+
+
+async def _send_widget_or_card(
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    player: Player,
+    text: str,
+    keyboard: InlineKeyboardMarkup,
+    on_forbidden: Callable[[], Awaitable[None]] | None,
+) -> None:
+    """Send the widget card, or the button card if Telegram refuses the widget.
+
+    Runs as a background task: sendWidget has taken up to a minute since launch,
+    and PTB handles one update at a time, so awaiting it in the handler would make
+    other voters' widget taps miss Telegram's 15-second answer deadline. A voter
+    who never started the bot surfaces here as Forbidden, after the handler that
+    asked has returned, so the caller's reaction comes in as on_forbidden."""
+    try:
+        if not await send_widget_card(
+            context, chat_id, player.telegram_id, player.display_name, settings.BOT_LANG
+        ):
+            await _send_card(context, chat_id, text, keyboard, player.photo_file_id)
+    except Forbidden as exc:
+        logger.info("could not DM voter %s: %s", chat_id, exc)
+        if on_forbidden is not None:
+            await on_forbidden()
+    except TelegramError as exc:
+        logger.warning("could not send a rating card to %s: %s", chat_id, exc)
 
 
 async def _delete_message_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -252,14 +279,19 @@ async def _try_dm_voter(
     conn: sqlite3.Connection,
     context: ContextTypes.DEFAULT_TYPE,
     user_id: int,
+    on_forbidden: Callable[[], Awaitable[None]] | None = None,
 ) -> bool:
     """DM the voter their next prompt (or a nudge). Returns True if the DM landed.
 
     Fails gracefully when the user has never started the bot (``Forbidden``).
+    A widget card is sent in the background, so for it a refusal arrives later,
+    through on_forbidden, and this returns True.
     """
     try:
         if _get_player(conn, user_id) is not None:
-            await _send_next_prompt(conn, context, chat_id=user_id, voter_id=user_id)
+            await _send_next_prompt(
+                conn, context, chat_id=user_id, voter_id=user_id, on_forbidden=on_forbidden
+            )
         else:
             await context.bot.send_message(chat_id=user_id, text=t("vote.group_dm_nudge"))
         return True
@@ -299,7 +331,10 @@ async def handle_vote_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         # Never leave a standing reply in the group: it quotes the /vote and
         # orphans into "Deleted message" chatter when the player tidies up.
         # Instead push the prompt into a DM and clear the command from the group.
-        dm_sent = await _try_dm_voter(conn, context, user.id)
+        async def nudge_in_group() -> None:
+            await _post_transient_group_nudge(context, chat.id, user, context.bot.username)
+
+        dm_sent = await _try_dm_voter(conn, context, user.id, on_forbidden=nudge_in_group)
         await _safe_delete(context, chat.id, message.message_id)
         if not dm_sent:
             await _post_transient_group_nudge(context, chat.id, user, context.bot.username)
