@@ -110,17 +110,19 @@ ORDER BY
     total ASC,
     voter_count ASC,
     r.telegram_id, i.indicator
-LIMIT 1
+LIMIT :limit
 """
 
 
-def select_next_score_target(
+def select_score_targets(
     conn: sqlite3.Connection,
     voter_id: int,
     exclude_player: int | None = None,
-) -> ScoreTarget | None:
-    """Return the next (player, indicator) the voter should rate, or None when
-    they've covered everyone and nothing has gone stale yet.
+    limit: int = 1,
+) -> list[ScoreTarget]:
+    """The voter's queue, best target first, at most `limit` rows (one per
+    player and indicator). Empty when they've covered everyone and nothing
+    has gone stale yet.
 
     A ندیدمش skip hides the WHOLE player from this voter — every indicator, not
     just the one that was on screen — until the row ages past
@@ -131,18 +133,29 @@ def select_next_score_target(
     binding a pre-formatted string risks a NULL modifier, which would make the
     comparison silently false and ignore the window entirely.
     """
-    row = conn.execute(
+    rows = conn.execute(
         _NEXT_TARGET_SQL,
         {
             "voter": voter_id,
             "exclude_player": exclude_player,
             "cooldown_days": settings.SKIP_COOLDOWN_DAYS,
             "revote_days": settings.REVOTE_AFTER_DAYS,
+            "limit": limit,
         },
-    ).fetchone()
-    if row is None:
-        return None
-    return ScoreTarget(player_id=row["player_id"], indicator=row["indicator"])
+    ).fetchall()
+    return [ScoreTarget(player_id=r["player_id"], indicator=r["indicator"]) for r in rows]
+
+
+def select_next_score_target(
+    conn: sqlite3.Connection,
+    voter_id: int,
+    exclude_player: int | None = None,
+) -> ScoreTarget | None:
+    """Return the next (player, indicator) the voter should rate, or None when
+    they've covered everyone and nothing has gone stale yet. See
+    select_score_targets for the ordering."""
+    targets = select_score_targets(conn, voter_id, exclude_player=exclude_player)
+    return targets[0] if targets else None
 
 
 def record_score(

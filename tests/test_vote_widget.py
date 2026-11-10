@@ -142,7 +142,7 @@ def test_next_on_the_only_player_left_ends_instead_of_repeating(
     add_player(conn, VOTER, "Alice")
     add_player(conn, 2, "Bob")
     state = vw.apply_query(conn, VOTER, "1n:2")
-    assert state is not None and state.get("e") == 1
+    assert state is not None and state.get("e") == 2
 
 
 def test_rating_the_last_player_ends_and_confirms_the_save(conn: sqlite3.Connection) -> None:
@@ -459,3 +459,126 @@ async def test_group_vote_with_a_blocked_dm_still_nudges_in_the_group(
     await _run_tasks(ctx)
     nudge = ctx.bot.send_message.call_args.kwargs
     assert nudge["chat_id"] == -100123 and "@alice" in nudge["text"]
+
+
+# --- ⏭ memory --------------------------------------------------------------
+
+
+def test_skipping_never_bounces_between_two_players(conn: sqlite3.Connection) -> None:
+    # Production bug: ⏭ on A showed B, ⏭ on B showed A again, forever.
+    _seed(conn)  # Alice votes; Bob and Carol are left
+    passed: set[int] = set()
+    first = vw.apply_query(conn, VOTER, "1n:2", passed)
+    assert first is not None and first["p"] == 3
+    second = vw.apply_query(conn, VOTER, "1n:3", passed)
+    assert second is not None and second.get("e") == 2
+    assert passed == {2, 3}
+
+
+def test_rating_after_a_skip_still_avoids_the_skipped_player(conn: sqlite3.Connection) -> None:
+    _seed(conn)
+    add_player(conn, 4, "Dan")
+    passed: set[int] = set()
+    vw.apply_query(conn, VOTER, "1n:2", passed)
+    after = vw.apply_query(conn, VOTER, "1r:3:333333", passed)
+    assert after is not None and after["p"] == 4
+
+
+def test_end_card_says_everyone_was_rated_only_when_nobody_was_skipped(
+    conn: sqlite3.Connection,
+) -> None:
+    add_player(conn, VOTER, "Alice")
+    add_player(conn, 2, "Bob")
+    assert vw.apply_query(conn, VOTER, "1r:2:333333", set())["e"] == 1  # type: ignore[index]
+
+
+async def test_a_new_card_forgets_earlier_skips(conn: sqlite3.Connection) -> None:
+    _seed(conn)
+    ctx = _ctx(conn)
+
+    def tap(data: str) -> MagicMock:
+        return _widget_update(
+            id=data, data=data, chat={"id": VOTER}, message_id=70, **{"from": {"id": VOTER}}
+        )
+
+    await vw.handle_widget_query(tap("1n:2"), ctx)
+    await _run_tasks(ctx)
+    assert ctx.bot_data["widget_passed"][VOTER] == {2}
+    await vw.send_widget_card(ctx, VOTER, 2, "Bob", "en")
+    assert ctx.bot_data["widget_passed"][VOTER] == set()
+
+
+# --- photos ---------------------------------------------------------------
+
+
+def _save_photo(telegram_id: int, size: tuple[int, int] = (640, 480)) -> None:
+    import io as _io
+
+    from PIL import Image
+
+    from toop.photos import save_photo_bytes
+
+    buf = _io.BytesIO()
+    Image.effect_noise(size, 60).convert("RGB").save(buf, "JPEG", quality=90)
+    save_photo_bytes(telegram_id, buf.getvalue())
+
+
+@pytest.fixture
+def photos_dir(tmp_path, monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(settings, "PHOTOS_DIR", str(tmp_path / "photos"))
+    vw._thumb_cache.clear()
+    return tmp_path / "photos"
+
+
+def test_a_player_with_a_photo_gets_a_small_inline_thumbnail(
+    conn: sqlite3.Connection, photos_dir: object
+) -> None:
+    _seed(conn)
+    _save_photo(2)
+    state = vw.next_state(conn, VOTER, 3, require_other=True)
+    assert state["p"] == 2
+    assert state["i"].startswith("data:image/webp;base64,")
+    assert len(state["i"]) - len("data:image/webp;base64,") <= vw.THUMB_MAX_B64
+    # The whole state still fits Telegram's 1024-byte chat_data, with the
+    # longest name and a save confirmation on top.
+    worst = {**vw.rating_state(2, "ن" * 200, state["i"]), "d": "ن" * vw.MAX_NAME_CHARS}
+    assert len(vw.dump_state(worst).encode()) <= 1024
+
+
+def test_players_without_a_photo_get_no_image(conn: sqlite3.Connection, photos_dir: object) -> None:
+    _seed(conn)
+    assert "i" not in vw.next_state(conn, VOTER, 3, require_other=True)
+
+
+def test_thumbnails_are_cached_until_the_photo_changes(
+    photos_dir: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _save_photo(2)
+    first = vw.player_thumbnail(2)
+    monkeypatch.setattr(vw.Image, "open", MagicMock(side_effect=AssertionError("not cached")))
+    assert vw.player_thumbnail(2) == first
+
+
+def test_a_broken_photo_file_means_no_thumbnail(photos_dir) -> None:  # type: ignore[no-untyped-def]
+    from toop.photos import save_photo_bytes
+
+    save_photo_bytes(2, b"not an image")
+    assert vw.player_thumbnail(2) is None
+
+
+def test_a_photo_too_detailed_for_the_budget_gets_no_thumbnail(
+    photos_dir: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _save_photo(2)
+    monkeypatch.setattr(vw, "THUMB_MAX_B64", 10)
+    assert vw.player_thumbnail(2) is None
+
+
+async def test_the_first_card_carries_the_photo(
+    conn: sqlite3.Connection, photos_dir: object
+) -> None:
+    _save_photo(2)
+    ctx = _ctx(conn)
+    await vw.send_widget_card(ctx, 7, 2, "Bob", "en")
+    chat_data = json.loads(ctx.bot.do_api_request.call_args.kwargs["api_kwargs"]["chat_data"])
+    assert chat_data["i"].startswith("data:image/webp;base64,")

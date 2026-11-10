@@ -14,6 +14,8 @@ through Bot.do_api_request and widget_query updates arrive in Update.api_kwargs.
 from __future__ import annotations
 
 import asyncio
+import base64
+import io
 import json
 import logging
 import re
@@ -24,14 +26,16 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
+from PIL import Image, ImageOps, UnidentifiedImageError
 from telegram import Update
 from telegram.error import BadRequest, TelegramError, TimedOut
 from telegram.ext import ContextTypes
 
 from toop.i18n import indicator_label, score_word, t
+from toop.photos import photo_path
 from toop.rating import INDICATORS
 from toop.sessions import get_active_session
-from toop.voting_queue import record_score, record_skip, select_next_score_target
+from toop.voting_queue import record_score, record_skip, select_score_targets
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +76,8 @@ def build_widget_html(lang: str) -> str:
             "err": t("vote.widget_error", lang),
             "endTitle": t("vote.widget_end_title", lang),
             "endBody": t("vote.widget_end_body", lang),
+            "skipTitle": t("vote.widget_end_skipped_title", lang),
+            "skipBody": t("vote.widget_end_skipped_body", lang),
         },
     }
     # The sandbox ignores CSS `direction`, so right-to-left is laid out by hand.
@@ -96,12 +102,54 @@ def _seq() -> int:
     return _last_seq
 
 
-def rating_state(player_id: int, name: str) -> dict[str, Any]:
-    return {"v": STATE_VERSION, "q": _seq(), "p": player_id, "n": name[:MAX_NAME_CHARS]}
+def rating_state(player_id: int, name: str, photo: str | None = None) -> dict[str, Any]:
+    state = {"v": STATE_VERSION, "q": _seq(), "p": player_id, "n": name[:MAX_NAME_CHARS]}
+    if photo is not None:
+        state["i"] = photo
+    return state
 
 
-def end_state() -> dict[str, Any]:
-    return {"v": STATE_VERSION, "q": _seq(), "e": 1}
+def end_state(*, skipped_some: bool = False) -> dict[str, Any]:
+    """The last card. e=2 when the voter passed over (⏭) whoever is left, so it
+    doesn't claim they rated everyone."""
+    return {"v": STATE_VERSION, "q": _seq(), "e": 2 if skipped_some else 1}
+
+
+# The state travels as chat_data and as answer data, both capped at 1024 bytes,
+# and the widget can't load images from anywhere, so a photo rides along as a
+# tiny inline WebP. 700 bytes of base64 leaves room for the rest of the state
+# (a 64-character Persian name is 128 bytes).
+THUMB_MAX_B64 = 700
+_THUMB_STEPS = ((48, 45), (48, 30), (40, 45), (40, 30), (32, 30))
+_thumb_cache: dict[int, tuple[float, str | None]] = {}
+
+
+def player_thumbnail(telegram_id: int) -> str | None:
+    """A data: URL for the player's /set_photo backup, or None without one.
+    Cached until the backup file changes."""
+    path = photo_path(telegram_id)
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return None
+    cached = _thumb_cache.get(telegram_id)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+    thumb = None
+    try:
+        with Image.open(path) as img:
+            face = ImageOps.exif_transpose(img).convert("RGB")
+        for size, quality in _THUMB_STEPS:
+            buf = io.BytesIO()
+            ImageOps.fit(face, (size, size)).save(buf, "WEBP", quality=quality, method=6)
+            encoded = base64.b64encode(buf.getvalue()).decode()
+            if len(encoded) <= THUMB_MAX_B64:
+                thumb = "data:image/webp;base64," + encoded
+                break
+    except (OSError, UnidentifiedImageError) as exc:
+        logger.warning("could not make a thumbnail for %s: %s", telegram_id, exc)
+    _thumb_cache[telegram_id] = (mtime, thumb)
+    return thumb
 
 
 def dump_state(state: dict[str, Any]) -> str:
@@ -116,27 +164,37 @@ def _player_name(conn: sqlite3.Connection, telegram_id: int) -> str | None:
 
 
 def next_state(
-    conn: sqlite3.Connection, voter_id: int, exclude: int, *, require_other: bool
+    conn: sqlite3.Connection,
+    voter_id: int,
+    exclude: int,
+    *,
+    require_other: bool,
+    passed: frozenset[int] | set[int] = frozenset(),
 ) -> dict[str, Any]:
     """The card for whoever the queue offers next, or the end card.
 
     require_other mirrors the button flow's ⏭: moving on from the only player
-    left must not hand back the same player."""
-    target = select_next_score_target(conn, voter_id, exclude_player=exclude)
-    if target is not None and require_other and target.player_id == exclude:
-        target = None
-    if target is None:
-        return end_state()
-    name = _player_name(conn, target.player_id)
-    if name is None:
-        return end_state()
-    return rating_state(target.player_id, name)
+    left must not hand back the same player. `passed` holds everyone the voter
+    has ⏭-ed on this card; without it the queue offers the last-but-one
+    player again, and two ⏭ taps bounce between the same two people."""
+    for target in select_score_targets(conn, voter_id, exclude_player=exclude, limit=1000):
+        if target.player_id in passed or (require_other and target.player_id == exclude):
+            continue
+        name = _player_name(conn, target.player_id)
+        if name is None:
+            continue
+        return rating_state(target.player_id, name, player_thumbnail(target.player_id))
+    return end_state(skipped_some=bool(passed))
 
 
-def apply_query(conn: sqlite3.Connection, voter_id: int, data: str) -> dict[str, Any] | None:
+def apply_query(
+    conn: sqlite3.Connection, voter_id: int, data: str, passed: set[int] | None = None
+) -> dict[str, Any] | None:
     """Record one widget request and return the state the card shows next, or
     None for a request to ignore (not a voter, malformed, or about themselves).
-    `data` is untrusted: the voter comes only from Telegram's `from`."""
+    `data` is untrusted: the voter comes only from Telegram's `from`. `passed`
+    collects the players this voter ⏭-ed, and is updated in place."""
+    passed = set() if passed is None else passed
     if _player_name(conn, voter_id) is None:
         return None
     match = _QUERY_RE.fullmatch(data)
@@ -148,7 +206,7 @@ def apply_query(conn: sqlite3.Connection, voter_id: int, data: str) -> dict[str,
     name = _player_name(conn, player_id)
     if name is None:
         # The player left the roster while their card was on screen.
-        return next_state(conn, voter_id, player_id, require_other=True)
+        return next_state(conn, voter_id, player_id, require_other=True, passed=passed)
     if action == "r":
         if digits is None:
             return None
@@ -156,7 +214,7 @@ def apply_query(conn: sqlite3.Connection, voter_id: int, data: str) -> dict[str,
             record_score(conn, voter_id, player_id, indicator, int(digit))
         # Straight on to the next player; `d` names who was just saved, so the
         # new card can confirm it in one line.
-        state = next_state(conn, voter_id, player_id, require_other=True)
+        state = next_state(conn, voter_id, player_id, require_other=True, passed=passed)
         return {**state, "d": name[:MAX_NAME_CHARS]}
     if digits is not None:
         return None
@@ -167,8 +225,9 @@ def apply_query(conn: sqlite3.Connection, voter_id: int, data: str) -> dict[str,
         record_skip(
             conn, voter_id, player_id, INDICATORS[0], session_id=active.id if active else None
         )
-        return next_state(conn, voter_id, player_id, require_other=False)
-    return next_state(conn, voter_id, player_id, require_other=True)
+        return next_state(conn, voter_id, player_id, require_other=False, passed=passed)
+    passed.add(player_id)
+    return next_state(conn, voter_id, player_id, require_other=True, passed=passed)
 
 
 async def send_widget_card(
@@ -177,7 +236,10 @@ async def send_widget_card(
     """Send a rating card for one player. False means Telegram refused it, so
     the caller falls back to the button card. A timeout counts as sent: the
     widget may still land, and a fallback would stack a second card under it.
-    Forbidden (the voter never started the bot) propagates to the caller."""
+    Forbidden (the voter never started the bot) propagates to the caller.
+
+    A new card starts a new pass over the queue, so it forgets earlier ⏭s."""
+    _passed_players(context, chat_id).clear()
     try:
         await context.bot.do_api_request(
             "sendWidget",
@@ -185,7 +247,7 @@ async def send_widget_card(
                 "chat_id": chat_id,
                 "html": build_widget_html(lang),
                 "allow_queries": True,
-                "chat_data": dump_state(rating_state(player_id, name)),
+                "chat_data": dump_state(rating_state(player_id, name, player_thumbnail(player_id))),
                 "caption": t("vote.widget_caption", lang),
             },
             read_timeout=SEND_READ_TIMEOUT,
@@ -257,6 +319,13 @@ async def _persist_state(
             logger.warning("editMessageWidgetData %s/%s failed: %s", chat_id, message_id, exc)
 
 
+def _passed_players(context: ContextTypes.DEFAULT_TYPE, voter_id: int) -> set[int]:
+    """Players this voter ⏭-ed since their latest card was sent. In memory: a
+    restart forgets them, which only means a skipped player can come back."""
+    passed: dict[int, set[int]] = context.bot_data.setdefault("widget_passed", {})
+    return passed.setdefault(voter_id, set())
+
+
 async def handle_widget_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Answer a tap on a rating widget. Registered as a TypeHandler in its own
     group, so it sees every update and returns at once for anything else."""
@@ -267,7 +336,9 @@ async def handle_widget_query(update: Update, context: ContextTypes.DEFAULT_TYPE
     voter_id = (raw.get("from") or {}).get("id")
     state = None
     if isinstance(voter_id, int):
-        state = apply_query(conn, voter_id, str(raw.get("data", "")))
+        state = apply_query(
+            conn, voter_id, str(raw.get("data", "")), _passed_players(context, voter_id)
+        )
     # Every query gets an answer within 15 seconds, or the widget shows a timeout.
     answer: dict[str, Any] = {"widget_query_id": raw["id"]}
     if state is not None:

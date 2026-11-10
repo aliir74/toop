@@ -180,7 +180,7 @@ async def test_set_photo_photo_stores_file_id_and_backs_up(
     # Largest PhotoSize (last) is stored.
     assert list_active_players(conn)[0].photo_file_id == "FULLRES"
     assert PENDING_SET_PHOTO_KEY not in ctx.user_data
-    backup = photos._photo_path(111)
+    backup = photos.photo_path(111)
     assert backup.read_bytes() == b"JPEGBYTES"
     assert "H P" in update.effective_message.reply_text.await_args.args[0]
 
@@ -319,5 +319,5 @@ async def test_unset_photo_callback_clears_and_deletes_backup(
     update = _callback_update("unsetphoto:111")
     await handle_unset_photo_callback(update, _ctx(conn))
     assert list_active_players(conn)[0].photo_file_id is None
-    assert not photos._photo_path(111).exists()
+    assert not photos.photo_path(111).exists()
     assert "H P" in update.callback_query.edit_message_text.await_args.args[0]
