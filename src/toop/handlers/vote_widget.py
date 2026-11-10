@@ -152,8 +152,17 @@ def player_thumbnail(telegram_id: int) -> str | None:
     return thumb
 
 
+STATE_MAX_BYTES = 1024
+
+
 def dump_state(state: dict[str, Any]) -> str:
-    return json.dumps(state, ensure_ascii=False)
+    """The state as Telegram stores it. Both chat_data and answer data are
+    capped at 1024 bytes, so a photo that would push it over is left out:
+    the card still works, just without the avatar."""
+    text = json.dumps(state, ensure_ascii=False)
+    if len(text.encode()) > STATE_MAX_BYTES and "i" in state:
+        text = json.dumps({k: v for k, v in state.items() if k != "i"}, ensure_ascii=False)
+    return text
 
 
 def _player_name(conn: sqlite3.Connection, telegram_id: int) -> str | None:
@@ -177,7 +186,7 @@ def next_state(
     left must not hand back the same player. `passed` holds everyone the voter
     has ⏭-ed on this card; without it the queue offers the last-but-one
     player again, and two ⏭ taps bounce between the same two people."""
-    for target in select_score_targets(conn, voter_id, exclude_player=exclude, limit=1000):
+    for target in select_score_targets(conn, voter_id, exclude_player=exclude, limit=-1):
         if target.player_id in passed or (require_other and target.player_id == exclude):
             continue
         name = _player_name(conn, target.player_id)

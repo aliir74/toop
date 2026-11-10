@@ -121,7 +121,7 @@ def select_score_targets(
     limit: int = 1,
 ) -> list[ScoreTarget]:
     """The voter's queue, best target first, at most `limit` rows (one per
-    player and indicator). Empty when they've covered everyone and nothing
+    player and indicator; -1 for all of them). Empty when they've covered everyone and nothing
     has gone stale yet.
 
     A ندیدمش skip hides the WHOLE player from this voter — every indicator, not

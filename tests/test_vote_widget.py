@@ -582,3 +582,33 @@ async def test_the_first_card_carries_the_photo(
     await vw.send_widget_card(ctx, 7, 2, "Bob", "en")
     chat_data = json.loads(ctx.bot.do_api_request.call_args.kwargs["api_kwargs"]["chat_data"])
     assert chat_data["i"].startswith("data:image/webp;base64,")
+
+
+def test_a_state_that_would_overflow_drops_the_photo_not_the_card() -> None:
+    # Codex review: a 680-byte thumbnail, a 10-digit id and two 64-character
+    # Persian names came to 1031 bytes, and Telegram refuses over 1024.
+    photo = "data:image/webp;base64," + "A" * vw.THUMB_MAX_B64
+    state = {**vw.rating_state(5482030877, "ن" * 64, photo), "d": "ن" * 64}
+    text = vw.dump_state(state)
+    assert len(text.encode()) <= vw.STATE_MAX_BYTES
+    assert json.loads(text)["p"] == 5482030877 and "i" not in json.loads(text)
+
+
+def test_a_state_that_fits_keeps_its_photo() -> None:
+    state = vw.rating_state(2, "Bob", "data:image/webp;base64,AAAA")
+    assert json.loads(vw.dump_state(state))["i"].endswith("AAAA")
+
+
+def test_skipping_walks_the_whole_queue_however_long(conn: sqlite3.Connection) -> None:
+    # Codex review: a row cap applied before filtering skipped players ended a
+    # long queue early (six rows per player).
+    add_player(conn, VOTER, "Alice")
+    for pid in range(2, 202):
+        add_player(conn, pid, f"P{pid}")
+    passed: set[int] = set()
+    state = vw.next_state(conn, VOTER, 0, require_other=True)
+    seen = 0
+    while not state.get("e"):
+        seen += 1
+        state = vw.apply_query(conn, VOTER, f"1n:{state['p']}", passed)  # type: ignore[assignment]
+    assert seen == 200
