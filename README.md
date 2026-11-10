@@ -163,8 +163,8 @@ groups, forwards and inline mode on the test server, but only in private chats i
 1. **Log in to the test server in a Telegram app.**
    - Desktop: Settings, then Shift+Alt+right-click "Add Account", then "Test Server".
    - iOS: tap the Settings tab 10 times, then Accounts, "Login to another account", "Test".
-   A number of the form `99966XYYYY` (X = 1-3) signs in with the code `XXXXX`. A real
-   number gets its code in a Telegram app that is already logged in to the test server.
+   Sign in with your real number. Telegram's docs also list throwaway numbers
+   (`99966XYYYY`, code `XXXXX`), but on 2026-11-10 the test server rejected that code.
 2. **Make a test bot.** Message @BotFather from the test account and copy the token.
 3. **Point a second checkout at it** with its own `.env`, so it never touches the live data:
    ```bash
