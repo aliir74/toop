@@ -66,12 +66,12 @@ def build_widget_html(lang: str) -> str:
             "dk": t("vote.btn_dont_know", lang),
             "skip": t("vote.btn_skip", lang),
             "saved": t("vote.widget_saved", lang),
-            "next": t("vote.widget_next", lang),
             "saving": t("vote.widget_saving", lang),
             "slow": t("vote.widget_slow", lang),
             "fast": t("vote.widget_fast", lang),
             "err": t("vote.widget_error", lang),
-            "end": t("vote.no_prompts", lang),
+            "endTitle": t("vote.widget_end_title", lang),
+            "endBody": t("vote.widget_end_body", lang),
         },
     }
     # The sandbox ignores CSS `direction`, so right-to-left is laid out by hand.
@@ -90,10 +90,6 @@ def _seq() -> int:
 
 def rating_state(player_id: int, name: str) -> dict[str, Any]:
     return {"v": STATE_VERSION, "q": _seq(), "p": player_id, "n": name[:MAX_NAME_CHARS]}
-
-
-def saved_state(player_id: int, name: str, digits: str) -> dict[str, Any]:
-    return {**rating_state(player_id, name), "s": digits}
 
 
 def end_state() -> dict[str, Any]:
@@ -150,7 +146,10 @@ def apply_query(conn: sqlite3.Connection, voter_id: int, data: str) -> dict[str,
             return None
         for indicator, digit in zip(INDICATORS, digits, strict=True):
             record_score(conn, voter_id, player_id, indicator, int(digit))
-        return saved_state(player_id, name, digits)
+        # Straight on to the next player; `d` names who was just saved, so the
+        # new card can confirm it in one line.
+        state = next_state(conn, voter_id, player_id, require_other=True)
+        return {**state, "d": name[:MAX_NAME_CHARS]}
     if digits is not None:
         return None
     if action == "k":
@@ -202,6 +201,7 @@ class _CardEdits:
 
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     latest: int = 0
+    caption_cleared: bool = False
 
 
 def _card_edits(context: ContextTypes.DEFAULT_TYPE, chat_id: int, message_id: int) -> _CardEdits:
@@ -221,6 +221,18 @@ async def _persist_state(
     async with edits.lock:
         if state["q"] != edits.latest:
             return
+        if not edits.caption_cleared:
+            # The caption asks voters whose app can't draw widgets to update. A
+            # tap proves this app can, so the hint only clutters the card now.
+            edits.caption_cleared = True
+            try:
+                await context.bot.do_api_request(
+                    "editMessageCaption",
+                    api_kwargs={"chat_id": chat_id, "message_id": message_id},
+                    read_timeout=EDIT_READ_TIMEOUT,
+                )
+            except TelegramError as exc:
+                logger.info("could not clear widget caption %s/%s: %s", chat_id, message_id, exc)
         try:
             await context.bot.do_api_request(
                 "editMessageWidgetData",

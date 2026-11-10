@@ -1,6 +1,6 @@
 <style>
 body{text-align:__ALIGN__;font-size:var(--tg-text-font-size);color:var(--tg-theme-text-color)}
-h4{margin:4px 0 16px}
+h4{margin:4px 0 16px}h4:empty{display:none}
 button{border:0;border-radius:8px;font:inherit;background:var(--tg-theme-secondary-bg-color);color:var(--tg-theme-text-color)}
 button:disabled{opacity:.4}
 .pri{background:var(--tg-theme-button-color);color:var(--tg-theme-button-text-color)}
@@ -12,8 +12,8 @@ button:disabled{opacity:.4}
 .f{display:flex;flex-direction:__ROW__;gap:6px;margin-top:18px}
 .f button{flex:1;height:var(--tg-button-height,36px)}
 .lk{display:inline-block;margin-top:8px;background:none;color:var(--tg-theme-link-color);font-size:.85em;padding:4px 0}
-.badge{display:inline-block;padding:3px 12px;border-radius:12px;background:rgba(52,199,89,.16);color:#2a9d4b;font-weight:600;font-size:.9em;margin-bottom:14px}
-.end{white-space:pre-wrap;line-height:1.6}
+.end{text-align:center;padding:14px 4px 6px}.end .em{font-size:40px;line-height:1.2}.end b{display:block;margin:8px 0 6px;font-size:1.1em}.end p{margin:0;color:var(--tg-theme-hint-color);line-height:1.6}
+#m.ok{color:#2a9d4b}
 #m{color:var(--tg-theme-hint-color);font-size:.85em;margin-top:10px;min-height:1.2em;padding-bottom:var(--tg-content-safe-area-inset-bottom)}
 </style>
 <h4 id="t"></h4><div id="app"></div><div id="m"></div>
@@ -22,17 +22,15 @@ const C=__CFG__,X=C.t,W=window.TelegramWidget||{chatData:null,request:()=>Promis
 const $=i=>document.getElementById(i),E=(t,c,x)=>{const e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e};
 let cur=null,v=[0,0,0,0,0,0];
 function parse(s){try{const o=JSON.parse(s);return o&&o.v===1?o:null}catch(e){return null}}
-function msg(t){$('m').textContent=t}
-function apply(s){if(!s||(cur&&s.q<=cur.q))return;cur=s;v=[0,0,0,0,0,0];msg('');draw()}
+function msg(t){$('m').textContent=t;$('m').className=''}
+function apply(s){if(!s||(cur&&s.q<=cur.q))return;cur=s;v=[0,0,0,0,0,0];draw();msg(s.d?X.saved.replace('{name}',s.d):'');$('m').className=s.d?'ok':''}
 function ask(d){msg(X.saving);W.request(d).then(a=>{const s=parse(a.result);if(s)apply(s);else msg(X.err)},e=>{const c=e&&e.code;if(c==='BUSY')return;msg(c==='TIMEOUT'||c==='FAILED'?X.slow:c==='RATE_LIMITED'?X.fast:X.err)})}
 function stars(n,tap){const b=E('span','st');for(let k=0;k<5;k++){const x=C.rtl?5-k:k+1,s=E(tap?'button':'span',x<=n?'on':'','★');if(tap)s.onclick=()=>tap(x);b.appendChild(s)}return b}
 function row(i,n,tap){const r=E('div','r');r.appendChild(E('span','l',C.S[i]+(n?' · '+C.L[n-1]:'')));r.appendChild(stars(n,tap));return r}
 function draw(){const a=$('app');a.innerHTML='';
  if(!cur){$('t').textContent='';return}
- if(cur.e){$('t').textContent='';a.appendChild(E('div','end',X.end));return}
+ if(cur.e){$('t').textContent='';const d=E('div','end');d.appendChild(E('div','em','🎉'));d.appendChild(E('b','',X.endTitle));d.appendChild(E('p','',X.endBody));a.appendChild(d);return}
  $('t').textContent=X.title.replace('{name}',cur.n);
- if(cur.s){a.appendChild(E('div','badge',X.saved));[...cur.s].forEach((d,i)=>a.appendChild(row(i,+d)));
-  const f=E('div','f'),b=E('button','pri',X.next);b.onclick=()=>ask('1n:'+cur.p);f.appendChild(b);a.appendChild(f);return}
  C.S.forEach((_,i)=>a.appendChild(row(i,v[i],x=>{v[i]=x;draw()})));
  const f=E('div','f'),s=E('button','pri',X.submit),k=E('button','',X.dk);
  s.disabled=v.includes(0);s.onclick=()=>ask('1r:'+cur.p+':'+v.join(''));k.onclick=()=>ask('1k:'+cur.p);

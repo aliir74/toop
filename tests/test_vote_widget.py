@@ -70,19 +70,21 @@ def test_states_are_versioned_ordered_and_small() -> None:
     assert later["q"] >= first["q"]
     assert len(first["n"]) == vw.MAX_NAME_CHARS
     # chat_data and answer data are capped at 1024 bytes.
-    assert len(vw.dump_state(vw.saved_state(2, "ن" * 500, "123451")).encode()) <= 1024
+    worst = {**vw.rating_state(2, "ن" * 500), "d": "ن" * vw.MAX_NAME_CHARS}
+    assert len(vw.dump_state(worst).encode()) <= 1024
 
 
 # --- applying requests ----------------------------------------------------
 
 
-def test_submit_records_all_six_scores_and_shows_the_saved_card(
+def test_submit_records_all_six_scores_and_goes_straight_to_the_next_player(
     conn: sqlite3.Connection,
 ) -> None:
     _seed(conn)
     state = vw.apply_query(conn, VOTER, "1r:2:543215")
     assert state is not None
-    assert (state["p"], state["n"], state["s"]) == (2, "Bob", "543215")
+    # The next card is Carol's, and it confirms that Bob was saved.
+    assert (state["p"], state["n"], state["d"]) == (3, "Carol", "Bob")
     assert _scores(conn, 2) == dict(zip(INDICATORS, [5, 4, 3, 2, 1, 5], strict=True))
 
 
@@ -92,7 +94,7 @@ def test_ghost_players_can_be_rated(conn: sqlite3.Connection) -> None:
     ghost = add_ghost_player(conn, "Nima")
     assert ghost.telegram_id < 0
     state = vw.apply_query(conn, VOTER, f"1r:{ghost.telegram_id}:453524")
-    assert state is not None and state["s"] == "453524"
+    assert state is not None and state["d"] == "Nima"
     assert _scores(conn, ghost.telegram_id)["attack"] == 4
     assert vw.apply_query(conn, VOTER, f"1k:{ghost.telegram_id}") is not None
 
@@ -132,12 +134,11 @@ def test_next_on_the_only_player_left_ends_instead_of_repeating(
     assert state is not None and state.get("e") == 1
 
 
-def test_after_rating_everyone_the_next_card_is_the_end(conn: sqlite3.Connection) -> None:
+def test_rating_the_last_player_ends_and_confirms_the_save(conn: sqlite3.Connection) -> None:
     add_player(conn, VOTER, "Alice")
     add_player(conn, 2, "Bob")
-    vw.apply_query(conn, VOTER, "1r:2:333333")
-    state = vw.apply_query(conn, VOTER, "1n:2")
-    assert state is not None and state.get("e") == 1
+    state = vw.apply_query(conn, VOTER, "1r:2:333333")
+    assert state is not None and state.get("e") == 1 and state["d"] == "Bob"
 
 
 def test_a_card_for_a_removed_player_moves_on(conn: sqlite3.Connection) -> None:
@@ -260,7 +261,7 @@ async def test_widget_query_is_answered_with_the_new_state_then_persisted(
     (method,) = ctx.bot.do_api_request.call_args.args
     answer = ctx.bot.do_api_request.call_args.kwargs["api_kwargs"]
     assert method == "answerWidgetQuery" and answer["widget_query_id"] == "q1"
-    assert json.loads(answer["data"])["s"] == "333333"
+    assert json.loads(answer["data"])["d"] == "Bob"
     ctx.application.create_task.assert_called_once()
     await _run_tasks(ctx)
 
@@ -323,13 +324,47 @@ async def test_an_older_state_never_overwrites_a_newer_one(conn: sqlite3.Connect
     await vw.handle_widget_query(tap("1n:2"), ctx)
     ctx.bot.do_api_request.reset_mock()
     await _run_tasks(ctx)
-    # Only the newest state is written: the "next player" card, not the saved one.
+    # Only the newest state is written: the card after the skip, not the one
+    # the submit produced.
     edits = [
         c for c in ctx.bot.do_api_request.call_args_list if c.args[0] == "editMessageWidgetData"
     ]
     assert len(edits) == 1
     written = json.loads(edits[0].kwargs["api_kwargs"]["chat_data"])
-    assert "s" not in written and written["p"] == 3
+    assert "d" not in written and written["p"] == 3
+
+
+async def test_the_first_tap_clears_the_update_your_app_caption_once(
+    conn: sqlite3.Connection,
+) -> None:
+    _seed(conn)
+    ctx = _ctx(conn)
+    for data in ("1n:2", "1n:3"):
+        update = _widget_update(
+            id=data, data=data, chat={"id": VOTER}, message_id=70, **{"from": {"id": VOTER}}
+        )
+        await vw.handle_widget_query(update, ctx)
+        await _run_tasks(ctx)
+    methods = [c.args[0] for c in ctx.bot.do_api_request.call_args_list]
+    assert methods.count("editMessageCaption") == 1
+
+
+async def test_a_failed_caption_clear_still_writes_the_state(conn: sqlite3.Connection) -> None:
+    _seed(conn)
+    ctx = _ctx(conn)
+
+    async def fail_caption(method: str, **_: object) -> None:
+        if method == "editMessageCaption":
+            raise BadRequest("message can't be edited")
+
+    ctx.bot.do_api_request.side_effect = fail_caption
+    update = _widget_update(
+        id="q", data="1n:2", chat={"id": VOTER}, message_id=70, **{"from": {"id": VOTER}}
+    )
+    await vw.handle_widget_query(update, ctx)
+    await _run_tasks(ctx)
+    methods = [c.args[0] for c in ctx.bot.do_api_request.call_args_list]
+    assert methods[-1] == "editMessageWidgetData"
 
 
 # --- the voting flow ------------------------------------------------------
