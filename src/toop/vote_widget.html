@@ -11,7 +11,7 @@ button:disabled{opacity:.4}
 .st .on{color:#f5b301}
 .f{display:flex;flex-direction:__ROW__;gap:6px;margin-top:18px}
 .f button{flex:1;height:var(--tg-button-height,36px)}
-.lk{display:block;margin-top:8px;background:none;color:var(--tg-theme-link-color);font-size:.85em;padding:4px 0}
+.lk{display:inline-block;margin-top:8px;background:none;color:var(--tg-theme-link-color);font-size:.85em;padding:4px 0}
 .badge{display:inline-block;padding:3px 12px;border-radius:12px;background:rgba(52,199,89,.16);color:#2a9d4b;font-weight:600;font-size:.9em;margin-bottom:14px}
 .end{white-space:pre-wrap;line-height:1.6}
 #m{color:var(--tg-theme-hint-color);font-size:.85em;margin-top:10px;min-height:1.2em;padding-bottom:var(--tg-content-safe-area-inset-bottom)}
@@ -37,7 +37,7 @@ function draw(){const a=$('app');a.innerHTML='';
  const f=E('div','f'),s=E('button','pri',X.submit),k=E('button','',X.dk);
  s.disabled=v.includes(0);s.onclick=()=>ask('1r:'+cur.p+':'+v.join(''));k.onclick=()=>ask('1k:'+cur.p);
  f.appendChild(s);f.appendChild(k);a.appendChild(f);
- const n=E('button','lk',X.skip);n.onclick=()=>ask('1n:'+cur.p);a.appendChild(n)}
+ const w=E('div'),n=E('button','lk',X.skip);n.onclick=()=>ask('1n:'+cur.p);w.appendChild(n);a.appendChild(w)}
 W.onEvent('chatDataChanged',()=>apply(parse(W.chatData)));
 apply(parse(W.chatData));if(!cur)draw();
 </script>
