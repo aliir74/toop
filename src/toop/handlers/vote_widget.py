@@ -45,9 +45,10 @@ SEND_READ_TIMEOUT = 20.0
 EDIT_READ_TIMEOUT = 90.0
 
 # Request format v1: "1r:<player>:<six 1-5 digits>" submits, "1k:<player>" is
-# ندیدمش, "1n:<player>" moves on. The leading version digit lets a later format
+# ندیدمش, "1n:<player>" moves on. <player> is negative for a ghost player
+# (no Telegram account yet). The leading version digit lets a later format
 # coexist with cards already sitting in chats, whose code can never change.
-_QUERY_RE = re.compile(r"1([rkn]):(\d{1,20})(?::([1-5]{6}))?")
+_QUERY_RE = re.compile(r"1([rkn]):(-?\d{1,20})(?::([1-5]{6}))?")
 
 
 @cache

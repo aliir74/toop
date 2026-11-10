@@ -14,7 +14,7 @@ import toop.handlers.vote_widget as vw
 from toop.config import settings
 from toop.handlers.voting import _send_next_prompt, handle_vote_command
 from toop.i18n import indicator_label, score_word, t
-from toop.players import add_player
+from toop.players import add_ghost_player, add_player
 from toop.rating import INDICATORS
 from toop.sessions import open_session
 
@@ -84,6 +84,17 @@ def test_submit_records_all_six_scores_and_shows_the_saved_card(
     assert state is not None
     assert (state["p"], state["n"], state["s"]) == (2, "Bob", "543215")
     assert _scores(conn, 2) == dict(zip(INDICATORS, [5, 4, 3, 2, 1, 5], strict=True))
+
+
+def test_ghost_players_can_be_rated(conn: sqlite3.Connection) -> None:
+    # Ghosts (players without a Telegram account yet) have negative ids.
+    add_player(conn, VOTER, "Alice")
+    ghost = add_ghost_player(conn, "Nima")
+    assert ghost.telegram_id < 0
+    state = vw.apply_query(conn, VOTER, f"1r:{ghost.telegram_id}:453524")
+    assert state is not None and state["s"] == "453524"
+    assert _scores(conn, ghost.telegram_id)["attack"] == 4
+    assert vw.apply_query(conn, VOTER, f"1k:{ghost.telegram_id}") is not None
 
 
 def test_dont_know_records_one_skip_and_moves_to_another_player(
