@@ -108,6 +108,11 @@ class Settings(BaseSettings):
     # that a season-old opinion does not survive a whole season. Must be > 0 —
     # a zero window would make every score permanently stale.
     REVOTE_AFTER_DAYS: int = Field(default=60, gt=0)
+    # Rate a whole player in one Bot API 10.4 HTML widget (six star rows) instead
+    # of one button card per skill. Off by default: a Telegram app too old for
+    # widgets shows only the card's caption, and widgets work only in the bot's
+    # private chat in production. The button flow stays as the fallback.
+    VOTE_WIDGET: bool = False
     # Weekly re-vote nudge. Tuesday 7pm is the day after the Monday session, when
     # the voter has just played with these people and their memory is freshest;
     # it also stays clear of the Thursday attendance poll, so the group never

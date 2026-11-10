@@ -4,13 +4,14 @@ import logging
 from datetime import UTC, datetime, time
 from zoneinfo import ZoneInfo
 
-from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault
+from telegram import BotCommand, BotCommandScopeChat, BotCommandScopeDefault, Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
     CommandHandler,
     MessageHandler,
     PollAnswerHandler,
+    TypeHandler,
     filters,
 )
 
@@ -73,6 +74,7 @@ from toop.handlers.snapshot import (
     handle_snapshot,
     handle_swap,
 )
+from toop.handlers.vote_widget import handle_widget_query
 from toop.handlers.voting import (
     handle_nudge,
     handle_start,
@@ -102,6 +104,19 @@ async def _register_commands(app: Application) -> None:
         await app.bot.set_my_commands(
             _to_bot_commands(admin=True), scope=BotCommandScopeChat(chat_id=admin_id)
         )
+
+
+# Telegram's default update set (everything but chat_member and the reaction
+# updates) plus widget_query, which Bot API 10.4 only sends when asked for by
+# name. The widget handler sits alone in its own group: a TypeHandler matches
+# every update, and in a shared group it would swallow commands and callbacks.
+_DEFAULT_EXCLUDED_UPDATES = frozenset(
+    {Update.CHAT_MEMBER, Update.MESSAGE_REACTION, Update.MESSAGE_REACTION_COUNT}
+)
+ALLOWED_UPDATES = [u for u in Update.ALL_TYPES if u not in _DEFAULT_EXCLUDED_UPDATES] + [
+    "widget_query"
+]
+WIDGET_HANDLER_GROUP = 10
 
 
 def main() -> None:
@@ -239,12 +254,14 @@ def main() -> None:
         group=4,
     )
 
+    app.add_handler(TypeHandler(Update, handle_widget_query), group=WIDGET_HANDLER_GROUP)
+
     logger.info(
         "توپ starting (admin=%s, group=%s)",
         settings.ADMIN_TELEGRAM_ID,
         settings.GROUP_CHAT_ID,
     )
-    app.run_polling()  # pragma: no cover
+    app.run_polling(allowed_updates=ALLOWED_UPDATES)  # pragma: no cover
 
 
 if __name__ == "__main__":  # pragma: no cover
