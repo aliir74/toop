@@ -18,6 +18,7 @@ from toop.players import (
     resolve_roster_player,
     set_player_photo,
     soft_remove_player,
+    sync_player_username,
 )
 
 
@@ -463,3 +464,13 @@ def test_resolve_roster_player_misses(conn: sqlite3.Connection) -> None:
     assert resolve_roster_player(conn, "@gone") is None
     assert resolve_roster_player(conn, "404") is None
     assert resolve_roster_player(conn, "@") is None
+
+
+def test_sync_player_username_sets_clears_and_ignores_unknown(conn: sqlite3.Connection) -> None:
+    add_player(conn, 1, "Morteza")
+    sync_player_username(conn, 1, "@Mortyz40")
+    assert get_player_by_username(conn, "mortyz40") is not None
+    sync_player_username(conn, 1, None)
+    assert get_player_by_username(conn, "mortyz40") is None
+    sync_player_username(conn, 404, "nobody")  # not on the roster: no row created
+    assert get_player_by_username(conn, "nobody") is None

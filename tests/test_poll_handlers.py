@@ -177,6 +177,22 @@ async def test_poll_answer_auto_registers_unknown_voter(conn: sqlite3.Connection
     assert count_rsvps(conn, sess.id).yes == 1
 
 
+async def test_poll_answer_refreshes_username_keeps_admin_name(
+    conn: sqlite3.Connection,
+) -> None:
+    # 2026-11-16: Morteza was added before he set @Mortyz40, so the roster kept
+    # "no username" even though he voted every week.
+    sess = open_session(conn, date(2026, 5, 18))
+    add_player(conn, 5, "Morteza")
+    record_poll(conn, session_id=sess.id, poll_id="p1", kind="attendance", message_id=1)
+    update = _answer_update("p1", (0,), 5)
+    update.poll_answer.user.username = "Mortyz40"
+    await handle_poll_answer(update, _ctx(conn))
+    row = conn.execute("SELECT username, display_name FROM players WHERE telegram_id=5").fetchone()
+    assert row["username"] == "mortyz40"
+    assert row["display_name"] == "Morteza"
+
+
 async def test_poll_answer_unknown_poll_noop(conn: sqlite3.Connection) -> None:
     await handle_poll_answer(_answer_update("zzz", (0,), 1), _ctx(conn))  # no crash
 

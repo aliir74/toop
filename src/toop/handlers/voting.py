@@ -19,7 +19,7 @@ from toop.config import settings
 from toop.contacts import get_contact, upsert_contact
 from toop.handlers.vote_widget import send_widget_card
 from toop.i18n import indicator_label, score_word, t
-from toop.players import Player
+from toop.players import Player, sync_player_username
 from toop.sessions import get_active_session
 from toop.voting_queue import (
     ScoreTarget,
@@ -440,6 +440,7 @@ async def handle_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             conn = _conn(context)
             is_new = get_contact(conn, user.id) is None
             upsert_contact(conn, user.id, username=user.username, display_name=user.full_name)
+            sync_player_username(conn, user.id, user.username)
             if is_new and settings.GROUP_CHAT_ID:
                 await _notify_group_new_contact(context, conn, user.full_name)
         await message.reply_text(t("vote.start_dm"))
