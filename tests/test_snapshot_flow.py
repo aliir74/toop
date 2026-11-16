@@ -394,3 +394,98 @@ async def test_publish_handles_telegram_error(conn: sqlite3.Connection) -> None:
     ctx.bot.send_message = AsyncMock(side_effect=TelegramError("nope"))
     await handle_publish(update, ctx)
     assert "Failed to publish" in update.effective_message.reply_text.await_args.args[0]
+
+
+def test_format_teams_shows_suggested_lineup_for_six_a_side(conn: sqlite3.Connection) -> None:
+    from toop.i18n import t
+
+    for i in range(1, 13):
+        add_player(conn, i, f"P{i}", f"p{i}")
+    text = _format_teams(conn, _snap([1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]), "2026-05-18")
+    assert t("snapshot.lineup_header") in text
+    assert t("snapshot.lineup_rule") in text
+    # Six court positions per team: each name appears in its team block and its lineup.
+    for i in range(1, 13):
+        assert text.count(f"P{i}") >= 2
+
+
+def test_format_teams_lineup_can_be_switched_off(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from toop.i18n import t
+
+    monkeypatch.setattr("toop.handlers.snapshot.settings", _snap_settings(LINEUP_SUGGESTION=False))
+    for i in range(1, 13):
+        add_player(conn, i, f"P{i}", f"p{i}")
+    text = _format_teams(conn, _snap([1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]), "2026-05-18")
+    assert t("snapshot.lineup_header") not in text
+
+
+def _seed_session_with_12_rsvps(conn: sqlite3.Connection) -> int:
+    sess = open_session(conn, date(2026, 5, 18))
+    for i in range(1, 13):
+        add_player(conn, i, f"P{i}", f"p{i}")
+        upsert_rsvp(conn, sess.id, i, "yes")
+    return sess.id
+
+
+def _photo_ctx(conn: sqlite3.Connection) -> MagicMock:
+    ctx = _ctx(conn)
+    ctx.bot.send_photo = AsyncMock()
+    return ctx
+
+
+async def test_snapshot_sends_court_image_for_six_a_side(conn: sqlite3.Connection) -> None:
+    from toop.i18n import t
+
+    _seed_session_with_12_rsvps(conn)
+    update = _admin_update()
+    update.effective_message.chat_id = 42
+    ctx = _photo_ctx(conn)
+    await handle_snapshot(update, ctx)
+    ctx.bot.send_photo.assert_awaited_once()
+    kwargs = ctx.bot.send_photo.await_args.kwargs
+    assert kwargs["chat_id"] == 42
+    assert kwargs["photo"].startswith(b"\x89PNG")
+    assert kwargs["caption"] == t("snapshot.court_caption")
+
+
+async def test_no_court_image_for_seven_a_side(conn: sqlite3.Connection) -> None:
+    _seed_session_with_16_rsvps(conn)  # 14 attendees -> 7v7
+    ctx = _photo_ctx(conn)
+    await handle_snapshot(_admin_update(), ctx)
+    ctx.bot.send_photo.assert_not_awaited()
+
+
+async def test_no_court_image_when_lineups_off(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("toop.handlers.snapshot.settings", _snap_settings(LINEUP_SUGGESTION=False))
+    _seed_session_with_12_rsvps(conn)
+    ctx = _photo_ctx(conn)
+    await handle_snapshot(_admin_update(), ctx)
+    ctx.bot.send_photo.assert_not_awaited()
+
+
+async def test_court_image_send_failure_does_not_raise(conn: sqlite3.Connection) -> None:
+    from telegram.error import TelegramError
+
+    _seed_session_with_12_rsvps(conn)
+    update = _admin_update()
+    ctx = _photo_ctx(conn)
+    ctx.bot.send_photo = AsyncMock(side_effect=TelegramError("too big"))
+    await handle_snapshot(update, ctx)  # must not raise
+    update.effective_message.reply_text.assert_awaited_once()
+
+
+async def test_publish_and_auto_snapshot_send_court_image(conn: sqlite3.Connection) -> None:
+    from toop.handlers.snapshot import auto_snapshot_job
+
+    _seed_session_with_12_rsvps(conn)
+    ctx = _photo_ctx(conn)
+    await auto_snapshot_job(ctx)
+    assert ctx.bot.send_photo.await_args.kwargs["chat_id"] == 42  # admin DM
+
+    publish_ctx = _photo_ctx(conn)
+    await handle_publish(_admin_update(), publish_ctx)
+    assert publish_ctx.bot.send_photo.await_args.kwargs["chat_id"] == -100123  # group

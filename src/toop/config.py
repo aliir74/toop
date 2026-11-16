@@ -113,6 +113,9 @@ class Settings(BaseSettings):
     # widgets shows only the card's caption, and widgets work only in the bot's
     # private chat in production. The button flow stays as the fallback.
     VOTE_WIDGET: bool = False
+    # Add a suggested starting lineup (court positions 1-6, two setters opposite
+    # each other) under each team in the teams message. See toop/lineup.py.
+    LINEUP_SUGGESTION: bool = True
     # Weekly re-vote nudge. Tuesday 7pm is the day after the Monday session, when
     # the voter has just played with these people and their memory is freshest;
     # it also stays clear of the Thursday attendance poll, so the group never

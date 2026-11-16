@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import sqlite3
 from datetime import UTC, datetime
 
-from telegram import Update
+from telegram import Bot, Update
 from telegram.error import TelegramError
 from telegram.ext import ContextTypes
 from telegram.helpers import escape_markdown
@@ -18,7 +19,9 @@ from toop.balance import (
     swap_players,
 )
 from toop.config import settings
+from toop.court_image import CourtTeam, load_photos, render_court
 from toop.i18n import indicator_label_short, t
+from toop.lineup import Lineup, lineup_for_team
 from toop.pause import events_are_paused
 from toop.players import Player, resolve_roster_player
 from toop.rating import INDICATORS, refresh_ratings
@@ -122,15 +125,84 @@ def _team_block(label: str, names: list[str]) -> str:
     return "\n".join(lines)
 
 
+def _lineup_block(conn: sqlite3.Connection, label: str, lineup: Lineup) -> str:
+    """One team's suggested court positions and its two setters."""
+
+    def name(pid: int) -> str:
+        return escape_markdown(_names(conn, [pid])[0], version=1)
+
+    pos = {f"p{p}": name(pid) for p, pid in lineup.court.items()}
+    lines = [
+        label,
+        t("snapshot.lineup_front", **pos),
+        t("snapshot.lineup_back", **pos),
+        t("snapshot.lineup_setters", a=name(lineup.setters[0]), b=name(lineup.setters[1])),
+    ]
+    return "\n".join(lines)
+
+
+def _format_lineups(conn: sqlite3.Connection, snap: Snapshot) -> str:
+    """Suggested starting lineups for both teams, or "" when off or no team has
+    6 players, the only size the lineup model covers."""
+    if not settings.LINEUP_SUGGESTION:
+        return ""
+    blocks = []
+    for key, team in (
+        ("snapshot.team_a_label", snap.team_a),
+        ("snapshot.team_b_label", snap.team_b),
+    ):
+        lineup = lineup_for_team(conn, team)
+        if lineup is not None:
+            blocks.append(_lineup_block(conn, t(key), lineup))
+    if not blocks:
+        return ""
+    return (
+        t("snapshot.lineup_header")
+        + "\n\n"
+        + "\n\n".join(blocks)
+        + "\n\n"
+        + t("snapshot.lineup_rule")
+        + "\n\n"
+    )
+
+
+async def _send_court_image(
+    bot: Bot, chat_id: int, conn: sqlite3.Connection, snap: Snapshot
+) -> None:
+    """Send the court picture of both lineups. Skipped when lineups are off or
+    either team is not 6; a send failure is logged, never raised, because the
+    text message with the same lineup has already gone out."""
+    if not settings.LINEUP_SUGGESTION:
+        return
+    lineup_a = lineup_for_team(conn, snap.team_a)
+    lineup_b = lineup_for_team(conn, snap.team_b)
+    if lineup_a is None or lineup_b is None:
+        return
+    ids = snap.team_a + snap.team_b
+    names = dict(zip(ids, _names(conn, ids), strict=True))
+    photos = await load_photos(bot, conn, ids)
+    png = await asyncio.to_thread(
+        render_court,
+        CourtTeam("A", lineup_a, names, photos),
+        CourtTeam("B", lineup_b, names, photos),
+    )
+    try:
+        await bot.send_photo(chat_id=chat_id, photo=png, caption=t("snapshot.court_caption"))
+    except TelegramError as exc:
+        logger.warning("court image send to %s failed: %s", chat_id, exc)
+
+
 def _format_teams(conn: sqlite3.Connection, snap: Snapshot, session_date: str) -> str:
     a_block = _team_block(t("snapshot.team_a_label"), _names(conn, snap.team_a))
     b_block = _team_block(t("snapshot.team_b_label"), _names(conn, snap.team_b))
+    lineups = _format_lineups(conn, snap)
     metrics = snap.metrics
     labels = {ind: indicator_label_short(ind) for ind in INDICATORS}
     bars = skill_balance_bars(metrics.per_indicator_a, metrics.per_indicator_b, labels)
     return (
         t("snapshot.proposed", date=session_date) + "\n\n"
         f"{a_block}\n\n{b_block}\n\n"
+        + lineups
         + t("snapshot.skill_balance_header")
         + "\n"
         + f"{bars}\n"
@@ -182,6 +254,7 @@ async def handle_snapshot(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f"{_format_teams(conn, snap, sess.session_date.isoformat())}",
         parse_mode="Markdown",
     )
+    await _send_court_image(context.bot, message.chat_id, conn, snap)
 
 
 async def auto_snapshot_job(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -215,6 +288,8 @@ async def auto_snapshot_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         )
     except TelegramError as exc:
         logger.warning("auto_snapshot: failed to DM admin: %s", exc)
+        return
+    await _send_court_image(context.bot, settings.ADMIN_TELEGRAM_ID, conn, snap)
 
 
 @require_admin
@@ -312,6 +387,7 @@ async def handle_publish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     write_attendance(conn, sess.id)
     set_session_status(conn, sess.id, "published")
+    await _send_court_image(context.bot, settings.GROUP_CHAT_ID, conn, snap)
     await message.reply_text(
         t("snapshot.published", sid=sess.id, n=len(snap.team_a) + len(snap.team_b))
     )
