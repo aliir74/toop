@@ -352,6 +352,13 @@ async def test_start_in_dm_records_contact(conn: sqlite3.Connection) -> None:
     assert row["display_name"] == "User 7"
 
 
+async def test_start_in_dm_refreshes_roster_username(conn: sqlite3.Connection) -> None:
+    add_player(conn, 7, "Seven")
+    await handle_start(_dm_update(user_id=7), _ctx(conn))
+    row = conn.execute("SELECT username FROM players WHERE telegram_id=7").fetchone()
+    assert row["username"] == "user7"
+
+
 async def test_start_in_dm_repeat_keeps_single_contact(conn: sqlite3.Connection) -> None:
     await handle_start(_dm_update(user_id=7), _ctx(conn))
     await handle_start(_dm_update(user_id=7), _ctx(conn))

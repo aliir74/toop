@@ -304,6 +304,18 @@ def get_player_by_username(conn: sqlite3.Connection, username: str) -> Player | 
     return _row_to_player(row) if row else None
 
 
+def sync_player_username(conn: sqlite3.Connection, telegram_id: int, username: str | None) -> None:
+    """Store the username Telegram reports now. A player added before they set
+    a username (or who changed it) would otherwise keep the stale value forever.
+    Touches username only, never the admin-set display name."""
+    normalized = username.lstrip("@").lower() if username else None
+    conn.execute(
+        "UPDATE players SET username=? WHERE telegram_id=? AND username IS NOT ?",
+        (normalized, telegram_id, normalized),
+    )
+    conn.commit()
+
+
 def parse_player_id(token: str) -> int | None:
     """Parse a numeric telegram id, including negative ghost ids."""
     raw = token.strip()

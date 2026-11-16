@@ -19,7 +19,7 @@ from toop.drift import (
 )
 from toop.i18n import t
 from toop.pause import events_are_paused
-from toop.players import add_player
+from toop.players import add_player, sync_player_username
 from toop.poll import (
     PollRow,
     attendance_options,
@@ -62,9 +62,11 @@ def _ensure_voter_registered(conn: sqlite3.Connection, user: User) -> None:
     used to silently drop votes from anyone not yet added — which made quorum and
     capacity undercount actual attendance (a 14-yes poll counted as 13).
     Registering unknown voters first means every vote counts. Only fills in
-    unknown voters; never overwrites an existing player's admin-set name.
+    unknown voters; for existing players it refreshes only the username,
+    never the admin-set name.
     """
     if is_player_on_roster(conn, user.id):
+        sync_player_username(conn, user.id, user.username)
         return
     add_player(conn, user.id, user.full_name or str(user.id), user.username)
 
