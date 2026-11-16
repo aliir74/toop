@@ -161,10 +161,11 @@ async def load_photos(bot: Bot, conn: sqlite3.Connection, pids: list[int]) -> di
     are left out (they get initials)."""
     photos: dict[int, bytes] = {}
     for pid in pids:
-        path = photo_path(pid)
-        if path.is_file():
-            photos[pid] = path.read_bytes()
+        try:
+            photos[pid] = photo_path(pid).read_bytes()
             continue
+        except OSError:
+            pass  # no backup on disk (or unreadable): try Telegram
         row = conn.execute(
             "SELECT photo_file_id FROM players WHERE telegram_id=?", (pid,)
         ).fetchone()

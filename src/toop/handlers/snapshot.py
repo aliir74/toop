@@ -384,10 +384,10 @@ async def handle_publish(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except TelegramError as exc:
         await message.reply_text(t("snapshot.publish_failed", err=exc))
         return
-    await _send_court_image(context.bot, settings.GROUP_CHAT_ID, conn, snap)
 
     write_attendance(conn, sess.id)
     set_session_status(conn, sess.id, "published")
+    await _send_court_image(context.bot, settings.GROUP_CHAT_ID, conn, snap)
     await message.reply_text(
         t("snapshot.published", sid=sess.id, n=len(snap.team_a) + len(snap.team_b))
     )

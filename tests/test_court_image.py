@@ -97,6 +97,7 @@ async def test_load_photos_prefers_disk_then_telegram(
     for pid in (1, 2, 3, 4):
         add_player(conn, pid, f"P{pid}", f"p{pid}")
     (tmp_path / "1.jpg").write_bytes(b"disk")
+    (tmp_path / "2.jpg").mkdir()  # unreadable backup -> fall back to Telegram
     set_player_photo(conn, 2, "file-2")
     set_player_photo(conn, 3, "file-3")
 
