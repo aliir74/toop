@@ -258,6 +258,53 @@ async def test_remove_player_not_on_roster(admin_settings: None, conn: sqlite3.C
     assert "wasn't in the active roster" in update.effective_message.reply_text.await_args.args[0]
 
 
+async def test_list_players_shows_id_for_no_username_player(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 555, "Meysam Bz")
+    update = _admin_update("/list_players")
+    await handle_list_players(update, _context(conn, args=[]))
+    reply = update.effective_message.reply_text.await_args.args[0]
+    assert "Meysam Bz (no username) · id 555" in reply
+
+
+async def test_remove_player_by_id_without_username(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    add_player(conn, 555, "Meysam Bz")
+    update = _admin_update("/remove_player 555")
+    ctx = _context(conn, args=["555"], chat_id=None)
+    await handle_remove_player(update, ctx)
+    assert list_active_players(conn) == []
+    assert "Removed Meysam Bz" in update.effective_message.reply_text.await_args.args[0]
+    ctx.bot.get_chat.assert_not_awaited()
+
+
+async def test_remove_player_unknown_id(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/remove_player 404")
+    ctx = _context(conn, args=["404"], chat_id=404)
+    await handle_remove_player(update, ctx)
+    assert "Couldn't find 404" in update.effective_message.reply_text.await_args.args[0]
+    ctx.bot.get_chat.assert_not_awaited()
+
+
+async def test_remove_player_stale_username_falls_back_to_telegram(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    # Roster still holds the old handle; Telegram resolves the new one to the same id.
+    add_player(conn, 111, "Alice", "old_alice")
+    update = _admin_update("/remove_player @new_alice")
+    await handle_remove_player(update, _context(conn, args=["@new_alice"], chat_id=111))
+    assert list_active_players(conn) == []
+    assert "Removed @new_alice" in update.effective_message.reply_text.await_args.args[0]
+
+
+async def test_disable_voting_unknown_id(admin_settings: None, conn: sqlite3.Connection) -> None:
+    update = _admin_update("/disable_voting 404")
+    await handle_disable_voting(update, _context(conn, args=["404"]))
+    assert "Couldn't find" in update.effective_message.reply_text.await_args.args[0]
+
+
 async def test_list_players_returns_without_message(
     admin_settings: None, conn: sqlite3.Connection
 ) -> None:

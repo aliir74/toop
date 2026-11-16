@@ -12,8 +12,10 @@ from toop.players import (
     get_player_by_username,
     link_ghost_player,
     list_active_players,
+    parse_player_id,
     pause_player_pool,
     rename_player,
+    resolve_roster_player,
     set_player_photo,
     soft_remove_player,
 )
@@ -422,3 +424,42 @@ def test_link_ghost_remaps_score_history(conn: sqlite3.Connection) -> None:
     ]
     # History rows must not inflate the reported score-migration count.
     assert result.score_rows == 2
+
+
+# ----- typed-argument resolution (players without a username) -----
+
+
+def test_parse_player_id() -> None:
+    assert parse_player_id("123") == 123
+    assert parse_player_id(" -5 ") == -5
+    assert parse_player_id("--5") is None
+    assert parse_player_id("-") is None
+    assert parse_player_id("@alice") is None
+    assert parse_player_id("12a") is None
+
+
+def test_resolve_roster_player_by_id_without_username(conn: sqlite3.Connection) -> None:
+    add_player(conn, 7, "Meysam Bz")
+    player = resolve_roster_player(conn, "7")
+    assert player is not None and player.display_name == "Meysam Bz"
+
+
+def test_resolve_roster_player_ghost_id(conn: sqlite3.Connection) -> None:
+    ghost = add_ghost_player(conn, "Ghosty")
+    player = resolve_roster_player(conn, str(ghost.telegram_id))
+    assert player is not None and player.telegram_id == ghost.telegram_id < 0
+
+
+def test_resolve_roster_player_by_username(conn: sqlite3.Connection) -> None:
+    add_player(conn, 8, "Alice", "alice")
+    player = resolve_roster_player(conn, "@Alice")
+    assert player is not None and player.telegram_id == 8
+
+
+def test_resolve_roster_player_misses(conn: sqlite3.Connection) -> None:
+    add_player(conn, 9, "Gone", "gone")
+    soft_remove_player(conn, 9)
+    assert resolve_roster_player(conn, "9") is None
+    assert resolve_roster_player(conn, "@gone") is None
+    assert resolve_roster_player(conn, "404") is None
+    assert resolve_roster_player(conn, "@") is None

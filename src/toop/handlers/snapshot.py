@@ -20,7 +20,7 @@ from toop.balance import (
 from toop.config import settings
 from toop.i18n import indicator_label_short, t
 from toop.pause import events_are_paused
-from toop.players import Player
+from toop.players import Player, resolve_roster_player
 from toop.rating import INDICATORS, refresh_ratings
 from toop.selection import select_attendees
 from toop.sessions import get_active_session, set_session_status
@@ -83,24 +83,6 @@ def _fetch_player(conn: sqlite3.Connection, telegram_id: int) -> Player | None:
         "SELECT telegram_id, username, display_name, is_calibrating, active "
         "FROM players WHERE telegram_id=?",
         (telegram_id,),
-    ).fetchone()
-    if row is None:
-        return None
-    return Player(
-        telegram_id=row["telegram_id"],
-        username=row["username"],
-        display_name=row["display_name"],
-        is_calibrating=bool(row["is_calibrating"]),
-        active=bool(row["active"]),
-    )
-
-
-def _fetch_player_by_username(conn: sqlite3.Connection, username: str) -> Player | None:
-    handle = username.lstrip("@").lower()
-    row = conn.execute(
-        "SELECT telegram_id, username, display_name, is_calibrating, active "
-        "FROM players WHERE username=? AND active=1",
-        (handle,),
     ).fetchone()
     if row is None:
         return None
@@ -253,8 +235,8 @@ async def handle_swap(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         await message.reply_text(t("snapshot.no_snapshot_yet"))
         return
 
-    player_a = _fetch_player_by_username(conn, context.args[0])
-    player_b = _fetch_player_by_username(conn, context.args[1])
+    player_a = resolve_roster_player(conn, context.args[0])
+    player_b = resolve_roster_player(conn, context.args[1])
     if player_a is None or player_b is None:
         await message.reply_text(t("snapshot.usernames_not_roster"))
         return

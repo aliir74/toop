@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -301,6 +302,30 @@ def get_player_by_username(conn: sqlite3.Connection, username: str) -> Player | 
         (username.lstrip("@").lower(),),
     ).fetchone()
     return _row_to_player(row) if row else None
+
+
+def parse_player_id(token: str) -> int | None:
+    """Parse a numeric telegram id, including negative ghost ids."""
+    raw = token.strip()
+    return int(raw) if re.fullmatch(r"-?\d+", raw) else None
+
+
+def resolve_roster_player(conn: sqlite3.Connection, token: str) -> Player | None:
+    """Resolve an active roster player from a typed command argument.
+
+    Accepts a telegram id (``/list_players`` shows it; ghosts are negative) or an
+    ``@username``. The id path is how admins target players who have no username.
+    """
+    player_id = parse_player_id(token)
+    if player_id is not None:
+        row = conn.execute(
+            f"SELECT {_PLAYER_COLS} FROM players WHERE telegram_id=? AND active=1",
+            (player_id,),
+        ).fetchone()
+        return _row_to_player(row) if row else None
+    if not token.strip().lstrip("@"):
+        return None
+    return get_player_by_username(conn, token.strip())
 
 
 def dont_know_stats(conn: sqlite3.Connection) -> list[DontKnowStat]:

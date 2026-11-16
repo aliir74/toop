@@ -124,12 +124,12 @@ Command **names** stay latin in both (Telegram requires ascii `/commands`); only
 | `/contacts` | Everyone who's DM'd the bot, flagging who's 🆕 not yet on the roster and emitting a copy-paste `/add_player <id> "Name"` line for each |
 | `/add_ghost "Display Name"` | Add an accountless "ghost" player others can vote on **before** they join Telegram. Seeds calibration prompts. Link them to a real account later with `/link_player`. |
 | `/link_player <ghost_id> <@username\|real_id>` | Merge a ghost into a real account once that person joins. Migrates all their votes, ratings, RSVPs, and attendance. The real account must have DM'd the bot first. |
-| `/remove_player @username` | Soft-delete from roster |
+| `/remove_player <@username\|id>` | Soft-delete from roster |
 | `/pause_voting <@username\|id> <2w\|10d>` | Temporarily pull a player from the rating pool — others stop being asked to rate them (they can still vote). Auto-expires. |
 | `/disable_voting <@username\|id>` | Pull a player from the rating pool indefinitely (until `/enable_voting`). |
 | `/enable_voting <@username\|id>` | Restore a player to the rating pool, clearing any pause or disable. |
 | `/dk_report` | Per-player "don't know" rate, highest first — who the group can least confidently rate (pause candidates). |
-| `/list_players` | Numbered roster, calibration markers, plus 👻 ghost / ⏸ paused / 🚫 disabled flags |
+| `/list_players` | Numbered roster with each player's telegram id, calibration markers, plus 👻 ghost / ⏸ paused / 🚫 disabled flags. Every command that takes `@username` also takes this id, so players with no username (and ghosts, whose ids are negative) work too. |
 | `/rename` | Tap a player from inline buttons, then type the new display name (DM-only). Updates `display_name` only. |
 | `/rename <@username\|telegram_id> "New Name"` | One-shot rename, skips the buttons |
 | `/set_photo` | Tap a player (ghosts included), then send a photo. Shown on that player's rating card so voters can tell similarly-named players apart. Re-send to replace. DM-only. |
@@ -137,9 +137,9 @@ Command **names** stay latin in both (Telegram requires ascii `/commands`); only
 | `/open_session [YYYY-MM-DD]` | Manual override: auto-closes any prior session, opens a new one, and posts the attendance poll. Normally the Thursday job does this automatically. |
 | `/sessions` | Recent sessions + status |
 | `/snapshot` | Pick attendees from the poll, refit ratings, generate teams, and show them inline. Status → snapshotted. |
-| `/swap @a @b` | Swap two players across teams, live metrics |
-| `/change_player +@username` | Add an attendee (locked-in) and rebalance. DM-only. |
-| `/change_player -@username` | Remove an attendee and rebalance. DM-only. |
+| `/swap <@a\|id> <@b\|id>` | Swap two players across teams, live metrics |
+| `/change_player +<@username\|id>` | Add an attendee (locked-in) and rebalance. DM-only. |
+| `/change_player -<@username\|id>` | Remove an attendee and rebalance. DM-only. |
 | `/change_player` | No args: buttons to remove a current attendee or promote a waitlister, then rebalance. DM-only. |
 | `/publish` | Post teams + attendance to group, write attendance rows, status → published |
 | `/health` | Per-player voting health (completion-only — no vote contents) |
