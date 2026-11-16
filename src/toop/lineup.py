@@ -12,9 +12,6 @@ chosen order is then turned so the steadiest servers start at positions 1 and 2:
 the bot cannot know which team serves first, and a team that receives first
 rotates before its first serve, so its first server is whoever started at 2.
 
-A 7th player (the per-team sub) joins the cycle: whoever rotates out of
-position 1 sits out, and the sitting player comes back in at position 6.
-
 Research and the scoring rationale: docs/algorithm/README.md (2026-11-16 entry).
 """
 
@@ -26,10 +23,9 @@ from itertools import permutations
 
 from toop.rating import INDICATORS, get_player_ratings
 
-BENCH = 0
 # Seats in the order players move through them: 2 -> 1 -> 6 -> 5 -> 4 -> 3 -> 2.
 # Seat i's player moves to seat i+1 on each rotation.
-_SEATS = {6: (1, 6, 5, 4, 3, 2), 7: (1, BENCH, 6, 5, 4, 3, 2)}
+_SEATS = (1, 6, 5, 4, 3, 2)
 FRONT = (4, 3, 2)
 BACK = (5, 6, 1)
 
@@ -43,14 +39,12 @@ Scores = dict[str, dict[int, float]]
 @dataclass(frozen=True)
 class Lineup:
     court: dict[int, int]  # court position (1-6) -> telegram_id
-    bench: int | None  # the sub sitting out at the start (7-player teams)
     setters: tuple[int, int]  # the two designated setters, best first
     worst_rotation: float
 
 
-def _court_at(order: tuple[int, ...], seats: tuple[int, ...], turn: int) -> dict[int, int]:
-    n = len(seats)
-    return {seats[(i + turn) % n]: pid for i, pid in enumerate(order)}
+def _court_at(order: tuple[int, ...], turn: int) -> dict[int, int]:
+    return {_SEATS[(i + turn) % 6]: pid for i, pid in enumerate(order)}
 
 
 def _rotation_score(court: dict[int, int], setters: tuple[int, int], s: Scores) -> float:
@@ -70,11 +64,9 @@ def _rotation_score(court: dict[int, int], setters: tuple[int, int], s: Scores) 
 
 
 def suggest_lineup(team: list[int], scores: Scores) -> Lineup | None:
-    """Best starting lineup for a team of 6 or 7, or None for any other size."""
-    seats = _SEATS.get(len(team))
-    if seats is None:
+    """Best starting lineup for a team of 6, or None for any other size."""
+    if len(team) != 6:
         return None
-    n = len(seats)
     by_setting = sorted(team, key=lambda p: (-scores["setting"][p], p))
     setters = (by_setting[0], by_setting[1])
 
@@ -83,22 +75,21 @@ def suggest_lineup(team: list[int], scores: Scores) -> Lineup | None:
     best_order: tuple[int, ...] = ()
     for perm in permutations(rest):
         order = (first, *perm)
-        if n == 6 and abs(order.index(setters[0]) - order.index(setters[1])) != 3:
+        if abs(order.index(setters[0]) - order.index(setters[1])) != 3:
             continue
-        per_turn = [_rotation_score(_court_at(order, seats, r), setters, scores) for r in range(n)]
-        key = (min(per_turn), sum(per_turn) / n)
+        per_turn = [_rotation_score(_court_at(order, r), setters, scores) for r in range(6)]
+        key = (min(per_turn), sum(per_turn) / 6)
         if best is None or key > best:
             best, best_order = key, order
     assert best is not None
 
     def serve_key(turn: int) -> float:
-        court = _court_at(best_order, seats, turn)
+        court = _court_at(best_order, turn)
         return scores["serve"][court[1]] + scores["serve"][court[2]]
 
-    start = max(range(n), key=lambda r: (serve_key(r), -r))
-    court = _court_at(best_order, seats, start)
-    bench = court.pop(BENCH, None)
-    return Lineup(court=court, bench=bench, setters=setters, worst_rotation=best[0])
+    start = max(range(6), key=lambda r: (serve_key(r), -r))
+    court = _court_at(best_order, start)
+    return Lineup(court=court, setters=setters, worst_rotation=best[0])
 
 
 def lineup_for_team(conn: sqlite3.Connection, team: list[int]) -> Lineup | None:

@@ -124,7 +124,7 @@ def _team_block(label: str, names: list[str]) -> str:
 
 
 def _lineup_block(conn: sqlite3.Connection, label: str, lineup: Lineup) -> str:
-    """One team's suggested court positions, setters and (for 7) the sub."""
+    """One team's suggested court positions and its two setters."""
 
     def name(pid: int) -> str:
         return escape_markdown(_names(conn, [pid])[0], version=1)
@@ -136,14 +136,12 @@ def _lineup_block(conn: sqlite3.Connection, label: str, lineup: Lineup) -> str:
         t("snapshot.lineup_back", **pos),
         t("snapshot.lineup_setters", a=name(lineup.setters[0]), b=name(lineup.setters[1])),
     ]
-    if lineup.bench is not None:
-        lines.append(t("snapshot.lineup_bench", name=name(lineup.bench)))
     return "\n".join(lines)
 
 
 def _format_lineups(conn: sqlite3.Connection, snap: Snapshot) -> str:
     """Suggested starting lineups for both teams, or "" when off or no team has
-    a 6- or 7-player size the lineup model covers."""
+    6 players, the only size the lineup model covers."""
     if not settings.LINEUP_SUGGESTION:
         return ""
     blocks = []

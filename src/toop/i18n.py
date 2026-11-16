@@ -238,10 +238,8 @@ def _fa() -> dict[str, str]:
         "snapshot.lineup_front": "جلو: 4 {p4} · 3 {p3} · 2 {p2}",
         "snapshot.lineup_back": "عقب: 5 {p5} · 6 {p6} · 1 {p1} 🏐",
         "snapshot.lineup_setters": "پاسورها: {a} و {b}",
-        "snapshot.lineup_bench": "ذخیره: {name}",
         "snapshot.lineup_rule": (
-            "بعد از هر سرویس، پاسوری که جلوست به وسطِ جلو (3) می‌رود و پاس می‌دهد.\n"
-            "تیم 7 نفره: کسی که از جای 1 بیرون می‌چرخد می‌نشیند و ذخیره در 6 وارد می‌شود."
+            "بعد از هر سرویس، پاسوری که جلوست به وسطِ جلو (3) می‌رود و پاس می‌دهد."
         ),
         "snapshot.summary": (
             "اسنپ‌شات برای جلسه #{sid} ذخیره شد.{swap}\n"
@@ -629,11 +627,9 @@ def _en() -> dict[str, str]:
         "snapshot.lineup_front": "Front: 4 {p4} · 3 {p3} · 2 {p2}",
         "snapshot.lineup_back": "Back: 5 {p5} · 6 {p6} · 1 {p1} 🏐",
         "snapshot.lineup_setters": "Setters: {a} and {b}",
-        "snapshot.lineup_bench": "Sub: {name}",
         "snapshot.lineup_rule": (
             "After each serve, whichever setter is in the front row moves to "
-            "front-middle (3) and sets.\n"
-            "7-player team: whoever rotates out of 1 sits, and the sub comes in at 6."
+            "front-middle (3) and sets."
         ),
         "snapshot.summary": (
             "Snapshot saved for session #{sid}.{swap}\n"

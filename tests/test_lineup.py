@@ -31,7 +31,6 @@ def test_six_players_one_designated_setter_always_in_front_row() -> None:
     assert lineup.setters == (3, 5)
     assert sorted(lineup.court) == [1, 2, 3, 4, 5, 6]
     assert sorted(lineup.court.values()) == [1, 2, 3, 4, 5, 6]
-    assert lineup.bench is None
     for court in _rotations(lineup.court):
         front = {court[p] for p in FRONT}
         assert len(front & {3, 5}) == 1
@@ -53,18 +52,9 @@ def test_steadiest_server_starts_at_position_one_or_two() -> None:
     assert 4 in (lineup.court[1], lineup.court[2])
 
 
-def test_seven_players_put_one_on_the_bench() -> None:
-    scores = _scores(7, setting={7: 4.0, 2: 3.0})
-    lineup = suggest_lineup([1, 2, 3, 4, 5, 6, 7], scores)
-    assert lineup is not None
-    assert lineup.setters == (7, 2)
-    assert lineup.bench is not None
-    assert sorted([*lineup.court.values(), lineup.bench]) == [1, 2, 3, 4, 5, 6, 7]
-    assert sorted(lineup.court) == [1, 2, 3, 4, 5, 6]
-
-
 def test_other_team_sizes_get_no_lineup() -> None:
     assert suggest_lineup([1, 2, 3, 4, 5], _scores(5)) is None
+    assert suggest_lineup(list(range(1, 8)), _scores(7)) is None
     assert suggest_lineup(list(range(1, 9)), _scores(8)) is None
 
 
