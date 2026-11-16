@@ -178,9 +178,14 @@ def test_logs_never_contain_the_bot_token() -> None:
         url = f"https://api.telegram.org/bot{token}/getUpdates"
         logging.getLogger("httpx").info("HTTP Request: POST %s", url)
         logging.getLogger("telegram.ext").error("request to %s failed", url)
+        try:
+            raise RuntimeError(f"Invalid token: {token}")
+        except RuntimeError:
+            logging.getLogger("telegram.ext").exception("startup failed")
     finally:
         logging.basicConfig(force=True, handlers=[logging.NullHandler()])
     out = stream.getvalue()
     assert token not in out
     assert "getUpdates" in out and "<BOT_TOKEN>" in out  # the error line is kept, redacted
     assert "HTTP Request" not in out  # per-request httpx INFO lines are silenced
+    assert "Invalid token: <BOT_TOKEN>" in out  # tracebacks are redacted too

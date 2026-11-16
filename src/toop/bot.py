@@ -119,36 +119,29 @@ ALLOWED_UPDATES = [u for u in Update.ALL_TYPES if u not in _DEFAULT_EXCLUDED_UPD
 WIDGET_HANDLER_GROUP = 10
 
 
-class _RedactToken(logging.Filter):
-    """Replace the bot token in any log line. Telegram API URLs carry it
-    (``/bot<token>/getMe``), so any logger that prints a URL would leak it."""
+class _RedactingFormatter(logging.Formatter):
+    """Replace the bot token in the fully formatted log line, traceback
+    included. Telegram API URLs carry it (``/bot<token>/getMe``), and PTB's
+    InvalidToken error quotes it, so any logger could otherwise leak it."""
 
-    def __init__(self, token: str) -> None:
-        super().__init__()
+    def __init__(self, fmt: str, token: str) -> None:
+        super().__init__(fmt)
         self._token = token
 
-    def filter(self, record: logging.LogRecord) -> bool:
-        if self._token:
-            message = record.getMessage()
-            if self._token in message:
-                record.msg = message.replace(self._token, "<BOT_TOKEN>")
-                record.args = ()
-        return True
+    def format(self, record: logging.LogRecord) -> str:
+        text = super().format(record)
+        return text.replace(self._token, "<BOT_TOKEN>") if self._token else text
 
 
 def configure_logging(token: str, handlers: list[logging.Handler] | None = None) -> None:
     """INFO logging with the bot token redacted. httpx logs every request URL at
     INFO, so it is raised to WARNING: one line per poll was noise that also
     carried the token."""
-    logging.basicConfig(
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        level=logging.INFO,
-        handlers=handlers,
-        force=True,
-    )
+    logging.basicConfig(level=logging.INFO, handlers=handlers, force=True)
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    formatter = _RedactingFormatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", token)
     for handler in logging.getLogger().handlers:
-        handler.addFilter(_RedactToken(token))
+        handler.setFormatter(formatter)
 
 
 def main() -> None:
