@@ -394,3 +394,28 @@ async def test_publish_handles_telegram_error(conn: sqlite3.Connection) -> None:
     ctx.bot.send_message = AsyncMock(side_effect=TelegramError("nope"))
     await handle_publish(update, ctx)
     assert "Failed to publish" in update.effective_message.reply_text.await_args.args[0]
+
+
+def test_format_teams_shows_suggested_lineup_for_six_a_side(conn: sqlite3.Connection) -> None:
+    from toop.i18n import t
+
+    for i in range(1, 13):
+        add_player(conn, i, f"P{i}", f"p{i}")
+    text = _format_teams(conn, _snap([1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]), "2026-05-18")
+    assert t("snapshot.lineup_header") in text
+    assert t("snapshot.lineup_rule") in text
+    # Six court positions per team: each name appears in its team block and its lineup.
+    for i in range(1, 13):
+        assert text.count(f"P{i}") >= 2
+
+
+def test_format_teams_lineup_can_be_switched_off(
+    conn: sqlite3.Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from toop.i18n import t
+
+    monkeypatch.setattr("toop.handlers.snapshot.settings", _snap_settings(LINEUP_SUGGESTION=False))
+    for i in range(1, 13):
+        add_player(conn, i, f"P{i}", f"p{i}")
+    text = _format_teams(conn, _snap([1, 2, 3, 4, 5, 6], [7, 8, 9, 10, 11, 12]), "2026-05-18")
+    assert t("snapshot.lineup_header") not in text

@@ -19,6 +19,7 @@ from toop.balance import (
 )
 from toop.config import settings
 from toop.i18n import indicator_label_short, t
+from toop.lineup import Lineup, lineup_for_team
 from toop.pause import events_are_paused
 from toop.players import Player, resolve_roster_player
 from toop.rating import INDICATORS, refresh_ratings
@@ -122,15 +123,60 @@ def _team_block(label: str, names: list[str]) -> str:
     return "\n".join(lines)
 
 
+def _lineup_block(conn: sqlite3.Connection, label: str, lineup: Lineup) -> str:
+    """One team's suggested court positions, setters and (for 7) the sub."""
+
+    def name(pid: int) -> str:
+        return escape_markdown(_names(conn, [pid])[0], version=1)
+
+    pos = {f"p{p}": name(pid) for p, pid in lineup.court.items()}
+    lines = [
+        label,
+        t("snapshot.lineup_front", **pos),
+        t("snapshot.lineup_back", **pos),
+        t("snapshot.lineup_setters", a=name(lineup.setters[0]), b=name(lineup.setters[1])),
+    ]
+    if lineup.bench is not None:
+        lines.append(t("snapshot.lineup_bench", name=name(lineup.bench)))
+    return "\n".join(lines)
+
+
+def _format_lineups(conn: sqlite3.Connection, snap: Snapshot) -> str:
+    """Suggested starting lineups for both teams, or "" when off or no team has
+    a 6- or 7-player size the lineup model covers."""
+    if not settings.LINEUP_SUGGESTION:
+        return ""
+    blocks = []
+    for key, team in (
+        ("snapshot.team_a_label", snap.team_a),
+        ("snapshot.team_b_label", snap.team_b),
+    ):
+        lineup = lineup_for_team(conn, team)
+        if lineup is not None:
+            blocks.append(_lineup_block(conn, t(key), lineup))
+    if not blocks:
+        return ""
+    return (
+        t("snapshot.lineup_header")
+        + "\n\n"
+        + "\n\n".join(blocks)
+        + "\n\n"
+        + t("snapshot.lineup_rule")
+        + "\n\n"
+    )
+
+
 def _format_teams(conn: sqlite3.Connection, snap: Snapshot, session_date: str) -> str:
     a_block = _team_block(t("snapshot.team_a_label"), _names(conn, snap.team_a))
     b_block = _team_block(t("snapshot.team_b_label"), _names(conn, snap.team_b))
+    lineups = _format_lineups(conn, snap)
     metrics = snap.metrics
     labels = {ind: indicator_label_short(ind) for ind in INDICATORS}
     bars = skill_balance_bars(metrics.per_indicator_a, metrics.per_indicator_b, labels)
     return (
         t("snapshot.proposed", date=session_date) + "\n\n"
         f"{a_block}\n\n{b_block}\n\n"
+        + lineups
         + t("snapshot.skill_balance_header")
         + "\n"
         + f"{bars}\n"
