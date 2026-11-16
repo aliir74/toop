@@ -73,6 +73,10 @@ def test_parse_rename_args_numeric_id() -> None:
     assert _parse_rename_args('/rename 111 "New Name"') == (111, "New Name")
 
 
+def test_parse_rename_args_ghost_id() -> None:
+    assert _parse_rename_args('/rename -3 "Ghost Name"') == (-3, "Ghost Name")
+
+
 def test_parse_rename_args_too_few_tokens() -> None:
     assert _parse_rename_args("/rename @alice") is None
 

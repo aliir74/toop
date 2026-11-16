@@ -22,6 +22,7 @@ from toop.handlers.snapshot import (
     take_snapshot,
 )
 from toop.i18n import t
+from toop.players import resolve_roster_player
 from toop.poll import list_waitlist, remove_from_waitlist
 from toop.rsvp import lock_in_player, upsert_rsvp
 from toop.sessions import Session, get_active_session
@@ -46,19 +47,9 @@ def _label(conn: sqlite3.Connection, telegram_id: int) -> str:
 
 
 def _resolve_target(conn: sqlite3.Connection, raw: str) -> int | None:
-    """Resolve an @username or numeric id to an active roster telegram_id."""
-    if raw.isdigit():
-        row = conn.execute(
-            "SELECT telegram_id FROM players WHERE telegram_id=? AND active=1", (int(raw),)
-        ).fetchone()
-    else:
-        handle = raw.lstrip("@").lower()
-        if not handle:
-            return None
-        row = conn.execute(
-            "SELECT telegram_id FROM players WHERE username=? AND active=1", (handle,)
-        ).fetchone()
-    return row["telegram_id"] if row is not None else None
+    """Resolve an @username or telegram id (ghosts are negative) to an active roster id."""
+    player = resolve_roster_player(conn, raw)
+    return player.telegram_id if player is not None else None
 
 
 def _apply_add(conn: sqlite3.Connection, session_id: int, telegram_id: int) -> None:

@@ -33,8 +33,10 @@ from toop.players import (
     get_player_by_username,
     link_ghost_player,
     list_active_players,
+    parse_player_id,
     pause_player_pool,
     rename_player,
+    resolve_roster_player,
     set_player_photo,
     soft_remove_player,
 )
@@ -323,6 +325,15 @@ async def handle_remove_player(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=_player_keyboard(players, RMPICK_PREFIX),
         )
         return
+    # Roster first: covers telegram ids and players without a username.
+    player = resolve_roster_player(conn, context.args[0])
+    if player is not None:
+        soft_remove_player(conn, player.telegram_id)
+        await message.reply_text(t("roster.removed_name", name=player.display_name))
+        return
+    if parse_player_id(context.args[0]) is not None:
+        await message.reply_text(t("roster.cant_find_roster", target=context.args[0]))
+        return
     username = context.args[0].lstrip("@").lower()
     if not username:
         await message.reply_text(t("roster.remove_usage"))
@@ -364,12 +375,9 @@ def _is_paused(pool_paused_until: str | None, now: datetime) -> bool:
 
 
 def _resolve_pool_target(conn: sqlite3.Connection, token: str) -> int | None:
-    """Resolve a roster player from a digit id (incl. negative ghost ids) or a
-    @username already on the roster. No network call — pool targets are on-roster."""
-    raw = token.lstrip("@")
-    if raw.lstrip("-").isdigit():
-        return int(raw)
-    player = get_player_by_username(conn, raw)
+    """Resolve an active roster player from an id (incl. negative ghost ids) or a
+    @username. No network call: pool targets are on-roster."""
+    player = resolve_roster_player(conn, token)
     return player.telegram_id if player else None
 
 
@@ -781,7 +789,15 @@ async def handle_list_players(update: Update, context: ContextTypes.DEFAULT_TYPE
         elif _is_paused(p.pool_paused_until, now):
             tags = t("roster.voting_paused_tag")
         lines.append(
-            t("roster.list_row", i=i, name=p.display_name, handle=handle, marker=marker, tags=tags)
+            t(
+                "roster.list_row",
+                i=i,
+                name=p.display_name,
+                handle=handle,
+                id=p.telegram_id,
+                marker=marker,
+                tags=tags,
+            )
         )
     await message.reply_text("\n".join(lines))
 
@@ -845,8 +861,9 @@ def _parse_rename_args(text: str) -> tuple[int | str, str] | None:
     new_name = " ".join(tokens[2:]).strip()
     if not new_name:
         return None
-    if raw.isdigit():
-        return int(raw), new_name
+    player_id = parse_player_id(raw)
+    if player_id is not None:
+        return player_id, new_name
     username = raw.lstrip("@").lower()
     if not username:
         return None

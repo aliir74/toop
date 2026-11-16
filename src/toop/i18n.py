@@ -82,7 +82,7 @@ def _fa() -> dict[str, str]:
         ),
         "cmd.remove_player.short": "حذف بازیکن از فهرست",
         "cmd.remove_player.usage": (
-            "/remove_player (بدون آرگومان) برای دکمه‌ها، یا /remove_player @username"
+            "/remove_player (بدون آرگومان) برای دکمه‌ها، یا /remove_player <@username|شناسه>"
         ),
         "cmd.pause_voting.short": "توقف موقت امتیازدهی به یک بازیکن",
         "cmd.pause_voting.usage": "/pause_voting <@username|telegram_id> <مدت مثل 2w یا 10d>",
@@ -127,10 +127,10 @@ def _fa() -> dict[str, str]:
         "cmd.snapshot.short": "ساخت تیم‌های متوازن",
         "cmd.snapshot.usage": "/snapshot — ساخت تیم‌های متوازن از حاضرین فعلی",
         "cmd.swap.short": "جابه‌جایی دو بازیکن بین تیم‌ها",
-        "cmd.swap.usage": "/swap @player_a @player_b",
+        "cmd.swap.usage": "/swap <@username|شناسه> <@username|شناسه>",
         "cmd.change_player.short": "افزودن/حذف یک حاضر + توازن مجدد",
         "cmd.change_player.usage": (
-            "/change_player +@username (افزودن) یا -@username "
+            "/change_player +<@username|شناسه> (افزودن) یا -<@username|شناسه> "
             "(حذف)؛ بدون آرگومان برای دکمه‌ها (فقط در پیوی)"
         ),
         "cmd.publish.short": "انتشار تیم‌ها در گروه",
@@ -243,10 +243,12 @@ def _fa() -> dict[str, str]:
         "snapshot.no_active_open": "جلسه فعالی نیست. با /open_session یکی باز کن.",
         "snapshot.no_rsvps": "هنوز کسی بله نداده — چیزی برای اسنپ‌شات نیست.",
         "snapshot.auto_ran": "⏰ اسنپ‌شات خودکار اجرا شد.\n\n{summary}",
-        "snapshot.swap_usage": "روش استفاده: /swap @player_a @player_b",
+        "snapshot.swap_usage": "روش استفاده: /swap <@username|شناسه> <@username|شناسه>",
         "snapshot.no_active": "جلسه فعالی نیست.",
         "snapshot.no_snapshot_yet": "هنوز اسنپ‌شاتی نیست. اول /snapshot را بزن.",
-        "snapshot.usernames_not_roster": "یک یا هر دو نام‌کاربری در فهرست نیستند.",
+        "snapshot.usernames_not_roster": (
+            "یک یا هر دو بازیکن در فهرست نیستند. شناسه را از /list_players بردار."
+        ),
         "snapshot.opposite_teams": "برای جابه‌جایی باید هر دو بازیکن در دو تیم مقابل باشند.",
         "snapshot.swapped": "🔁 جابه‌جا شد {a} ↔ {b}\n\n{text}",
         "snapshot.no_snapshot_publish": "اسنپ‌شاتی برای انتشار نیست.",
@@ -258,12 +260,13 @@ def _fa() -> dict[str, str]:
         "snapshot.published": "✅ جلسه #{sid} منتشر شد و {n} ردیف حضور ثبت شد.",
         # --- change_player ---
         "change.usage": (
-            "روش استفاده: /change_player +@username (افزودن) یا /change_player -@username (حذف). "
+            "روش استفاده: /change_player +<@username|شناسه> (افزودن) "
+            "یا /change_player -<@username|شناسه> (حذف). "
             "بدون آرگومان برای دکمه‌ها."
         ),
         "change.dm_only": "/change_player را در گفتگوی خصوصی با من استفاده کن.",
         "change.pick_prompt": "یک بازیکن را برای حذف، یا یک نفر از لیست انتظار را برای ارتقا بزن:",
-        "change.not_found": "{target} در فهرست پیدا نشد.",
+        "change.not_found": "{target} در فهرست پیدا نشد. شناسه را از /list_players بردار.",
         "change.none_left": "کسی برای توازن نمانده.",
         "change.btn_remove": "➖ {name}",
         "change.btn_promote": "⬆️ {name}",
@@ -291,7 +294,7 @@ def _fa() -> dict[str, str]:
             'روش استفاده: /add_player @username "نام نمایشی"  '
             '(یا /add_player <telegram_id> "نام نمایشی")'
         ),
-        "roster.remove_usage": "روش استفاده: /remove_player @username",
+        "roster.remove_usage": "روش استفاده: /remove_player <@username|شناسه>",
         "roster.pause_usage": (
             "روش استفاده: /pause_voting <@username|telegram_id> <مدت مثل 2w یا 10d>"
         ),
@@ -392,7 +395,7 @@ def _fa() -> dict[str, str]:
         "roster.ghost_tag": "👻 شبح",
         "roster.voting_disabled_tag": " — 🚫 امتیازدهی غیرفعال",
         "roster.voting_paused_tag": " — ⏸ امتیازدهی متوقف",
-        "roster.list_row": "{i}. {name} {handle} — {marker}{tags}",
+        "roster.list_row": "{i}. {name} {handle} · شناسه {id} — {marker}{tags}",
         "roster.contacts_none": "هنوز کسی به من پیام نداده. از افراد بخواه /start بفرستند.",
         "roster.contacts_header": "مخاطبین (کسانی که به من پیام داده‌اند):",
         "roster.contact_row": "{i}. {handle} ({name}) — اولین مشاهده {date}",
@@ -463,7 +466,7 @@ def _en() -> dict[str, str]:
         ),
         "cmd.remove_player.short": "Remove a player from the roster",
         "cmd.remove_player.usage": (
-            "/remove_player (no args) for buttons, or /remove_player @username"
+            "/remove_player (no args) for buttons, or /remove_player <@username|id>"
         ),
         "cmd.pause_voting.short": "Pause rating a player",
         "cmd.pause_voting.usage": "/pause_voting <@username|telegram_id> <duration like 2w or 10d>",
@@ -510,10 +513,11 @@ def _en() -> dict[str, str]:
         "cmd.snapshot.short": "Generate balanced teams",
         "cmd.snapshot.usage": "/snapshot — build balanced teams from the current yes-RSVPs",
         "cmd.swap.short": "Swap two players between teams",
-        "cmd.swap.usage": "/swap @player_a @player_b",
+        "cmd.swap.usage": "/swap <@username|id> <@username|id>",
         "cmd.change_player.short": "Add/remove an attendee + rebalance",
         "cmd.change_player.usage": (
-            "/change_player +@username (add) or -@username (remove); no args for buttons (DM only)"
+            "/change_player +<@username|id> (add) or -<@username|id> (remove); "
+            "no args for buttons (DM only)"
         ),
         "cmd.publish.short": "Publish teams to the group",
         "cmd.publish.usage": "/publish — post the current teams to the group chat",
@@ -621,10 +625,12 @@ def _en() -> dict[str, str]:
         "snapshot.no_active_open": "No active session. Open one with /open_session.",
         "snapshot.no_rsvps": "No yes-RSVPs yet — nothing to snapshot.",
         "snapshot.auto_ran": "⏰ Auto-snapshot ran.\n\n{summary}",
-        "snapshot.swap_usage": "Usage: /swap @player_a @player_b",
+        "snapshot.swap_usage": "Usage: /swap <@username|id> <@username|id>",
         "snapshot.no_active": "No active session.",
         "snapshot.no_snapshot_yet": "No snapshot yet. Run /snapshot first.",
-        "snapshot.usernames_not_roster": "One or both usernames aren't on the roster.",
+        "snapshot.usernames_not_roster": (
+            "One or both players aren't on the roster. Get the id from /list_players."
+        ),
         "snapshot.opposite_teams": "Both players must be on opposite teams to swap.",
         "snapshot.swapped": "🔁 Swapped {a} ↔ {b}\n\n{text}",
         "snapshot.no_snapshot_publish": "No snapshot to publish.",
@@ -635,12 +641,13 @@ def _en() -> dict[str, str]:
         "snapshot.publish_failed": "Failed to publish: {err}",
         "snapshot.published": "✅ Published session #{sid} and recorded {n} attendance rows.",
         "change.usage": (
-            "Usage: /change_player +@username (add) or /change_player -@username (remove). "
+            "Usage: /change_player +<@username|id> (add) "
+            "or /change_player -<@username|id> (remove). "
             "Send with no args for buttons."
         ),
         "change.dm_only": "Use /change_player in a private chat with me.",
         "change.pick_prompt": "Tap a player to remove, or a waitlister to promote:",
-        "change.not_found": "Couldn't find {target} on the roster.",
+        "change.not_found": "Couldn't find {target} on the roster. Get the id from /list_players.",
         "change.none_left": "No attendees left to balance.",
         "change.btn_remove": "➖ {name}",
         "change.btn_promote": "⬆️ {name}",
@@ -666,7 +673,7 @@ def _en() -> dict[str, str]:
             'Usage: /add_player @username "Display Name"  '
             '(or /add_player <telegram_id> "Display Name")'
         ),
-        "roster.remove_usage": "Usage: /remove_player @username",
+        "roster.remove_usage": "Usage: /remove_player <@username|id>",
         "roster.pause_usage": (
             "Usage: /pause_voting <@username|telegram_id> <duration like 2w or 10d>"
         ),
@@ -762,7 +769,7 @@ def _en() -> dict[str, str]:
         "roster.ghost_tag": "👻 ghost",
         "roster.voting_disabled_tag": " — 🚫 voting disabled",
         "roster.voting_paused_tag": " — ⏸ voting paused",
-        "roster.list_row": "{i}. {name} {handle} — {marker}{tags}",
+        "roster.list_row": "{i}. {name} {handle} · id {id} — {marker}{tags}",
         "roster.contacts_none": "Nobody has DM'd me yet. Ask people to send /start.",
         "roster.contacts_header": "Contacts (people who've DM'd me):",
         "roster.contact_row": "{i}. {handle} ({name}) — first seen {date}",

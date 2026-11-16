@@ -176,6 +176,22 @@ async def test_swap_reply_escapes_player_names(conn: sqlite3.Connection) -> None
     assert "Bob\\_B" in reply
 
 
+async def test_swap_by_telegram_id_without_usernames(conn: sqlite3.Connection) -> None:
+    sess = open_session(conn, date(2026, 5, 18))
+    add_player(conn, 1, "NoHandleA")
+    add_player(conn, 2, "NoHandleB")
+    upsert_rsvp(conn, sess.id, 1, "yes")
+    upsert_rsvp(conn, sess.id, 2, "yes")
+    await handle_snapshot(_admin_update(), _ctx(conn))
+    snap = get_snapshot(conn, sess.id)
+    assert snap is not None
+    a, b = snap.team_a[0], snap.team_b[0]
+    await handle_swap(_admin_update(), _ctx(conn, args=[str(a), str(b)]))
+    new_snap = get_snapshot(conn, sess.id)
+    assert new_snap is not None
+    assert new_snap.team_a == [b] and new_snap.team_b == [a]
+
+
 def test_format_teams_handles_odd_team_sizes(conn: sqlite3.Connection) -> None:
     # One team carries an extra sub: both lists render their full count with
     # no index drift (the old fixed-width table padded a blank cell).
@@ -242,7 +258,6 @@ from telegram.error import TelegramError  # noqa: E402
 from toop.handlers.snapshot import (  # noqa: E402
     _conn,
     _fetch_player,
-    _fetch_player_by_username,
     auto_snapshot_job,
 )
 
@@ -263,10 +278,6 @@ def test_conn_raises_when_missing() -> None:
 
 def test_fetch_player_missing_returns_none(conn: sqlite3.Connection) -> None:
     assert _fetch_player(conn, 999) is None
-
-
-def test_fetch_player_by_username_missing_returns_none(conn: sqlite3.Connection) -> None:
-    assert _fetch_player_by_username(conn, "@ghost") is None
 
 
 async def test_snapshot_returns_without_message(conn: sqlite3.Connection) -> None:

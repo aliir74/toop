@@ -15,7 +15,7 @@ from toop.handlers.change_player import (
     handle_change_remove_callback,
 )
 from toop.handlers.snapshot import _weights, take_snapshot
-from toop.players import add_player
+from toop.players import add_ghost_player, add_player
 from toop.poll import add_to_waitlist, list_waitlist
 from toop.rsvp import upsert_rsvp
 from toop.sessions import Session, get_active_session, open_session
@@ -151,6 +151,35 @@ async def test_add_by_id_drops_from_waitlist(
     u = _update()
     await handle_change_player(u, _ctx(conn, ["+99"]))
     assert list_waitlist(conn, sess.id) == []
+
+
+async def test_swap_no_username_players_by_id(
+    admin_settings: None, conn: sqlite3.Connection
+) -> None:
+    # The 2026-11-16 case: drop an attendee and add a reserve, neither has a username.
+    sess = _seed_snapshot(conn)
+    add_player(conn, 70, "Meysam Bz")
+    upsert_rsvp(conn, sess.id, 70, "yes")
+    take_snapshot(conn, _weights(), settings.MAX_ATTENDEES, settings.CALIBRATION_THRESHOLD)
+    add_player(conn, 71, "Morteza")
+    u = _update()
+    await handle_change_player(u, _ctx(conn, ["-70"]))
+    await handle_change_player(u, _ctx(conn, ["+71"]))
+    reply = _last_reply(u)
+    assert "Morteza" in reply and "Meysam" not in reply
+
+
+async def test_remove_ghost_by_negative_id(admin_settings: None, conn: sqlite3.Connection) -> None:
+    sess = _seed_snapshot(conn)
+    ghost = add_ghost_player(conn, "Ghosty")
+    upsert_rsvp(conn, sess.id, ghost.telegram_id, "yes")
+    u = _update()
+    await handle_change_player(u, _ctx(conn, [f"-{ghost.telegram_id}"]))
+    row = conn.execute(
+        "SELECT status FROM rsvps WHERE session_id=? AND telegram_id=?",
+        (sess.id, ghost.telegram_id),
+    ).fetchone()
+    assert row["status"] == "no"
 
 
 async def test_remove_rebalances(admin_settings: None, conn: sqlite3.Connection) -> None:
