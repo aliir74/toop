@@ -238,6 +238,11 @@ def _fa() -> dict[str, str]:
         "snapshot.lineup_front": "جلو: 4 {p4} · 3 {p3} · 2 {p2}",
         "snapshot.lineup_back": "عقب: 5 {p5} · 6 {p6} · 1 {p1} 🏐",
         "snapshot.lineup_setters": "پاسورها: {a} و {b}",
+        "snapshot.court_caption": (
+            "🏐 چیدمان شروع (تیم آ بالا، تیم ب پایین)\n"
+            "🟡 حلقه زرد = پاسور؛ هر کدام جلوست بعد از سرویس به 3 می‌رود و پاس می‌دهد.\n"
+            "⚪ توپ کنار جای 1 = سرویس‌زن اول."
+        ),
         "snapshot.lineup_rule": (
             "بعد از هر سرویس، پاسوری که جلوست به وسطِ جلو (3) می‌رود و پاس می‌دهد."
         ),
@@ -627,6 +632,11 @@ def _en() -> dict[str, str]:
         "snapshot.lineup_front": "Front: 4 {p4} · 3 {p3} · 2 {p2}",
         "snapshot.lineup_back": "Back: 5 {p5} · 6 {p6} · 1 {p1} 🏐",
         "snapshot.lineup_setters": "Setters: {a} and {b}",
+        "snapshot.court_caption": (
+            "🏐 Starting lineup (Team A top, Team B bottom)\n"
+            "🟡 Yellow ring = setter; whichever is in front moves to 3 after the serve and sets.\n"
+            "⚪ Ball next to spot 1 = first server."
+        ),
         "snapshot.lineup_rule": (
             "After each serve, whichever setter is in the front row moves to "
             "front-middle (3) and sets."
