@@ -165,3 +165,22 @@ def test_widget_queries_are_requested_and_handled_in_their_own_group(
         c for c in patched_main.add_handler.call_args_list if c.kwargs.get("group", 0) == group
     ]
     assert others == widget_calls
+
+
+def test_logs_never_contain_the_bot_token() -> None:
+    import io
+    import logging
+
+    token = "123456:SECRET-token"
+    stream = io.StringIO()
+    bot.configure_logging(token, handlers=[logging.StreamHandler(stream)])
+    try:
+        url = f"https://api.telegram.org/bot{token}/getUpdates"
+        logging.getLogger("httpx").info("HTTP Request: POST %s", url)
+        logging.getLogger("telegram.ext").error("request to %s failed", url)
+    finally:
+        logging.basicConfig(force=True, handlers=[logging.NullHandler()])
+    out = stream.getvalue()
+    assert token not in out
+    assert "getUpdates" in out and "<BOT_TOKEN>" in out  # the error line is kept, redacted
+    assert "HTTP Request" not in out  # per-request httpx INFO lines are silenced

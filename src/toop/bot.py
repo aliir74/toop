@@ -119,12 +119,41 @@ ALLOWED_UPDATES = [u for u in Update.ALL_TYPES if u not in _DEFAULT_EXCLUDED_UPD
 WIDGET_HANDLER_GROUP = 10
 
 
-def main() -> None:
-    """Entry point for the توپ bot."""
+class _RedactToken(logging.Filter):
+    """Replace the bot token in any log line. Telegram API URLs carry it
+    (``/bot<token>/getMe``), so any logger that prints a URL would leak it."""
+
+    def __init__(self, token: str) -> None:
+        super().__init__()
+        self._token = token
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if self._token:
+            message = record.getMessage()
+            if self._token in message:
+                record.msg = message.replace(self._token, "<BOT_TOKEN>")
+                record.args = ()
+        return True
+
+
+def configure_logging(token: str, handlers: list[logging.Handler] | None = None) -> None:
+    """INFO logging with the bot token redacted. httpx logs every request URL at
+    INFO, so it is raised to WARNING: one line per poll was noise that also
+    carried the token."""
     logging.basicConfig(
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         level=logging.INFO,
+        handlers=handlers,
+        force=True,
     )
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    for handler in logging.getLogger().handlers:
+        handler.addFilter(_RedactToken(token))
+
+
+def main() -> None:
+    """Entry point for the توپ bot."""
+    configure_logging(settings.BOT_TOKEN)
 
     settings.require_runtime()
     conn = get_connection(settings.DATABASE_PATH)
