@@ -19,7 +19,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps, UnidentifiedImageError
 from telegram import Bot
 from telegram.error import TelegramError
 
-from toop.lineup import Lineup
+from toop.lineup import SETTER_POSITION, Lineup
 from toop.photos import photo_path
 
 logger = logging.getLogger(__name__)
@@ -85,7 +85,7 @@ def _ball(draw: ImageDraw.ImageDraw, x: float, y: float, r: int) -> None:
 def _player(img: Image.Image, team: CourtTeam, pid: int, pos: int, x: float, y: float) -> None:
     draw = ImageDraw.Draw(img)
     color = _COLORS[team.key]
-    setter = pid in team.lineup.setters
+    setter = pos == SETTER_POSITION
     ring = 18 if setter else 8
     draw.ellipse(
         (x - _R - ring, y - _R - ring, x + _R + ring, y + _R + ring),

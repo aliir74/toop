@@ -237,14 +237,13 @@ def _fa() -> dict[str, str]:
         "snapshot.lineup_header": "🏐 *چیدمان شروع پیشنهادی* (جلو = کنار تور)",
         "snapshot.lineup_front": "جلو: 4 {p4} · 3 {p3} · 2 {p2}",
         "snapshot.lineup_back": "عقب: 5 {p5} · 6 {p6} · 1 {p1} 🏐",
-        "snapshot.lineup_setters": "پاسورها: {a} و {b}",
         "snapshot.court_caption": (
             "🏐 چیدمان شروع (تیم آ بالا، تیم ب پایین)\n"
-            "🟡 حلقه زرد = پاسور؛ هر کدام جلوست بعد از سرویس به 3 می‌رود و پاس می‌دهد.\n"
+            "🟡 حلقه زرد = پاسورِ الان (هر کس در 3 است). پاسور ثابت نداریم.\n"
             "⚪ توپ کنار جای 1 = سرویس‌زن اول."
         ),
         "snapshot.lineup_rule": (
-            "بعد از هر سرویس، پاسوری که جلوست به وسطِ جلو (3) می‌رود و پاس می‌دهد."
+            "پاسور ثابت نداریم: همه می‌چرخند و هر کس در وسطِ جلو (3) است پاس می‌دهد."
         ),
         "snapshot.summary": (
             "اسنپ‌شات برای جلسه #{sid} ذخیره شد.{swap}\n"
@@ -631,15 +630,13 @@ def _en() -> dict[str, str]:
         "snapshot.lineup_header": "🏐 *Suggested starting lineup* (front = at the net)",
         "snapshot.lineup_front": "Front: 4 {p4} · 3 {p3} · 2 {p2}",
         "snapshot.lineup_back": "Back: 5 {p5} · 6 {p6} · 1 {p1} 🏐",
-        "snapshot.lineup_setters": "Setters: {a} and {b}",
         "snapshot.court_caption": (
             "🏐 Starting lineup (Team A top, Team B bottom)\n"
-            "🟡 Yellow ring = setter; whichever is in front moves to 3 after the serve and sets.\n"
+            "🟡 Yellow ring = current setter (whoever is at 3). No fixed setter.\n"
             "⚪ Ball next to spot 1 = first server."
         ),
         "snapshot.lineup_rule": (
-            "After each serve, whichever setter is in the front row moves to "
-            "front-middle (3) and sets."
+            "No fixed setter: everyone rotates, and whoever is at front-middle (3) sets."
         ),
         "snapshot.summary": (
             "Snapshot saved for session #{sid}.{swap}\n"

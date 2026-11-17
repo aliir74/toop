@@ -126,7 +126,7 @@ def _team_block(label: str, names: list[str]) -> str:
 
 
 def _lineup_block(conn: sqlite3.Connection, label: str, lineup: Lineup) -> str:
-    """One team's suggested court positions and its two setters."""
+    """One team's suggested starting court positions."""
 
     def name(pid: int) -> str:
         return escape_markdown(_names(conn, [pid])[0], version=1)
@@ -136,7 +136,6 @@ def _lineup_block(conn: sqlite3.Connection, label: str, lineup: Lineup) -> str:
         label,
         t("snapshot.lineup_front", **pos),
         t("snapshot.lineup_back", **pos),
-        t("snapshot.lineup_setters", a=name(lineup.setters[0]), b=name(lineup.setters[1])),
     ]
     return "\n".join(lines)
 
