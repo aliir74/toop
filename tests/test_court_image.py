@@ -28,7 +28,6 @@ def _lineup(base: int) -> Lineup:
     # court position -> player id; base+4 stands at position 4.
     return Lineup(
         court={pos: base + pos for pos in range(1, 7)},
-        setters=(base + 1, base + 4),
         worst_rotation=0.0,
     )
 
